@@ -6,8 +6,10 @@ delivery status, and reports device health (SIM, signal, battery) to a
 backend over WebSocket, with REST as a fallback.
 
 This repository is the **Android app** (Flutter shell + native Android
-telephony layer). Backend (NestJS) and dashboard live in separate
-repositories.
+telephony layer). The backend and dashboard live separately; the node is
+**backend-agnostic** and only speaks the Luno wire protocol, so any server
+(Firebase, Supabase, Express, Next, Nest, …) that implements it works — the
+backend's tech stack is out of scope here.
 
 Focus for this phase is **Android only**. Linux/Windows GSM-modem nodes,
 macOS, and web dashboard are future-roadmap items and are not being built
@@ -27,7 +29,7 @@ here yet — see `CLAUDE.md` for the reasoning.
 ## Architecture
 
 ```
-NestJS backend
+Backend (any Luno-protocol server)
      │ WebSocket / REST
 Flutter (dashboard, pairing, settings, logs)
      │ Platform Channel / Pigeon
