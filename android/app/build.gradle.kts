@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    id("com.google.devtools.ksp")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -29,6 +30,15 @@ android {
         versionName = flutter.versionName
     }
 
+    // Versioned schema exported from day one so future migrations have a baseline.
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -50,4 +60,11 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     // StateFlow/coroutines for the agent's state source of truth.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // Room: the durable outbox/inbox spine (persist-before-act).
+    implementation("androidx.room:room-runtime:2.7.1")
+    implementation("androidx.room:room-ktx:2.7.1")
+    ksp("androidx.room:room-compiler:2.7.1")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }
