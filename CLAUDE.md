@@ -76,6 +76,15 @@ Flutter owns pairing/auth UI, device status display, settings, and log
 viewing — it calls into the native layer and renders what comes back, it
 does not implement retry/queueing/telephony logic itself.
 
+## Code conventions
+
+- **Don't add code comments by default.** Write self-explanatory code (clear
+  names, small functions) instead. Add a comment *only* when it earns its place —
+  e.g. a non-obvious "why", a genuine gotcha, an API/OS quirk, or a
+  deliberate-looking-wrong decision. No restating what the code already says, no
+  section-header banners, no doc blocks on every class/function.
+- This applies to Kotlin and Dart alike. When in doubt, leave the comment out.
+
 ## Commit conventions
 
 - **Never** add a `Co-Authored-By` trailer (no "Co-Authored-By: Claude" or any
