@@ -28,19 +28,20 @@ AgentRunState _agentStateFromName(String name) {
 /// M2 slice: [ping] (round-trip) and [tickEvents] (native 1 Hz push).
 /// M3 slice: [startAgent]/[stopAgent]/[isAgentRunning] and [agentStateEvents]
 /// (the foreground-service running state).
-/// M4 slice: [getSimInfo]/[hasPhonePermission]/[requestPhonePermission] and
-/// [simChangedEvents] (a signal to re-query SIMs).
+/// M4/M5 slice: [getDeviceState]/[hasPhonePermission]/[requestPhonePermission]
+/// and [deviceStateEvents] (a signal to re-query coalesced telemetry).
 class LunoBridge {
   LunoBridge({
     LunoHostApi? hostApi,
     EventChannel? tickChannel,
     EventChannel? agentStateChannel,
-    EventChannel? simChannel,
+    EventChannel? deviceStateChannel,
   })  : _hostApi = hostApi ?? LunoHostApi(),
         _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
         _agentStateChannel =
             agentStateChannel ?? const EventChannel(agentStateChannelName),
-        _simChannel = simChannel ?? const EventChannel(simChannelName);
+        _deviceStateChannel =
+            deviceStateChannel ?? const EventChannel(deviceStateChannelName);
 
   /// Must match [FlutterEventBridge.CHANNEL_NAME] on the native side.
   static const String tickChannelName = 'com.luno.gateway/events/tick';
@@ -49,13 +50,14 @@ class LunoBridge {
   static const String agentStateChannelName =
       'com.luno.gateway/events/agent_state';
 
-  /// Must match [SimChangeChannel.CHANNEL_NAME] on the native side.
-  static const String simChannelName = 'com.luno.gateway/events/sim';
+  /// Must match [DeviceStateChannel.CHANNEL_NAME] on the native side.
+  static const String deviceStateChannelName =
+      'com.luno.gateway/events/device_state';
 
   final LunoHostApi _hostApi;
   final EventChannel _tickChannel;
   final EventChannel _agentStateChannel;
-  final EventChannel _simChannel;
+  final EventChannel _deviceStateChannel;
 
   /// Round-trips [message] through the native HostApi and returns the
   /// transformed echo. Proves the Dart->Kotlin bridge is live and carries data.
@@ -86,22 +88,19 @@ class LunoBridge {
       .receiveBroadcastStream()
       .map((event) => _agentStateFromName(event as String));
 
-  /// Current active SIM subscriptions. Empty when the phone permission is
-  /// missing or no SIM is present.
-  Future<List<SimInfo>> getSimInfo() async {
-    final sims = await _hostApi.getSimInfo();
-    return sims.whereType<SimInfo>().toList(growable: false);
-  }
+  /// Current coalesced device telemetry (SIMs, battery, …). SIMs are empty
+  /// without the phone permission or with no SIM; battery is null until read.
+  Future<DeviceState> getDeviceState() => _hostApi.getDeviceState();
 
   /// Whether READ_PHONE_STATE is granted (needed to read SIM info).
   Future<bool> hasPhonePermission() => _hostApi.hasPhonePermission();
 
-  /// Prompts for READ_PHONE_STATE. On grant, [simChangedEvents] fires so the
-  /// caller can re-query [getSimInfo].
+  /// Prompts for READ_PHONE_STATE. On grant, [deviceStateEvents] fires so the
+  /// caller can re-query [getDeviceState].
   Future<void> requestPhonePermission() => _hostApi.requestPhonePermission();
 
-  /// Fires whenever the SIM set changes (and once on subscribe). Carries only a
-  /// revision counter — re-query [getSimInfo] for the typed data.
-  Stream<int> get simChangedEvents =>
-      _simChannel.receiveBroadcastStream().map((event) => event as int);
+  /// Fires whenever any device-telemetry slice changes (and once on subscribe).
+  /// Carries only a revision counter — re-query [getDeviceState] for the data.
+  Stream<int> get deviceStateEvents =>
+      _deviceStateChannel.receiveBroadcastStream().map((event) => event as int);
 }

@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../bridge/generated/luno_api.g.dart' show SimInfo;
+import '../../bridge/generated/luno_api.g.dart' show BatteryStatus, DeviceState, SimInfo;
 import '../../bridge/luno_bridge.dart';
 
-/// Temporary M2–M4 demo surface: exercises the native bridge end to end — a
+/// Temporary M2–M5 demo surface: exercises the native bridge end to end — a
 /// `ping` round-trip, the live native tick stream, the M3 foreground-service
-/// controls, and the M4 live SIM list. This gets replaced by the real dashboard
-/// in M17; for now it exists to visibly prove the agent works.
+/// controls, and the M4/M5 live device telemetry (SIMs + battery). This gets
+/// replaced by the real dashboard in M17; for now it visibly proves the agent.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, LunoBridge? bridge}) : _bridge = bridge;
 
@@ -22,14 +22,14 @@ class _HomeScreenState extends State<HomeScreen> {
   late final LunoBridge _bridge = widget._bridge ?? LunoBridge();
   StreamSubscription<int>? _tickSub;
   StreamSubscription<AgentRunState>? _agentSub;
-  StreamSubscription<int>? _simSub;
+  StreamSubscription<int>? _deviceSub;
 
   String _pingResult = '(not called yet)';
   int? _lastTick;
   AgentRunState _agentState = AgentRunState.unknown;
 
   bool _hasPhonePermission = false;
-  List<SimInfo> _sims = const [];
+  DeviceState? _deviceState;
 
   @override
   void initState() {
@@ -41,17 +41,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _agentSub = _bridge.agentStateEvents.listen((state) {
       if (mounted) setState(() => _agentState = state);
     });
-    // Any SIM-change signal (including the initial one on subscribe) triggers a
-    // typed re-query — the native side owns the source of truth.
-    _simSub = _bridge.simChangedEvents.listen((_) => _refreshSims());
-    _refreshSims();
+    // Any telemetry-change signal (including the initial one on subscribe)
+    // triggers a typed re-query — the native side owns the source of truth.
+    _deviceSub = _bridge.deviceStateEvents.listen((_) => _refreshDeviceState());
+    _refreshDeviceState();
   }
 
   @override
   void dispose() {
     _tickSub?.cancel();
     _agentSub?.cancel();
-    _simSub?.cancel();
+    _deviceSub?.cancel();
     super.dispose();
   }
 
@@ -71,13 +71,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _stopAgent() => _bridge.stopAgent();
 
-  Future<void> _refreshSims() async {
+  Future<void> _refreshDeviceState() async {
     final hasPermission = await _bridge.hasPhonePermission();
-    final sims = hasPermission ? await _bridge.getSimInfo() : const <SimInfo>[];
+    final state = await _bridge.getDeviceState();
     if (mounted) {
       setState(() {
         _hasPhonePermission = hasPermission;
-        _sims = sims;
+        _deviceState = state;
       });
     }
   }
@@ -85,6 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isRunning = _agentState == AgentRunState.running;
+    final battery = _deviceState?.battery;
+    final sims = _deviceState?.sims ?? const <SimInfo>[];
     return Scaffold(
       appBar: AppBar(title: const Text('Luno')),
       body: ListView(
@@ -109,14 +111,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const Divider(height: 40),
+          Text('Battery', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          _BatteryCard(battery: battery),
+          const Divider(height: 40),
           _SimSection(
             hasPermission: _hasPhonePermission,
-            sims: _sims,
+            sims: sims,
             onGrant: () async {
               await _bridge.requestPhonePermission();
-              // The grant result arrives via the sim-change stream; also poll
+              // The grant result arrives via the telemetry stream; also poll
               // once in case the OS reports it without a subscription bump.
-              await _refreshSims();
+              await _refreshDeviceState();
             },
           ),
           const Divider(height: 40),
@@ -154,6 +160,37 @@ class _AgentStatusChip extends StatelessWidget {
     return Chip(
       avatar: Icon(icon, color: color, size: 20),
       label: Text(label),
+    );
+  }
+}
+
+class _BatteryCard extends StatelessWidget {
+  const _BatteryCard({required this.battery});
+
+  final BatteryStatus? battery;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = battery;
+    if (b == null) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.battery_unknown),
+          title: Text('Battery status unavailable'),
+        ),
+      );
+    }
+    final level = b.levelPercent >= 0 ? '${b.levelPercent}%' : 'unknown';
+    final source = b.plugged == 'NONE' ? 'on battery' : 'charging via ${b.plugged}';
+    return Card(
+      child: ListTile(
+        leading: Icon(
+          b.isCharging ? Icons.battery_charging_full : Icons.battery_full,
+          color: b.isCharging ? Colors.green : null,
+        ),
+        title: Text('$level · ${b.isCharging ? 'charging' : 'discharging'}'),
+        subtitle: Text('$source · health ${b.health}'),
+      ),
     );
   }
 }

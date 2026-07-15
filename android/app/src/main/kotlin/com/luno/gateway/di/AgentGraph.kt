@@ -4,6 +4,8 @@ import android.content.Context
 import com.luno.gateway.agent.AgentController
 import com.luno.gateway.logging.LogcatSink
 import com.luno.gateway.logging.LunoLogger
+import com.luno.gateway.telephony.BatteryMonitor
+import com.luno.gateway.telephony.DeviceStateStore
 import com.luno.gateway.telephony.SimInfoManager
 
 /**
@@ -23,5 +25,9 @@ class AgentGraph(context: Context) {
 
     val logger: LunoLogger = LunoLogger(LogcatSink())
     val agentController: AgentController = AgentController(logger)
-    val simInfoManager: SimInfoManager = SimInfoManager(appContext, logger)
+
+    /** Coalesced telemetry state written by the device managers below. */
+    val deviceStateStore: DeviceStateStore = DeviceStateStore()
+    val simInfoManager: SimInfoManager = SimInfoManager(appContext, deviceStateStore, logger)
+    val batteryMonitor: BatteryMonitor = BatteryMonitor(appContext, deviceStateStore, logger)
 }

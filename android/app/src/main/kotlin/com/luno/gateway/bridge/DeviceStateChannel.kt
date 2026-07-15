@@ -1,6 +1,6 @@
 package com.luno.gateway.bridge
 
-import com.luno.gateway.telephony.SimInfoManager
+import com.luno.gateway.telephony.DeviceStateStore
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import kotlinx.coroutines.CoroutineScope
@@ -11,19 +11,23 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 /**
- * Notifies Dart that the SIM set changed, so the UI re-queries the typed
- * [com.luno.gateway.bridge.generated.LunoHostApi.getSimInfo]. Following the M2/M3
- * split, the EventChannel carries a lightweight signal (a revision counter);
- * the structured data travels over Pigeon.
+ * The single coalesced telemetry stream to Dart (plan.md Phase 2). Following the
+ * M2/M3 split, the EventChannel carries a lightweight signal (a revision
+ * counter); the structured [com.luno.gateway.model.DeviceState] travels over
+ * Pigeon (`getDeviceState`). One channel serves SIM (M4), battery (M5), and the
+ * signal/network sources to come.
  *
- * Lifecycle: a Dart subscription both starts SIM monitoring
- * ([SimInfoManager.start]) and observes [SimInfoManager.state]; the first emit is
- * the current snapshot (snapshot-then-stream). Cancelling stops monitoring so no
- * listener leaks when the dashboard goes away.
+ * Lifecycle: a Dart subscription runs [onStart] (bring the device managers up)
+ * and observes [DeviceStateStore.state]; the first emit is the current snapshot
+ * (snapshot-then-stream). Cancelling runs [onStop] so no manager leaks when the
+ * dashboard goes away. [onStart]/[onStop] are supplied by the Activity because
+ * they touch managers it owns.
  */
-class SimChangeChannel(
+class DeviceStateChannel(
     messenger: BinaryMessenger,
-    private val manager: SimInfoManager,
+    private val store: DeviceStateStore,
+    private val onStart: () -> Unit,
+    private val onStop: () -> Unit,
 ) : EventChannel.StreamHandler {
 
     private val channel = EventChannel(messenger, CHANNEL_NAME)
@@ -37,12 +41,12 @@ class SimChangeChannel(
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        manager.start()
+        onStart()
         val collectScope = CoroutineScope(Dispatchers.Main.immediate)
         scope = collectScope
         var revision = 0L
         collectScope.launch {
-            manager.state
+            store.state
                 .onEach { events?.success(revision++) }
                 .collect()
         }
@@ -51,10 +55,10 @@ class SimChangeChannel(
     override fun onCancel(arguments: Any?) {
         scope?.cancel()
         scope = null
-        manager.stop()
+        onStop()
     }
 
     companion object {
-        const val CHANNEL_NAME = "com.luno.gateway/events/sim"
+        const val CHANNEL_NAME = "com.luno.gateway/events/device_state"
     }
 }

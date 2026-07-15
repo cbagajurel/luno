@@ -8,9 +8,9 @@ import androidx.core.content.ContextCompat
 import com.luno.gateway.agent.GatewayForegroundService
 import com.luno.gateway.bridge.AgentHost
 import com.luno.gateway.bridge.AgentStateChannel
+import com.luno.gateway.bridge.DeviceStateChannel
 import com.luno.gateway.bridge.FlutterEventBridge
 import com.luno.gateway.bridge.LunoHostApiImpl
-import com.luno.gateway.bridge.SimChangeChannel
 import com.luno.gateway.bridge.generated.LunoHostApi
 import com.luno.gateway.di.AgentGraph
 import io.flutter.embedding.android.FlutterActivity
@@ -18,9 +18,9 @@ import io.flutter.embedding.engine.FlutterEngine
 
 /**
  * Flutter host Activity. Installs the Pigeon [LunoHostApi] implementation, the
- * M2 tick [FlutterEventBridge], the M3 [AgentStateChannel], and the M4
- * [SimChangeChannel] onto each attached engine, tearing them down on detach so
- * Activity recreation doesn't leak handlers or double-register.
+ * M2 tick [FlutterEventBridge], the M3 [AgentStateChannel], and the M4/M5
+ * coalesced [DeviceStateChannel] onto each attached engine, tearing them down on
+ * detach so Activity recreation doesn't leak handlers or double-register.
  *
  * It also implements [AgentHost]: the HostApi delegates service start/stop and
  * the runtime-permission requests here because those need a Context/Activity.
@@ -28,7 +28,7 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity(), AgentHost {
     private var eventBridge: FlutterEventBridge? = null
     private var agentStateChannel: AgentStateChannel? = null
-    private var simChangeChannel: SimChangeChannel? = null
+    private var deviceStateChannel: DeviceStateChannel? = null
 
     private val graph: AgentGraph
         get() = (application as LunoApplication).graph
@@ -36,15 +36,27 @@ class MainActivity : FlutterActivity(), AgentHost {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        LunoHostApi.setUp(messenger, LunoHostApiImpl(this, graph.simInfoManager))
+        LunoHostApi.setUp(messenger, LunoHostApiImpl(this, graph.deviceStateStore))
         eventBridge = FlutterEventBridge(messenger).also { it.attach() }
         agentStateChannel = AgentStateChannel(messenger, graph.agentController).also { it.attach() }
-        simChangeChannel = SimChangeChannel(messenger, graph.simInfoManager).also { it.attach() }
+        deviceStateChannel = DeviceStateChannel(
+            messenger,
+            graph.deviceStateStore,
+            onStart = {
+                // Battery needs no permission; SIM monitoring no-ops until granted.
+                graph.batteryMonitor.start()
+                graph.simInfoManager.start()
+            },
+            onStop = {
+                graph.batteryMonitor.stop()
+                graph.simInfoManager.stop()
+            },
+        ).also { it.attach() }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        simChangeChannel?.detach()
-        simChangeChannel = null
+        deviceStateChannel?.detach()
+        deviceStateChannel = null
         agentStateChannel?.detach()
         agentStateChannel = null
         eventBridge?.detach()

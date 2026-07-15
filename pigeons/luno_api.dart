@@ -32,6 +32,31 @@ class SimInfo {
   final String simState;
 }
 
+/// Battery snapshot (M5), mirrored from `model/BatteryStatus.kt`.
+class BatteryStatus {
+  BatteryStatus({
+    required this.levelPercent,
+    required this.isCharging,
+    required this.plugged,
+    required this.health,
+  });
+
+  final int levelPercent;
+  final bool isCharging;
+  final String plugged;
+  final String health;
+}
+
+/// Coalesced device telemetry (M4+), mirrored from `model/DeviceState.kt`. One
+/// query and one stream carry all read-only device state; later milestones add
+/// fields (signal, network) without new channels.
+class DeviceState {
+  DeviceState({required this.sims, this.battery});
+
+  final List<SimInfo> sims;
+  final BatteryStatus? battery;
+}
+
 @ConfigurePigeon(
   PigeonOptions(
     dartOut: 'lib/bridge/generated/luno_api.g.dart',
@@ -67,9 +92,10 @@ abstract class LunoHostApi {
   /// The agent runs regardless; this only affects notification visibility.
   void requestNotificationPermission();
 
-  /// Current active SIM subscriptions (M4). Returns an empty list when the
-  /// phone permission is missing or no SIM is present — never throws.
-  List<SimInfo> getSimInfo();
+  /// Current coalesced device telemetry (M4 SIMs, M5 battery, …). SIMs are
+  /// empty without the phone permission or with no SIM; battery is null until
+  /// the first reading — never throws.
+  DeviceState getDeviceState();
 
   /// Whether READ_PHONE_STATE (needed to read SIM info) is granted.
   bool hasPhonePermission();

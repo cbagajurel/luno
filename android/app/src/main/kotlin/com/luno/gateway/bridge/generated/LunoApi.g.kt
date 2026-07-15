@@ -251,12 +251,116 @@ data class SimInfo (
     return result
   }
 }
+
+/**
+ * Battery snapshot (M5), mirrored from `model/BatteryStatus.kt`.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class BatteryStatus (
+  val levelPercent: Long,
+  val isCharging: Boolean,
+  val plugged: String,
+  val health: String
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): BatteryStatus {
+      val levelPercent = pigeonVar_list[0] as Long
+      val isCharging = pigeonVar_list[1] as Boolean
+      val plugged = pigeonVar_list[2] as String
+      val health = pigeonVar_list[3] as String
+      return BatteryStatus(levelPercent, isCharging, plugged, health)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      levelPercent,
+      isCharging,
+      plugged,
+      health,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as BatteryStatus
+    return LunoApiPigeonUtils.deepEquals(this.levelPercent, other.levelPercent) && LunoApiPigeonUtils.deepEquals(this.isCharging, other.isCharging) && LunoApiPigeonUtils.deepEquals(this.plugged, other.plugged) && LunoApiPigeonUtils.deepEquals(this.health, other.health)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.levelPercent)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.isCharging)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.plugged)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.health)
+    return result
+  }
+}
+
+/**
+ * Coalesced device telemetry (M4+), mirrored from `model/DeviceState.kt`. One
+ * query and one stream carry all read-only device state; later milestones add
+ * fields (signal, network) without new channels.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class DeviceState (
+  val sims: List<SimInfo>,
+  val battery: BatteryStatus? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): DeviceState {
+      val sims = pigeonVar_list[0] as List<SimInfo>
+      val battery = pigeonVar_list[1] as BatteryStatus?
+      return DeviceState(sims, battery)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      sims,
+      battery,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as DeviceState
+    return LunoApiPigeonUtils.deepEquals(this.sims, other.sims) && LunoApiPigeonUtils.deepEquals(this.battery, other.battery)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.sims)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.battery)
+    return result
+  }
+}
 private open class LunoApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
       129.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           SimInfo.fromList(it)
+        }
+      }
+      130.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          BatteryStatus.fromList(it)
+        }
+      }
+      131.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          DeviceState.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -266,6 +370,14 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
     when (value) {
       is SimInfo -> {
         stream.write(129)
+        writeValue(stream, value.toList())
+      }
+      is BatteryStatus -> {
+        stream.write(130)
+        writeValue(stream, value.toList())
+      }
+      is DeviceState -> {
+        stream.write(131)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -306,10 +418,11 @@ interface LunoHostApi {
    */
   fun requestNotificationPermission()
   /**
-   * Current active SIM subscriptions (M4). Returns an empty list when the
-   * phone permission is missing or no SIM is present — never throws.
+   * Current coalesced device telemetry (M4 SIMs, M5 battery, …). SIMs are
+   * empty without the phone permission or with no SIM; battery is null until
+   * the first reading — never throws.
    */
-  fun getSimInfo(): List<SimInfo>
+  fun getDeviceState(): DeviceState
   /** Whether READ_PHONE_STATE (needed to read SIM info) is granted. */
   fun hasPhonePermission(): Boolean
   /**
@@ -408,11 +521,11 @@ interface LunoHostApi {
         }
       }
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.getSimInfo$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.getDeviceState$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
-              listOf(api.getSimInfo())
+              listOf(api.getDeviceState())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }

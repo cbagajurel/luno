@@ -9,16 +9,14 @@ import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 import com.luno.gateway.logging.LunoLogger
-import com.luno.gateway.model.DeviceState
 import com.luno.gateway.model.SimInfo
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Reads active SIM subscriptions and tracks insert/remove live. This is the
  * first "native manager → domain model → stream to UI" implementation; M5–M7
  * (battery, signal, network) follow the same shape (docs/milestones.md Phase 2).
+ * It writes its slice into the shared [DeviceStateStore]; the store owns the
+ * coalesced stream.
  *
  * Permission: [SubscriptionManager.getActiveSubscriptionInfoList] and the change
  * listener require the dangerous `READ_PHONE_STATE`. Every read is guarded — a
@@ -34,16 +32,13 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class SimInfoManager(
     private val context: Context,
+    private val store: DeviceStateStore,
     private val logger: LunoLogger,
 ) {
     private val subscriptionManager: SubscriptionManager =
         context.getSystemService(SubscriptionManager::class.java)
     private val telephonyManager: TelephonyManager =
         context.getSystemService(TelephonyManager::class.java)
-
-    private val _state = MutableStateFlow(DeviceState())
-    /** Live device state; observers get the current snapshot then every change. */
-    val state: StateFlow<DeviceState> = _state.asStateFlow()
 
     private var listener: SubscriptionManager.OnSubscriptionsChangedListener? = null
 
@@ -88,11 +83,8 @@ class SimInfoManager(
         listener = null
     }
 
-    /** A fresh read of the current device state, independent of monitoring. */
-    fun snapshot(): DeviceState = DeviceState(sims = readSims())
-
     private fun refresh() {
-        _state.value = DeviceState(sims = readSims())
+        store.updateSims(readSims())
     }
 
     private fun readSims(): List<SimInfo> {
