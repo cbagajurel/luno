@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../bridge/generated/luno_api.g.dart' show BatteryStatus, DeviceState, SimInfo;
+import '../../bridge/generated/luno_api.g.dart'
+    show BatteryStatus, DeviceState, SignalInfo, SimInfo;
 import '../../bridge/luno_bridge.dart';
 
 /// Temporary demo surface for M2–M5; replaced by the real dashboard in M17.
@@ -82,6 +83,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final isRunning = _agentState == AgentRunState.running;
     final battery = _deviceState?.battery;
     final sims = _deviceState?.sims ?? const <SimInfo>[];
+    final signals = {
+      for (final s in _deviceState?.signals ?? const <SignalInfo>[])
+        s.subscriptionId: s,
+    };
     return Scaffold(
       appBar: AppBar(title: const Text('Luno')),
       body: ListView(
@@ -113,6 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _SimSection(
             hasPermission: _hasPhonePermission,
             sims: sims,
+            signals: signals,
             onGrant: () async {
               await _bridge.requestPhonePermission();
               await _refreshDeviceState();
@@ -192,11 +198,13 @@ class _SimSection extends StatelessWidget {
   const _SimSection({
     required this.hasPermission,
     required this.sims,
+    required this.signals,
     required this.onGrant,
   });
 
   final bool hasPermission;
   final List<SimInfo> sims;
+  final Map<int, SignalInfo> signals;
   final Future<void> Function() onGrant;
 
   @override
@@ -234,16 +242,17 @@ class _SimSection extends StatelessWidget {
             ),
           )
         else
-          ...sims.map((sim) => _SimTile(sim: sim)),
+          ...sims.map((sim) => _SimTile(sim: sim, signal: signals[sim.subscriptionId])),
       ],
     );
   }
 }
 
 class _SimTile extends StatelessWidget {
-  const _SimTile({required this.sim});
+  const _SimTile({required this.sim, this.signal});
 
   final SimInfo sim;
+  final SignalInfo? signal;
 
   @override
   Widget build(BuildContext context) {
@@ -256,11 +265,18 @@ class _SimTile extends StatelessWidget {
         subtitle: Text(
           'Carrier: $carrier\n'
           'Slot ${sim.slotIndex} · subId ${sim.subscriptionId} · '
-          '${sim.isEmbedded ? 'eSIM' : 'physical'}',
+          '${sim.isEmbedded ? 'eSIM' : 'physical'}\n'
+          'Signal: ${_signalLabel(signal)}',
         ),
         trailing: Chip(label: Text(sim.simState)),
         isThreeLine: true,
       ),
     );
+  }
+
+  static String _signalLabel(SignalInfo? signal) {
+    if (signal == null) return 'unknown';
+    final bars = '${signal.level}/4';
+    return signal.dbm != null ? '${signal.dbm} dBm ($bars)' : bars;
   }
 }

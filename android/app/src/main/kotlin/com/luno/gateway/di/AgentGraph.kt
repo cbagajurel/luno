@@ -6,6 +6,7 @@ import com.luno.gateway.logging.LogcatSink
 import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.telephony.BatteryMonitor
 import com.luno.gateway.telephony.DeviceStateStore
+import com.luno.gateway.telephony.SignalStrengthMonitor
 import com.luno.gateway.telephony.SimInfoManager
 
 class AgentGraph(context: Context) {
@@ -17,4 +18,6 @@ class AgentGraph(context: Context) {
     val deviceStateStore: DeviceStateStore = DeviceStateStore()
     val simInfoManager: SimInfoManager = SimInfoManager(appContext, deviceStateStore, logger)
     val batteryMonitor: BatteryMonitor = BatteryMonitor(appContext, deviceStateStore, logger)
+    val signalStrengthMonitor: SignalStrengthMonitor =
+        SignalStrengthMonitor(appContext, deviceStateStore, logger)
 }

@@ -293,22 +293,67 @@ data class BatteryStatus (
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
+data class SignalInfo (
+  val subscriptionId: Long,
+  val dbm: Long? = null,
+  val level: Long
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): SignalInfo {
+      val subscriptionId = pigeonVar_list[0] as Long
+      val dbm = pigeonVar_list[1] as Long?
+      val level = pigeonVar_list[2] as Long
+      return SignalInfo(subscriptionId, dbm, level)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      subscriptionId,
+      dbm,
+      level,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as SignalInfo
+    return LunoApiPigeonUtils.deepEquals(this.subscriptionId, other.subscriptionId) && LunoApiPigeonUtils.deepEquals(this.dbm, other.dbm) && LunoApiPigeonUtils.deepEquals(this.level, other.level)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.subscriptionId)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.dbm)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.level)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
 data class DeviceState (
   val sims: List<SimInfo>,
-  val battery: BatteryStatus? = null
+  val battery: BatteryStatus? = null,
+  val signals: List<SignalInfo>
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): DeviceState {
       val sims = pigeonVar_list[0] as List<SimInfo>
       val battery = pigeonVar_list[1] as BatteryStatus?
-      return DeviceState(sims, battery)
+      val signals = pigeonVar_list[2] as List<SignalInfo>
+      return DeviceState(sims, battery, signals)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       sims,
       battery,
+      signals,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -319,13 +364,14 @@ data class DeviceState (
       return true
     }
     val other = other as DeviceState
-    return LunoApiPigeonUtils.deepEquals(this.sims, other.sims) && LunoApiPigeonUtils.deepEquals(this.battery, other.battery)
+    return LunoApiPigeonUtils.deepEquals(this.sims, other.sims) && LunoApiPigeonUtils.deepEquals(this.battery, other.battery) && LunoApiPigeonUtils.deepEquals(this.signals, other.signals)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.sims)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.battery)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.signals)
     return result
   }
 }
@@ -344,6 +390,11 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
       }
       131.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
+          SignalInfo.fromList(it)
+        }
+      }
+      132.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
           DeviceState.fromList(it)
         }
       }
@@ -360,8 +411,12 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         stream.write(130)
         writeValue(stream, value.toList())
       }
-      is DeviceState -> {
+      is SignalInfo -> {
         stream.write(131)
+        writeValue(stream, value.toList())
+      }
+      is DeviceState -> {
+        stream.write(132)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)

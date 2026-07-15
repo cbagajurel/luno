@@ -34,11 +34,24 @@ class BatteryStatus {
   final String health;
 }
 
+class SignalInfo {
+  SignalInfo({
+    required this.subscriptionId,
+    this.dbm,
+    required this.level,
+  });
+
+  final int subscriptionId;
+  final int? dbm;
+  final int level;
+}
+
 class DeviceState {
-  DeviceState({required this.sims, this.battery});
+  DeviceState({required this.sims, this.battery, required this.signals});
 
   final List<SimInfo> sims;
   final BatteryStatus? battery;
+  final List<SignalInfo> signals;
 }
 
 @ConfigurePigeon(

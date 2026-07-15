@@ -35,10 +35,12 @@ class MainActivity : FlutterActivity(), AgentHost {
             graph.deviceStateStore,
             onStart = {
                 graph.batteryMonitor.start()
+                graph.signalStrengthMonitor.start()
                 graph.simInfoManager.start()
             },
             onStop = {
                 graph.batteryMonitor.stop()
+                graph.signalStrengthMonitor.stop()
                 graph.simInfoManager.stop()
             },
         ).also { it.attach() }
