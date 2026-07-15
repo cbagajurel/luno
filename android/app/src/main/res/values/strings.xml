@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="luno_notification_channel_name">Gateway status</string>
+    <string name="luno_notification_channel_desc">Ongoing notification shown while the Luno SMS gateway is running.</string>
+    <string name="luno_notification_title">Luno gateway running</string>
+    <string name="luno_notification_text">Standing by to send and receive SMS.</string>
+</resources>

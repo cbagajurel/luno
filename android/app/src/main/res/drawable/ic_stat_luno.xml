@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Status-bar icon for the foreground-service notification. Must be a flat white
+  silhouette on transparent (Android tints it); anything else renders as a blob.
+  A simple signal-tower / broadcast mark stands in for the gateway.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,10m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,12h2l1,9h-4z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7.05,5.05l-1.41,-1.41C4.28,5.01 3.5,6.92 3.5,9s0.78,3.99 2.14,5.36l1.41,-1.41C6.02,11.87 5.5,10.5 5.5,9s0.52,-2.87 1.55,-3.95zM18.36,3.64l-1.41,1.41C17.98,6.13 18.5,7.5 18.5,9s-0.52,2.87 -1.55,3.95l1.41,1.41C19.72,12.99 20.5,11.08 20.5,9s-0.78,-3.99 -2.14,-5.36z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.88,7.88C9.34,8.42 9,9.17 9,10c0,0.83 0.34,1.58 0.88,2.12l-1.42,1.42C7.56,12.63 7,11.38 7,10s0.56,-2.63 1.46,-3.54l1.42,1.42zM15.54,6.46C16.44,7.37 17,8.62 17,10s-0.56,2.63 -1.46,3.54l-1.42,-1.42C14.66,11.58 15,10.83 15,10c0,-0.83 -0.34,-1.58 -0.88,-2.12l1.42,-1.42z" />
+</vector>

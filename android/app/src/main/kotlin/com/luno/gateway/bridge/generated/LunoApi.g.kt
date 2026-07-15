@@ -68,6 +68,26 @@ interface LunoHostApi {
    * data crosses it intact. Returns the transformed string.
    */
   fun ping(message: String): String
+  /**
+   * Starts the gateway foreground service (M3). User-initiated, so the FGS
+   * start is allowed even on Android 12+. Idempotent: starting a running
+   * agent is a no-op. The running state arrives via the agent-state
+   * EventChannel, not as a return value.
+   */
+  fun startAgent()
+  /** Requests the gateway foreground service stop and leave the foreground. */
+  fun stopAgent()
+  /**
+   * Snapshot of whether the agent is currently running, for the initial UI
+   * paint before the agent-state stream has emitted.
+   */
+  fun isAgentRunning(): Boolean
+  /**
+   * Prompts for POST_NOTIFICATIONS (Android 13+) so the persistent
+   * notification is visible. No-op on older versions or if already granted.
+   * The agent runs regardless; this only affects notification visibility.
+   */
+  fun requestNotificationPermission()
 
   companion object {
     /** The codec used by LunoHostApi. */
@@ -86,6 +106,69 @@ interface LunoHostApi {
             val messageArg = args[0] as String
             val wrapped: List<Any?> = try {
               listOf(api.ping(messageArg))
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.startAgent$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.startAgent()
+              listOf(null)
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.stopAgent$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.stopAgent()
+              listOf(null)
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.isAgentRunning$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.isAgentRunning())
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.requestNotificationPermission$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.requestNotificationPermission()
+              listOf(null)
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }

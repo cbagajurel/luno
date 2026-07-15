@@ -21,9 +21,9 @@ android {
 
     defaultConfig {
         applicationId = "com.luno.gateway"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // minSdk 26 is a locked decision (plan.md §Decisions): modern foreground
+        // service + notification-channel semantics without legacy branches.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -40,4 +40,14 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Load-bearing infrastructure only (see plan.md "Native over plugins").
+    // ServiceCompat/NotificationCompat/ContextCompat compatibility shims.
+    implementation("androidx.core:core-ktx:1.13.1")
+    // LifecycleService: the foreground service base with a lifecycle scope.
+    implementation("androidx.lifecycle:lifecycle-service:2.8.7")
+    // StateFlow/coroutines for the agent's state source of truth.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }

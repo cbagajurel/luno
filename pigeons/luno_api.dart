@@ -27,4 +27,22 @@ abstract class LunoHostApi {
   /// recognizable envelope so the caller can prove the bridge is live and that
   /// data crosses it intact. Returns the transformed string.
   String ping(String message);
+
+  /// Starts the gateway foreground service (M3). User-initiated, so the FGS
+  /// start is allowed even on Android 12+. Idempotent: starting a running
+  /// agent is a no-op. The running state arrives via the agent-state
+  /// EventChannel, not as a return value.
+  void startAgent();
+
+  /// Requests the gateway foreground service stop and leave the foreground.
+  void stopAgent();
+
+  /// Snapshot of whether the agent is currently running, for the initial UI
+  /// paint before the agent-state stream has emitted.
+  bool isAgentRunning();
+
+  /// Prompts for POST_NOTIFICATIONS (Android 13+) so the persistent
+  /// notification is visible. No-op on older versions or if already granted.
+  /// The agent runs regardless; this only affects notification visibility.
+  void requestNotificationPermission();
 }
