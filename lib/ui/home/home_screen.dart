@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../bridge/generated/luno_api.g.dart'
-    show BatteryStatus, DeviceState, SignalInfo, SimInfo;
+    show BatteryStatus, DeviceState, NetworkStatus, SignalInfo, SimInfo;
 import '../../bridge/luno_bridge.dart';
 
 /// Temporary demo surface for M2–M5; replaced by the real dashboard in M17.
@@ -111,6 +111,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const Divider(height: 40),
+          Text('Network', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          _NetworkCard(network: _deviceState?.network),
+          const Divider(height: 40),
           Text('Battery', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           _BatteryCard(battery: battery),
@@ -159,6 +163,39 @@ class _AgentStatusChip extends StatelessWidget {
     return Chip(
       avatar: Icon(icon, color: color, size: 20),
       label: Text(label),
+    );
+  }
+}
+
+class _NetworkCard extends StatelessWidget {
+  const _NetworkCard({required this.network});
+
+  final NetworkStatus? network;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = network;
+    if (n == null || !n.connected) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.cloud_off),
+          title: Text('Offline'),
+        ),
+      );
+    }
+    final online = n.validated;
+    final title = online
+        ? 'Online · ${n.transport}'
+        : 'Connected, no internet · ${n.transport}';
+    return Card(
+      child: ListTile(
+        leading: Icon(
+          online ? Icons.cloud_done : Icons.cloud_queue,
+          color: online ? Colors.green : Colors.orange,
+        ),
+        title: Text(title),
+        subtitle: Text(n.metered ? 'metered' : 'unmetered'),
+      ),
     );
   }
 }

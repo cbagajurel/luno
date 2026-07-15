@@ -335,10 +335,57 @@ data class SignalInfo (
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
+data class NetworkStatus (
+  val connected: Boolean,
+  val validated: Boolean,
+  val transport: String,
+  val metered: Boolean
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): NetworkStatus {
+      val connected = pigeonVar_list[0] as Boolean
+      val validated = pigeonVar_list[1] as Boolean
+      val transport = pigeonVar_list[2] as String
+      val metered = pigeonVar_list[3] as Boolean
+      return NetworkStatus(connected, validated, transport, metered)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      connected,
+      validated,
+      transport,
+      metered,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as NetworkStatus
+    return LunoApiPigeonUtils.deepEquals(this.connected, other.connected) && LunoApiPigeonUtils.deepEquals(this.validated, other.validated) && LunoApiPigeonUtils.deepEquals(this.transport, other.transport) && LunoApiPigeonUtils.deepEquals(this.metered, other.metered)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.connected)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.validated)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.transport)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.metered)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
 data class DeviceState (
   val sims: List<SimInfo>,
   val battery: BatteryStatus? = null,
-  val signals: List<SignalInfo>
+  val signals: List<SignalInfo>,
+  val network: NetworkStatus? = null
 )
  {
   companion object {
@@ -346,7 +393,8 @@ data class DeviceState (
       val sims = pigeonVar_list[0] as List<SimInfo>
       val battery = pigeonVar_list[1] as BatteryStatus?
       val signals = pigeonVar_list[2] as List<SignalInfo>
-      return DeviceState(sims, battery, signals)
+      val network = pigeonVar_list[3] as NetworkStatus?
+      return DeviceState(sims, battery, signals, network)
     }
   }
   fun toList(): List<Any?> {
@@ -354,6 +402,7 @@ data class DeviceState (
       sims,
       battery,
       signals,
+      network,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -364,7 +413,7 @@ data class DeviceState (
       return true
     }
     val other = other as DeviceState
-    return LunoApiPigeonUtils.deepEquals(this.sims, other.sims) && LunoApiPigeonUtils.deepEquals(this.battery, other.battery) && LunoApiPigeonUtils.deepEquals(this.signals, other.signals)
+    return LunoApiPigeonUtils.deepEquals(this.sims, other.sims) && LunoApiPigeonUtils.deepEquals(this.battery, other.battery) && LunoApiPigeonUtils.deepEquals(this.signals, other.signals) && LunoApiPigeonUtils.deepEquals(this.network, other.network)
   }
 
   override fun hashCode(): Int {
@@ -372,6 +421,7 @@ data class DeviceState (
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.sims)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.battery)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.signals)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.network)
     return result
   }
 }
@@ -395,6 +445,11 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
       }
       132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
+          NetworkStatus.fromList(it)
+        }
+      }
+      133.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
           DeviceState.fromList(it)
         }
       }
@@ -415,8 +470,12 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         stream.write(131)
         writeValue(stream, value.toList())
       }
-      is DeviceState -> {
+      is NetworkStatus -> {
         stream.write(132)
+        writeValue(stream, value.toList())
+      }
+      is DeviceState -> {
+        stream.write(133)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)

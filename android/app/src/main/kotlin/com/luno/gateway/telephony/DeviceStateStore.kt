@@ -2,6 +2,7 @@ package com.luno.gateway.telephony
 
 import com.luno.gateway.model.BatteryStatus
 import com.luno.gateway.model.DeviceState
+import com.luno.gateway.model.NetworkStatus
 import com.luno.gateway.model.SignalInfo
 import com.luno.gateway.model.SimInfo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,5 +43,10 @@ class DeviceStateStore {
         if (kept.size != _state.value.signals.size) {
             _state.value = _state.value.copy(signals = kept)
         }
+    }
+
+    @Synchronized
+    fun updateNetwork(network: NetworkStatus?) {
+        _state.value = _state.value.copy(network = network)
     }
 }

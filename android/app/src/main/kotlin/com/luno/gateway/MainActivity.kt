@@ -36,11 +36,13 @@ class MainActivity : FlutterActivity(), AgentHost {
             onStart = {
                 graph.batteryMonitor.start()
                 graph.signalStrengthMonitor.start()
+                graph.networkMonitor.start()
                 graph.simInfoManager.start()
             },
             onStop = {
                 graph.batteryMonitor.stop()
                 graph.signalStrengthMonitor.stop()
+                graph.networkMonitor.stop()
                 graph.simInfoManager.stop()
             },
         ).also { it.attach() }

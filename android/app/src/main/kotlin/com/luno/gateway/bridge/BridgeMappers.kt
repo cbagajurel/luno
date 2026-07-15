@@ -2,10 +2,12 @@ package com.luno.gateway.bridge
 
 import com.luno.gateway.model.BatteryStatus
 import com.luno.gateway.model.DeviceState
+import com.luno.gateway.model.NetworkStatus
 import com.luno.gateway.model.SignalInfo
 import com.luno.gateway.model.SimInfo
 import com.luno.gateway.bridge.generated.BatteryStatus as BatteryStatusDto
 import com.luno.gateway.bridge.generated.DeviceState as DeviceStateDto
+import com.luno.gateway.bridge.generated.NetworkStatus as NetworkStatusDto
 import com.luno.gateway.bridge.generated.SignalInfo as SignalInfoDto
 import com.luno.gateway.bridge.generated.SimInfo as SimInfoDto
 
@@ -33,8 +35,16 @@ fun SignalInfo.toDto(): SignalInfoDto = SignalInfoDto(
     level = level.toLong(),
 )
 
+fun NetworkStatus.toDto(): NetworkStatusDto = NetworkStatusDto(
+    connected = connected,
+    validated = validated,
+    transport = transport,
+    metered = metered,
+)
+
 fun DeviceState.toDto(): DeviceStateDto = DeviceStateDto(
     sims = sims.map { it.toDto() },
     battery = battery?.toDto(),
     signals = signals.values.map { it.toDto() },
+    network = network?.toDto(),
 )

@@ -267,11 +267,67 @@ class SignalInfo {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class NetworkStatus {
+  NetworkStatus({
+    required this.connected,
+    required this.validated,
+    required this.transport,
+    required this.metered,
+  });
+
+  bool connected;
+
+  bool validated;
+
+  String transport;
+
+  bool metered;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      connected,
+      validated,
+      transport,
+      metered,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static NetworkStatus decode(Object result) {
+    result as List<Object?>;
+    return NetworkStatus(
+      connected: result[0]! as bool,
+      validated: result[1]! as bool,
+      transport: result[2]! as String,
+      metered: result[3]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NetworkStatus || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(connected, other.connected) && _deepEquals(validated, other.validated) && _deepEquals(transport, other.transport) && _deepEquals(metered, other.metered);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 class DeviceState {
   DeviceState({
     required this.sims,
     this.battery,
     required this.signals,
+    this.network,
   });
 
   List<SimInfo> sims;
@@ -280,11 +336,14 @@ class DeviceState {
 
   List<SignalInfo> signals;
 
+  NetworkStatus? network;
+
   List<Object?> _toList() {
     return <Object?>[
       sims,
       battery,
       signals,
+      network,
     ];
   }
 
@@ -297,6 +356,7 @@ class DeviceState {
       sims: (result[0]! as List<Object?>).cast<SimInfo>(),
       battery: result[1] as BatteryStatus?,
       signals: (result[2]! as List<Object?>).cast<SignalInfo>(),
+      network: result[3] as NetworkStatus?,
     );
   }
 
@@ -309,7 +369,7 @@ class DeviceState {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(sims, other.sims) && _deepEquals(battery, other.battery) && _deepEquals(signals, other.signals);
+    return _deepEquals(sims, other.sims) && _deepEquals(battery, other.battery) && _deepEquals(signals, other.signals) && _deepEquals(network, other.network);
   }
 
   @override
@@ -334,8 +394,11 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is SignalInfo) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    }    else if (value is DeviceState) {
+    }    else if (value is NetworkStatus) {
       buffer.putUint8(132);
+      writeValue(buffer, value.encode());
+    }    else if (value is DeviceState) {
+      buffer.putUint8(133);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -352,6 +415,8 @@ class _PigeonCodec extends StandardMessageCodec {
       case 131:
         return SignalInfo.decode(readValue(buffer)!);
       case 132:
+        return NetworkStatus.decode(readValue(buffer)!);
+      case 133:
         return DeviceState.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

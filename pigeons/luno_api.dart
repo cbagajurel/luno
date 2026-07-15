@@ -35,23 +35,39 @@ class BatteryStatus {
 }
 
 class SignalInfo {
-  SignalInfo({
-    required this.subscriptionId,
-    this.dbm,
-    required this.level,
-  });
+  SignalInfo({required this.subscriptionId, this.dbm, required this.level});
 
   final int subscriptionId;
   final int? dbm;
   final int level;
 }
 
+class NetworkStatus {
+  NetworkStatus({
+    required this.connected,
+    required this.validated,
+    required this.transport,
+    required this.metered,
+  });
+
+  final bool connected;
+  final bool validated;
+  final String transport;
+  final bool metered;
+}
+
 class DeviceState {
-  DeviceState({required this.sims, this.battery, required this.signals});
+  DeviceState({
+    required this.sims,
+    this.battery,
+    required this.signals,
+    this.network,
+  });
 
   final List<SimInfo> sims;
   final BatteryStatus? battery;
   final List<SignalInfo> signals;
+  final NetworkStatus? network;
 }
 
 @ConfigurePigeon(
