@@ -11,20 +11,6 @@ import com.luno.gateway.LunoApplication
 import com.luno.gateway.di.AgentGraph
 import com.luno.gateway.logging.LunoLogger
 
-/**
- * The 24/7 process the whole agent lives inside. For M3 it does nothing but
- * enter the foreground and stay alive — that is the milestone. Telephony,
- * backend, and queue draining hang off [AgentController] in later milestones.
- *
- * Declared as a `specialUse` foreground service (locked decision, plan.md): a
- * persistent SMS gateway fits none of the narrow standard FGS types. On Android
- * 14+ an FGS started without a matching declared type crashes, so the type
- * passed here must equal the manifest `foregroundServiceType`.
- *
- * Restart semantics: [onStartCommand] returns START_STICKY, so after a system
- * kill the OS recreates the service with a null intent; the `else` branch treats
- * that as "start", re-entering the foreground.
- */
 class GatewayForegroundService : LifecycleService() {
 
     private lateinit var graph: AgentGraph
@@ -46,16 +32,15 @@ class GatewayForegroundService : LifecycleService() {
                 shutdown()
                 return START_NOT_STICKY
             }
-            else -> {
-                // Explicit ACTION_START, or a null intent from a START_STICKY restart.
-                enterForeground()
-            }
+            // Explicit ACTION_START, or a null intent from a START_STICKY restart.
+            else -> enterForeground()
         }
         return START_STICKY
     }
 
     private fun enterForeground() {
         notification.ensureChannel()
+        // The type must match the manifest foregroundServiceType or Android 14+ crashes.
         ServiceCompat.startForeground(
             this,
             ServiceNotification.NOTIFICATION_ID,
@@ -77,7 +62,6 @@ class GatewayForegroundService : LifecycleService() {
     }
 
     override fun onDestroy() {
-        // Covers OS-initiated teardown too, so the UI never shows a stale RUNNING.
         graph.agentController.onServiceStopped()
         logger.i(TAG, "foreground service destroyed")
         super.onDestroy()
@@ -88,14 +72,12 @@ class GatewayForegroundService : LifecycleService() {
         const val ACTION_START = "com.luno.gateway.action.START_AGENT"
         const val ACTION_STOP = "com.luno.gateway.action.STOP_AGENT"
 
-        /** Starts the agent from a user-initiated context (allowed FGS start). */
         fun start(context: Context) {
             val intent = Intent(context, GatewayForegroundService::class.java)
                 .setAction(ACTION_START)
             ContextCompat.startForegroundService(context, intent)
         }
 
-        /** Requests the agent stop and leave the foreground. */
         fun stop(context: Context) {
             val intent = Intent(context, GatewayForegroundService::class.java)
                 .setAction(ACTION_STOP)

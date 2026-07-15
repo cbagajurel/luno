@@ -6,20 +6,9 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 
 /**
- * Pushes native-originated events to Dart over a hand-written [EventChannel]
- * (Pigeon carries only request/response calls; streams go here so the
- * subscribe/cancel lifecycle is explicit).
- *
- * M2 payload is a monotonically increasing tick emitted once per second, to
- * prove Kotlin->Dart push works and arrives in order.
- *
- * Buffer/drop policy: the ticker runs ONLY while a Dart listener is attached —
- * started in [onListen], stopped in [onCancel] — so no event is produced before
- * Dart subscribes; there is nothing to buffer or drop. Each new subscription
- * restarts the count from 0.
- *
- * The [EventChannel.EventSink] must be touched on the main thread, so ticks are
- * driven by a main-looper [Handler].
+ * M2 bridge proof: a 1 Hz tick pushed to Dart. The ticker runs only while a
+ * listener is attached, so nothing is produced before Dart subscribes; each new
+ * subscription restarts from 0. The EventSink must be touched on the main thread.
  */
 class FlutterEventBridge(messenger: BinaryMessenger) : EventChannel.StreamHandler {
     private val channel = EventChannel(messenger, CHANNEL_NAME)
@@ -34,10 +23,8 @@ class FlutterEventBridge(messenger: BinaryMessenger) : EventChannel.StreamHandle
         }
     }
 
-    /** Registers this handler on the channel. Call once the engine is attached. */
     fun attach() = channel.setStreamHandler(this)
 
-    /** Stops ticking and unregisters. Call on engine detach to avoid leaks. */
     fun detach() {
         stopTicking()
         channel.setStreamHandler(null)

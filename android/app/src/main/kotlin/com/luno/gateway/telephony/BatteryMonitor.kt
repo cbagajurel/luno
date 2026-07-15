@@ -8,16 +8,6 @@ import android.os.BatteryManager
 import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.model.BatteryStatus
 
-/**
- * Tracks battery level, charging state, power source, and health (M5). Requires
- * no permission. Reads are event-driven off the sticky `ACTION_BATTERY_CHANGED`
- * broadcast — never polled — and results are written into the shared
- * [DeviceStateStore], where equality-based change detection debounces the
- * naturally chatty broadcast.
- *
- * The receiver runs on the main thread by default, matching the other telemetry
- * writers into the store.
- */
 class BatteryMonitor(
     private val context: Context,
     private val store: DeviceStateStore,
@@ -31,20 +21,18 @@ class BatteryMonitor(
 
     private var registered = false
 
-    /** Registers for battery changes and publishes the current sticky value. */
     fun start() {
         if (registered) {
             publish(context.registerReceiver(null, filter))
             return
         }
-        // Registering returns the current sticky Intent, giving an immediate snapshot.
+        // registerReceiver returns the current sticky Intent = an immediate snapshot.
         val sticky = context.registerReceiver(receiver, filter)
         registered = true
         publish(sticky)
         logger.i(TAG, "battery monitoring started")
     }
 
-    /** Unregisters the receiver. Idempotent. */
     fun stop() {
         if (!registered) return
         context.unregisterReceiver(receiver)

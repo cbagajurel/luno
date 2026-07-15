@@ -7,11 +7,8 @@ import com.luno.gateway.bridge.generated.BatteryStatus as BatteryStatusDto
 import com.luno.gateway.bridge.generated.DeviceState as DeviceStateDto
 import com.luno.gateway.bridge.generated.SimInfo as SimInfoDto
 
-/**
- * Domain model ↔ Pigeon DTO mapping, kept in one place so the agent's domain
- * types never leak Pigeon dependencies and vice versa. Pigeon represents Dart
- * `int` as Kotlin `Long`, so numeric fields are widened here.
- */
+// Pigeon represents Dart `int` as Kotlin `Long`, so numeric fields are widened.
+
 fun SimInfo.toDto(): SimInfoDto = SimInfoDto(
     subscriptionId = subscriptionId.toLong(),
     slotIndex = slotIndex.toLong(),

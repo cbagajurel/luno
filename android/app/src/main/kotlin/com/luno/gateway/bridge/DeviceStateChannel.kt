@@ -11,17 +11,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 /**
- * The single coalesced telemetry stream to Dart (plan.md Phase 2). Following the
- * M2/M3 split, the EventChannel carries a lightweight signal (a revision
- * counter); the structured [com.luno.gateway.model.DeviceState] travels over
- * Pigeon (`getDeviceState`). One channel serves SIM (M4), battery (M5), and the
- * signal/network sources to come.
- *
- * Lifecycle: a Dart subscription runs [onStart] (bring the device managers up)
- * and observes [DeviceStateStore.state]; the first emit is the current snapshot
- * (snapshot-then-stream). Cancelling runs [onStop] so no manager leaks when the
- * dashboard goes away. [onStart]/[onStop] are supplied by the Activity because
- * they touch managers it owns.
+ * The single coalesced telemetry stream. The channel carries only a revision
+ * counter; structured [com.luno.gateway.model.DeviceState] travels over Pigeon
+ * (`getDeviceState`). A subscription brings the device managers up via [onStart]
+ * and stops them via [onStop] so nothing leaks when the dashboard goes away.
  */
 class DeviceStateChannel(
     messenger: BinaryMessenger,

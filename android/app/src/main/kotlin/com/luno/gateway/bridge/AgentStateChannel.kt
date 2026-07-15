@@ -11,18 +11,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 /**
- * Streams the agent's running state to Dart over an [EventChannel]. The source
- * of truth is [AgentController.state] (a StateFlow held for the whole process),
- * so this handler is a pure adapter: it collects the flow and forwards each
- * value's [com.luno.gateway.agent.AgentState.name] to Dart.
- *
- * Snapshot-then-stream: collecting a StateFlow immediately replays the current
- * value, so a Dart listener that attaches after the agent already started still
- * gets the correct initial state, then live updates.
- *
- * The collection runs on the main dispatcher because the [EventChannel.EventSink]
- * must be touched on the main thread. The scope lives exactly as long as the
- * subscription: created in [onListen], cancelled in [onCancel].
+ * Streams the agent running state to Dart. Collecting the StateFlow replays the
+ * current value first (snapshot-then-stream). Runs on the main dispatcher
+ * because the EventSink must be touched on the main thread.
  */
 class AgentStateChannel(
     messenger: BinaryMessenger,

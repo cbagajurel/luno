@@ -10,17 +10,8 @@ import androidx.core.app.NotificationCompat
 import com.luno.gateway.MainActivity
 import com.luno.gateway.R
 
-/**
- * Owns the persistent, low-importance notification that keeps the gateway a
- * foreground service. Low importance (no sound, no peek, badge suppressed) is
- * deliberate: this is an always-on utility, not an alert.
- *
- * The channel exists from minSdk 26 upward, so no version guard is needed.
- * Tapping the notification reopens the dashboard.
- */
 class ServiceNotification(private val context: Context) {
 
-    /** Creates the notification channel if it does not already exist. */
     fun ensureChannel() {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
@@ -36,7 +27,6 @@ class ServiceNotification(private val context: Context) {
         }
     }
 
-    /** Builds the ongoing notification shown while the agent runs. */
     fun build(): Notification {
         val open = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT

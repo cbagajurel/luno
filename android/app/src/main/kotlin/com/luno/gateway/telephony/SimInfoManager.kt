@@ -11,25 +11,6 @@ import androidx.core.content.ContextCompat
 import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.model.SimInfo
 
-/**
- * Reads active SIM subscriptions and tracks insert/remove live. This is the
- * first "native manager → domain model → stream to UI" implementation; M5–M7
- * (battery, signal, network) follow the same shape (docs/milestones.md Phase 2).
- * It writes its slice into the shared [DeviceStateStore]; the store owns the
- * coalesced stream.
- *
- * Permission: [SubscriptionManager.getActiveSubscriptionInfoList] and the change
- * listener require the dangerous `READ_PHONE_STATE`. Every read is guarded — a
- * missing permission (or no SIM) yields an empty list, never a crash or a
- * SecurityException escaping.
- *
- * Threading: [start]/[stop] must be called on the main thread. On API < 30 the
- * legacy listener binds to the calling thread's Looper; the main thread always
- * has one. On API 30+ we pass the main executor explicitly.
- *
- * The change listener fires once immediately on registration, so [start]
- * naturally produces the first snapshot.
- */
 class SimInfoManager(
     private val context: Context,
     private val store: DeviceStateStore,
@@ -46,15 +27,13 @@ class SimInfoManager(
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) ==
             PackageManager.PERMISSION_GRANTED
 
-    /**
-     * Begins monitoring subscription changes. Idempotent and safe to call
-     * without permission (it no-ops and logs). Call again after the permission
-     * is granted to actually register.
-     */
+    // Idempotent; must run on the main thread. Safe to call before permission is
+    // granted (no-ops) and again after. The listener fires once on registration,
+    // which produces the first snapshot.
     fun start() {
         if (!hasPermission()) {
             logger.w(TAG, "READ_PHONE_STATE not granted; SIM info unavailable")
-            refresh() // publishes empty so the UI can render the "no permission" state
+            refresh()
             return
         }
         if (listener != null) {
@@ -77,7 +56,6 @@ class SimInfoManager(
         logger.i(TAG, "SIM monitoring started")
     }
 
-    /** Stops monitoring. Idempotent. */
     fun stop() {
         listener?.let { subscriptionManager.removeOnSubscriptionsChangedListener(it) }
         listener = null
@@ -94,7 +72,7 @@ class SimInfoManager(
                 subscriptionManager.activeSubscriptionInfoList ?: emptyList()
             active.map { it.toDomain() }
         } catch (e: SecurityException) {
-            // Restricted fields on Android 10+ / OEM quirks can still throw.
+            // Restricted subscription fields can still throw on Android 10+ / some OEMs.
             logger.w(TAG, "SecurityException reading subscriptions", e)
             emptyList()
         }

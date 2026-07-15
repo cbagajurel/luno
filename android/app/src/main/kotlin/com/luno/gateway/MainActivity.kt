@@ -16,15 +16,6 @@ import com.luno.gateway.di.AgentGraph
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
-/**
- * Flutter host Activity. Installs the Pigeon [LunoHostApi] implementation, the
- * M2 tick [FlutterEventBridge], the M3 [AgentStateChannel], and the M4/M5
- * coalesced [DeviceStateChannel] onto each attached engine, tearing them down on
- * detach so Activity recreation doesn't leak handlers or double-register.
- *
- * It also implements [AgentHost]: the HostApi delegates service start/stop and
- * the runtime-permission requests here because those need a Context/Activity.
- */
 class MainActivity : FlutterActivity(), AgentHost {
     private var eventBridge: FlutterEventBridge? = null
     private var agentStateChannel: AgentStateChannel? = null
@@ -43,7 +34,6 @@ class MainActivity : FlutterActivity(), AgentHost {
             messenger,
             graph.deviceStateStore,
             onStart = {
-                // Battery needs no permission; SIM monitoring no-ops until granted.
                 graph.batteryMonitor.start()
                 graph.simInfoManager.start()
             },
@@ -64,8 +54,6 @@ class MainActivity : FlutterActivity(), AgentHost {
         LunoHostApi.setUp(flutterEngine.dartExecutor.binaryMessenger, null)
         super.cleanUpFlutterEngine(flutterEngine)
     }
-
-    // --- AgentHost ---------------------------------------------------------
 
     override fun startAgent() = GatewayForegroundService.start(this)
 
@@ -110,8 +98,6 @@ class MainActivity : FlutterActivity(), AgentHost {
             REQ_POST_NOTIFICATIONS -> graph.logger.i(TAG, "POST_NOTIFICATIONS granted=$granted")
             REQ_READ_PHONE_STATE -> {
                 graph.logger.i(TAG, "READ_PHONE_STATE granted=$granted")
-                // Registering the listener now emits the first SIM snapshot,
-                // which pushes the sim-change signal so the UI re-queries.
                 if (granted) graph.simInfoManager.start()
             }
         }

@@ -192,13 +192,7 @@ class FlutterError (
   val details: Any? = null
 ) : Throwable()
 
-/**
- * One active SIM subscription, mirrored from the native domain model
- * (`model/SimInfo.kt`) at the bridge boundary. The MSISDN is intentionally not
- * carried (see M4 notes: it needs READ_PHONE_NUMBERS and is usually null).
- *
- * Generated class from Pigeon that represents data sent in messages.
- */
+/** Generated class from Pigeon that represents data sent in messages. */
 data class SimInfo (
   val subscriptionId: Long,
   val slotIndex: Long,
@@ -252,11 +246,7 @@ data class SimInfo (
   }
 }
 
-/**
- * Battery snapshot (M5), mirrored from `model/BatteryStatus.kt`.
- *
- * Generated class from Pigeon that represents data sent in messages.
- */
+/** Generated class from Pigeon that represents data sent in messages. */
 data class BatteryStatus (
   val levelPercent: Long,
   val isCharging: Boolean,
@@ -302,13 +292,7 @@ data class BatteryStatus (
   }
 }
 
-/**
- * Coalesced device telemetry (M4+), mirrored from `model/DeviceState.kt`. One
- * query and one stream carry all read-only device state; later milestones add
- * fields (signal, network) without new channels.
- *
- * Generated class from Pigeon that represents data sent in messages.
- */
+/** Generated class from Pigeon that represents data sent in messages. */
 data class DeviceState (
   val sims: List<SimInfo>,
   val battery: BatteryStatus? = null
@@ -385,50 +369,15 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
   }
 }
 
-/**
- * Dart -> Kotlin commands/queries. Implemented natively by [LunoHostApiImpl].
- *
- * Generated interface from Pigeon that represents a handler of messages from Flutter.
- */
+/** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface LunoHostApi {
-  /**
-   * Round-trip smoke test: the native side echoes [message] back inside a
-   * recognizable envelope so the caller can prove the bridge is live and that
-   * data crosses it intact. Returns the transformed string.
-   */
   fun ping(message: String): String
-  /**
-   * Starts the gateway foreground service (M3). User-initiated, so the FGS
-   * start is allowed even on Android 12+. Idempotent: starting a running
-   * agent is a no-op. The running state arrives via the agent-state
-   * EventChannel, not as a return value.
-   */
   fun startAgent()
-  /** Requests the gateway foreground service stop and leave the foreground. */
   fun stopAgent()
-  /**
-   * Snapshot of whether the agent is currently running, for the initial UI
-   * paint before the agent-state stream has emitted.
-   */
   fun isAgentRunning(): Boolean
-  /**
-   * Prompts for POST_NOTIFICATIONS (Android 13+) so the persistent
-   * notification is visible. No-op on older versions or if already granted.
-   * The agent runs regardless; this only affects notification visibility.
-   */
   fun requestNotificationPermission()
-  /**
-   * Current coalesced device telemetry (M4 SIMs, M5 battery, …). SIMs are
-   * empty without the phone permission or with no SIM; battery is null until
-   * the first reading — never throws.
-   */
   fun getDeviceState(): DeviceState
-  /** Whether READ_PHONE_STATE (needed to read SIM info) is granted. */
   fun hasPhonePermission(): Boolean
-  /**
-   * Prompts for READ_PHONE_STATE. On grant, native starts SIM monitoring and
-   * the sim-change EventChannel emits, so the UI can re-query [getSimInfo].
-   */
   fun requestPhonePermission()
 
   companion object {

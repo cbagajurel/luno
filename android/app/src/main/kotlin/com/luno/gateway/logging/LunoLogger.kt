@@ -1,15 +1,5 @@
 package com.luno.gateway.logging
 
-/**
- * The single structured-logging facade for the native agent. Everything logs
- * through here rather than calling [android.util.Log] directly, so sinks and
- * redaction are configured in one place.
- *
- * M3 fans out to a single [LogcatSink]. The [redactor] hook is where PII
- * scrubbing lands in M16 (docs/folder-structure.md `logging/Redaction.kt`); for
- * now it is identity. Records are dispatched to every sink in registration
- * order.
- */
 class LunoLogger(
     private val sinks: List<LogSink>,
     private val redactor: (String) -> String = { it },

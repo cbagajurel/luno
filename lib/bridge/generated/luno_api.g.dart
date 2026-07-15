@@ -10,9 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart' show immutable, protected, visibleForTesting;
 
 Object? _extractReplyValueOrThrow(
-  List<Object?>? replyList,
-  String channelName, {
-  required bool isNullValid,
+    List<Object?>? replyList,
+    String channelName, {
+    required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -46,9 +46,8 @@ bool _deepEquals(Object? a, Object? b) {
   }
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed.every(
-          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
-        );
+        a.indexed
+            .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {
@@ -97,9 +96,7 @@ int _deepHash(Object? value) {
   return value.hashCode;
 }
 
-/// One active SIM subscription, mirrored from the native domain model
-/// (`model/SimInfo.kt`) at the bridge boundary. The MSISDN is intentionally not
-/// carried (see M4 notes: it needs READ_PHONE_NUMBERS and is usually null).
+
 class SimInfo {
   SimInfo({
     required this.subscriptionId,
@@ -134,8 +131,7 @@ class SimInfo {
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static SimInfo decode(Object result) {
     result as List<Object?>;
@@ -158,12 +154,7 @@ class SimInfo {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(subscriptionId, other.subscriptionId) &&
-        _deepEquals(slotIndex, other.slotIndex) &&
-        _deepEquals(carrierName, other.carrierName) &&
-        _deepEquals(displayName, other.displayName) &&
-        _deepEquals(isEmbedded, other.isEmbedded) &&
-        _deepEquals(simState, other.simState);
+    return _deepEquals(subscriptionId, other.subscriptionId) && _deepEquals(slotIndex, other.slotIndex) && _deepEquals(carrierName, other.carrierName) && _deepEquals(displayName, other.displayName) && _deepEquals(isEmbedded, other.isEmbedded) && _deepEquals(simState, other.simState);
   }
 
   @override
@@ -171,7 +162,6 @@ class SimInfo {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
-/// Battery snapshot (M5), mirrored from `model/BatteryStatus.kt`.
 class BatteryStatus {
   BatteryStatus({
     required this.levelPercent,
@@ -189,12 +179,16 @@ class BatteryStatus {
   String health;
 
   List<Object?> _toList() {
-    return <Object?>[levelPercent, isCharging, plugged, health];
+    return <Object?>[
+      levelPercent,
+      isCharging,
+      plugged,
+      health,
+    ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static BatteryStatus decode(Object result) {
     result as List<Object?>;
@@ -215,10 +209,7 @@ class BatteryStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(levelPercent, other.levelPercent) &&
-        _deepEquals(isCharging, other.isCharging) &&
-        _deepEquals(plugged, other.plugged) &&
-        _deepEquals(health, other.health);
+    return _deepEquals(levelPercent, other.levelPercent) && _deepEquals(isCharging, other.isCharging) && _deepEquals(plugged, other.plugged) && _deepEquals(health, other.health);
   }
 
   @override
@@ -226,23 +217,25 @@ class BatteryStatus {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
-/// Coalesced device telemetry (M4+), mirrored from `model/DeviceState.kt`. One
-/// query and one stream carry all read-only device state; later milestones add
-/// fields (signal, network) without new channels.
 class DeviceState {
-  DeviceState({required this.sims, this.battery});
+  DeviceState({
+    required this.sims,
+    this.battery,
+  });
 
   List<SimInfo> sims;
 
   BatteryStatus? battery;
 
   List<Object?> _toList() {
-    return <Object?>[sims, battery];
+    return <Object?>[
+      sims,
+      battery,
+    ];
   }
 
   Object encode() {
-    return _toList();
-  }
+    return _toList();  }
 
   static DeviceState decode(Object result) {
     result as List<Object?>;
@@ -269,6 +262,7 @@ class DeviceState {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -276,13 +270,13 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    } else if (value is SimInfo) {
+    }    else if (value is SimInfo) {
       buffer.putUint8(129);
       writeValue(buffer, value.encode());
-    } else if (value is BatteryStatus) {
+    }    else if (value is BatteryStatus) {
       buffer.putUint8(130);
       writeValue(buffer, value.encode());
-    } else if (value is DeviceState) {
+    }    else if (value is DeviceState) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
     } else {
@@ -305,55 +299,40 @@ class _PigeonCodec extends StandardMessageCodec {
   }
 }
 
-/// Dart -> Kotlin commands/queries. Implemented natively by [LunoHostApiImpl].
 class LunoHostApi {
   /// Constructor for [LunoHostApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  LunoHostApi({
-    BinaryMessenger? binaryMessenger,
-    String messageChannelSuffix = '',
-  }) : pigeonVar_binaryMessenger = binaryMessenger,
-       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
-           ? '.$messageChannelSuffix'
-           : '';
+  LunoHostApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
 
   final String pigeonVar_messageChannelSuffix;
 
-  /// Round-trip smoke test: the native side echoes [message] back inside a
-  /// recognizable envelope so the caller can prove the bridge is live and that
-  /// data crosses it intact. Returns the transformed string.
   Future<String> ping(String message) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.ping$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.ping$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[message],
-    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[message]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as String;
   }
 
-  /// Starts the gateway foreground service (M3). User-initiated, so the FGS
-  /// start is allowed even on Android 12+. Idempotent: starting a running
-  /// agent is a no-op. The running state arrives via the agent-state
-  /// EventChannel, not as a return value.
   Future<void> startAgent() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.startAgent$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.startAgent$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -363,16 +342,15 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
-  /// Requests the gateway foreground service stop and leave the foreground.
   Future<void> stopAgent() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.stopAgent$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.stopAgent$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -382,17 +360,15 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
-  /// Snapshot of whether the agent is currently running, for the initial UI
-  /// paint before the agent-state stream has emitted.
   Future<bool> isAgentRunning() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.isAgentRunning$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.isAgentRunning$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -402,19 +378,16 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as bool;
   }
 
-  /// Prompts for POST_NOTIFICATIONS (Android 13+) so the persistent
-  /// notification is visible. No-op on older versions or if already granted.
-  /// The agent runs regardless; this only affects notification visibility.
   Future<void> requestNotificationPermission() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestNotificationPermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestNotificationPermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -424,18 +397,15 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
-  /// Current coalesced device telemetry (M4 SIMs, M5 battery, …). SIMs are
-  /// empty without the phone permission or with no SIM; battery is null until
-  /// the first reading — never throws.
   Future<DeviceState> getDeviceState() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.getDeviceState$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.getDeviceState$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -445,17 +415,16 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as DeviceState;
   }
 
-  /// Whether READ_PHONE_STATE (needed to read SIM info) is granted.
   Future<bool> hasPhonePermission() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasPhonePermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasPhonePermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -465,18 +434,16 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
     return pigeonVar_replyValue! as bool;
   }
 
-  /// Prompts for READ_PHONE_STATE. On grant, native starts SIM monitoring and
-  /// the sim-change EventChannel emits, so the UI can re-query [getSimInfo].
   Future<void> requestPhonePermission() async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestPhonePermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestPhonePermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -486,9 +453,10 @@ class LunoHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: true,
-    );
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 }

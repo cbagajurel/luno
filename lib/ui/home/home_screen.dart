@@ -5,10 +5,7 @@ import 'package:flutter/material.dart';
 import '../../bridge/generated/luno_api.g.dart' show BatteryStatus, DeviceState, SimInfo;
 import '../../bridge/luno_bridge.dart';
 
-/// Temporary M2–M5 demo surface: exercises the native bridge end to end — a
-/// `ping` round-trip, the live native tick stream, the M3 foreground-service
-/// controls, and the M4/M5 live device telemetry (SIMs + battery). This gets
-/// replaced by the real dashboard in M17; for now it visibly proves the agent.
+/// Temporary demo surface for M2–M5; replaced by the real dashboard in M17.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, LunoBridge? bridge}) : _bridge = bridge;
 
@@ -41,8 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _agentSub = _bridge.agentStateEvents.listen((state) {
       if (mounted) setState(() => _agentState = state);
     });
-    // Any telemetry-change signal (including the initial one on subscribe)
-    // triggers a typed re-query — the native side owns the source of truth.
     _deviceSub = _bridge.deviceStateEvents.listen((_) => _refreshDeviceState());
     _refreshDeviceState();
   }
@@ -120,8 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
             sims: sims,
             onGrant: () async {
               await _bridge.requestPhonePermission();
-              // The grant result arrives via the telemetry stream; also poll
-              // once in case the OS reports it without a subscription bump.
               await _refreshDeviceState();
             },
           ),

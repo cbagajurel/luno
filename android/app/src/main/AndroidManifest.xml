@@ -1,12 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- M3: keep-alive foreground service. specialUse is the locked FGS type
-         (plan.md) for a persistent SMS gateway; POST_NOTIFICATIONS is a runtime
-         permission on Android 13+. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- M4: read SIM/subscription info (carrier, slot, state). Dangerous,
-         runtime-requested. MSISDN is not read, so READ_PHONE_NUMBERS is omitted. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
@@ -35,9 +30,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- The 24/7 agent process. Not exported: only started in-process from a
-             user action (and, later, BOOT_COMPLETED). The specialUse subtype
-             property documents the justification required on Android 14+. -->
         <service
             android:name=".agent.GatewayForegroundService"
             android:exported="false"
