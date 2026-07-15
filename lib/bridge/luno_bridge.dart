@@ -28,15 +28,19 @@ AgentRunState _agentStateFromName(String name) {
 /// M2 slice: [ping] (round-trip) and [tickEvents] (native 1 Hz push).
 /// M3 slice: [startAgent]/[stopAgent]/[isAgentRunning] and [agentStateEvents]
 /// (the foreground-service running state).
+/// M4 slice: [getSimInfo]/[hasPhonePermission]/[requestPhonePermission] and
+/// [simChangedEvents] (a signal to re-query SIMs).
 class LunoBridge {
   LunoBridge({
     LunoHostApi? hostApi,
     EventChannel? tickChannel,
     EventChannel? agentStateChannel,
+    EventChannel? simChannel,
   })  : _hostApi = hostApi ?? LunoHostApi(),
         _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
         _agentStateChannel =
-            agentStateChannel ?? const EventChannel(agentStateChannelName);
+            agentStateChannel ?? const EventChannel(agentStateChannelName),
+        _simChannel = simChannel ?? const EventChannel(simChannelName);
 
   /// Must match [FlutterEventBridge.CHANNEL_NAME] on the native side.
   static const String tickChannelName = 'com.luno.gateway/events/tick';
@@ -45,9 +49,13 @@ class LunoBridge {
   static const String agentStateChannelName =
       'com.luno.gateway/events/agent_state';
 
+  /// Must match [SimChangeChannel.CHANNEL_NAME] on the native side.
+  static const String simChannelName = 'com.luno.gateway/events/sim';
+
   final LunoHostApi _hostApi;
   final EventChannel _tickChannel;
   final EventChannel _agentStateChannel;
+  final EventChannel _simChannel;
 
   /// Round-trips [message] through the native HostApi and returns the
   /// transformed echo. Proves the Dart->Kotlin bridge is live and carries data.
@@ -77,4 +85,23 @@ class LunoBridge {
   Stream<AgentRunState> get agentStateEvents => _agentStateChannel
       .receiveBroadcastStream()
       .map((event) => _agentStateFromName(event as String));
+
+  /// Current active SIM subscriptions. Empty when the phone permission is
+  /// missing or no SIM is present.
+  Future<List<SimInfo>> getSimInfo() async {
+    final sims = await _hostApi.getSimInfo();
+    return sims.whereType<SimInfo>().toList(growable: false);
+  }
+
+  /// Whether READ_PHONE_STATE is granted (needed to read SIM info).
+  Future<bool> hasPhonePermission() => _hostApi.hasPhonePermission();
+
+  /// Prompts for READ_PHONE_STATE. On grant, [simChangedEvents] fires so the
+  /// caller can re-query [getSimInfo].
+  Future<void> requestPhonePermission() => _hostApi.requestPhonePermission();
+
+  /// Fires whenever the SIM set changes (and once on subscribe). Carries only a
+  /// revision counter — re-query [getSimInfo] for the typed data.
+  Stream<int> get simChangedEvents =>
+      _simChannel.receiveBroadcastStream().map((event) => event as int);
 }

@@ -17,7 +17,7 @@ class LunoApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        graph = AgentGraph()
+        graph = AgentGraph(this)
         graph.logger.i(TAG, "LunoApplication created")
     }
 

@@ -10,6 +10,7 @@ import com.luno.gateway.bridge.AgentHost
 import com.luno.gateway.bridge.AgentStateChannel
 import com.luno.gateway.bridge.FlutterEventBridge
 import com.luno.gateway.bridge.LunoHostApiImpl
+import com.luno.gateway.bridge.SimChangeChannel
 import com.luno.gateway.bridge.generated.LunoHostApi
 import com.luno.gateway.di.AgentGraph
 import io.flutter.embedding.android.FlutterActivity
@@ -17,16 +18,17 @@ import io.flutter.embedding.engine.FlutterEngine
 
 /**
  * Flutter host Activity. Installs the Pigeon [LunoHostApi] implementation, the
- * M2 tick [FlutterEventBridge], and the M3 [AgentStateChannel] onto each attached
- * engine, tearing them down on detach so Activity recreation doesn't leak
- * handlers or double-register.
+ * M2 tick [FlutterEventBridge], the M3 [AgentStateChannel], and the M4
+ * [SimChangeChannel] onto each attached engine, tearing them down on detach so
+ * Activity recreation doesn't leak handlers or double-register.
  *
  * It also implements [AgentHost]: the HostApi delegates service start/stop and
- * the notification-permission request here because those need a Context/Activity.
+ * the runtime-permission requests here because those need a Context/Activity.
  */
 class MainActivity : FlutterActivity(), AgentHost {
     private var eventBridge: FlutterEventBridge? = null
     private var agentStateChannel: AgentStateChannel? = null
+    private var simChangeChannel: SimChangeChannel? = null
 
     private val graph: AgentGraph
         get() = (application as LunoApplication).graph
@@ -34,12 +36,15 @@ class MainActivity : FlutterActivity(), AgentHost {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        LunoHostApi.setUp(messenger, LunoHostApiImpl(this))
+        LunoHostApi.setUp(messenger, LunoHostApiImpl(this, graph.simInfoManager))
         eventBridge = FlutterEventBridge(messenger).also { it.attach() }
         agentStateChannel = AgentStateChannel(messenger, graph.agentController).also { it.attach() }
+        simChangeChannel = SimChangeChannel(messenger, graph.simInfoManager).also { it.attach() }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        simChangeChannel?.detach()
+        simChangeChannel = null
         agentStateChannel?.detach()
         agentStateChannel = null
         eventBridge?.detach()
@@ -58,11 +63,7 @@ class MainActivity : FlutterActivity(), AgentHost {
 
     override fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
+        if (!isGranted(Manifest.permission.POST_NOTIFICATIONS)) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
@@ -71,20 +72,42 @@ class MainActivity : FlutterActivity(), AgentHost {
         }
     }
 
+    override fun hasPhonePermission(): Boolean = isGranted(Manifest.permission.READ_PHONE_STATE)
+
+    override fun requestPhonePermission() {
+        if (!hasPhonePermission()) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_PHONE_STATE),
+                REQ_READ_PHONE_STATE,
+            )
+        }
+    }
+
+    private fun isGranted(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_POST_NOTIFICATIONS) {
-            val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
-            graph.logger.i(TAG, "POST_NOTIFICATIONS granted=$granted")
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        when (requestCode) {
+            REQ_POST_NOTIFICATIONS -> graph.logger.i(TAG, "POST_NOTIFICATIONS granted=$granted")
+            REQ_READ_PHONE_STATE -> {
+                graph.logger.i(TAG, "READ_PHONE_STATE granted=$granted")
+                // Registering the listener now emits the first SIM snapshot,
+                // which pushes the sim-change signal so the UI re-queries.
+                if (granted) graph.simInfoManager.start()
+            }
         }
     }
 
     companion object {
         private const val TAG = "MainActivity"
         private const val REQ_POST_NOTIFICATIONS = 1001
+        private const val REQ_READ_PHONE_STATE = 1002
     }
 }

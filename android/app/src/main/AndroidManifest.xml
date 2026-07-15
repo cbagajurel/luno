@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- M4: read SIM/subscription info (carrier, slot, state). Dangerous,
+         runtime-requested. MSISDN is not read, so READ_PHONE_NUMBERS is omitted. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
         android:label="Luno"

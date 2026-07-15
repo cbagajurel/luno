@@ -11,6 +11,27 @@
 // so the EventChannel subscribe/cancel lifecycle is explicit.
 import 'package:pigeon/pigeon.dart';
 
+/// One active SIM subscription, mirrored from the native domain model
+/// (`model/SimInfo.kt`) at the bridge boundary. The MSISDN is intentionally not
+/// carried (see M4 notes: it needs READ_PHONE_NUMBERS and is usually null).
+class SimInfo {
+  SimInfo({
+    required this.subscriptionId,
+    required this.slotIndex,
+    required this.carrierName,
+    required this.displayName,
+    required this.isEmbedded,
+    required this.simState,
+  });
+
+  final int subscriptionId;
+  final int slotIndex;
+  final String carrierName;
+  final String displayName;
+  final bool isEmbedded;
+  final String simState;
+}
+
 @ConfigurePigeon(
   PigeonOptions(
     dartOut: 'lib/bridge/generated/luno_api.g.dart',
@@ -45,4 +66,15 @@ abstract class LunoHostApi {
   /// notification is visible. No-op on older versions or if already granted.
   /// The agent runs regardless; this only affects notification visibility.
   void requestNotificationPermission();
+
+  /// Current active SIM subscriptions (M4). Returns an empty list when the
+  /// phone permission is missing or no SIM is present — never throws.
+  List<SimInfo> getSimInfo();
+
+  /// Whether READ_PHONE_STATE (needed to read SIM info) is granted.
+  bool hasPhonePermission();
+
+  /// Prompts for READ_PHONE_STATE. On grant, native starts SIM monitoring and
+  /// the sim-change EventChannel emits, so the UI can re-query [getSimInfo].
+  void requestPhonePermission();
 }

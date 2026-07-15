@@ -11,4 +11,6 @@ interface AgentHost {
     fun stopAgent()
     fun isAgentRunning(): Boolean
     fun requestNotificationPermission()
+    fun hasPhonePermission(): Boolean
+    fun requestPhonePermission()
 }

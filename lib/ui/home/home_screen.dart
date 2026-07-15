@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../bridge/generated/luno_api.g.dart' show SimInfo;
 import '../../bridge/luno_bridge.dart';
 
-/// Temporary M2/M3 demo surface: exercises the native bridge end to end — a
-/// `ping` round-trip, the live native tick stream, and the M3 foreground-service
-/// controls (start/stop + running state). This gets replaced by the real
-/// dashboard in M17; for now it exists to visibly prove the agent works.
+/// Temporary M2–M4 demo surface: exercises the native bridge end to end — a
+/// `ping` round-trip, the live native tick stream, the M3 foreground-service
+/// controls, and the M4 live SIM list. This gets replaced by the real dashboard
+/// in M17; for now it exists to visibly prove the agent works.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, LunoBridge? bridge}) : _bridge = bridge;
 
@@ -21,10 +22,14 @@ class _HomeScreenState extends State<HomeScreen> {
   late final LunoBridge _bridge = widget._bridge ?? LunoBridge();
   StreamSubscription<int>? _tickSub;
   StreamSubscription<AgentRunState>? _agentSub;
+  StreamSubscription<int>? _simSub;
 
   String _pingResult = '(not called yet)';
   int? _lastTick;
   AgentRunState _agentState = AgentRunState.unknown;
+
+  bool _hasPhonePermission = false;
+  List<SimInfo> _sims = const [];
 
   @override
   void initState() {
@@ -36,12 +41,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _agentSub = _bridge.agentStateEvents.listen((state) {
       if (mounted) setState(() => _agentState = state);
     });
+    // Any SIM-change signal (including the initial one on subscribe) triggers a
+    // typed re-query — the native side owns the source of truth.
+    _simSub = _bridge.simChangedEvents.listen((_) => _refreshSims());
+    _refreshSims();
   }
 
   @override
   void dispose() {
     _tickSub?.cancel();
     _agentSub?.cancel();
+    _simSub?.cancel();
     super.dispose();
   }
 
@@ -55,52 +65,70 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startAgent() async {
-    // Ask for the notification permission first so the persistent notification
-    // is visible; the agent starts either way.
     await _bridge.requestNotificationPermission();
     await _bridge.startAgent();
   }
 
   Future<void> _stopAgent() => _bridge.stopAgent();
 
+  Future<void> _refreshSims() async {
+    final hasPermission = await _bridge.hasPhonePermission();
+    final sims = hasPermission ? await _bridge.getSimInfo() : const <SimInfo>[];
+    if (mounted) {
+      setState(() {
+        _hasPhonePermission = hasPermission;
+        _sims = sims;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isRunning = _agentState == AgentRunState.running;
     return Scaffold(
       appBar: AppBar(title: const Text('Luno')),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _AgentStatusChip(state: _agentState),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FilledButton.icon(
-                  onPressed: isRunning ? null : _startAgent,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start agent'),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: isRunning ? _stopAgent : null,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop agent'),
-                ),
-              ],
-            ),
-            const Divider(height: 48),
-            const Text('HostApi.ping →'),
-            Text(_pingResult, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 24),
-            const Text('Native tick (EventChannel) →'),
-            Text(
-              _lastTick == null ? 'waiting…' : '$_lastTick',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Center(child: _AgentStatusChip(state: _agentState)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: isRunning ? null : _startAgent,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start agent'),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: isRunning ? _stopAgent : null,
+                icon: const Icon(Icons.stop),
+                label: const Text('Stop agent'),
+              ),
+            ],
+          ),
+          const Divider(height: 40),
+          _SimSection(
+            hasPermission: _hasPhonePermission,
+            sims: _sims,
+            onGrant: () async {
+              await _bridge.requestPhonePermission();
+              // The grant result arrives via the sim-change stream; also poll
+              // once in case the OS reports it without a subscription bump.
+              await _refreshSims();
+            },
+          ),
+          const Divider(height: 40),
+          const Text('HostApi.ping →'),
+          Text(_pingResult, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 16),
+          const Text('Native tick (EventChannel) →'),
+          Text(
+            _lastTick == null ? 'waiting…' : '$_lastTick',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _sendPing,
@@ -126,6 +154,83 @@ class _AgentStatusChip extends StatelessWidget {
     return Chip(
       avatar: Icon(icon, color: color, size: 20),
       label: Text(label),
+    );
+  }
+}
+
+class _SimSection extends StatelessWidget {
+  const _SimSection({
+    required this.hasPermission,
+    required this.sims,
+    required this.onGrant,
+  });
+
+  final bool hasPermission;
+  final List<SimInfo> sims;
+  final Future<void> Function() onGrant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('SIMs', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (!hasPermission)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Text(
+                    'Phone permission is needed to read SIM information.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onGrant,
+                    icon: const Icon(Icons.sim_card),
+                    label: const Text('Grant phone permission'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (sims.isEmpty)
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.sim_card_alert),
+              title: Text('No active SIM detected'),
+            ),
+          )
+        else
+          ...sims.map((sim) => _SimTile(sim: sim)),
+      ],
+    );
+  }
+}
+
+class _SimTile extends StatelessWidget {
+  const _SimTile({required this.sim});
+
+  final SimInfo sim;
+
+  @override
+  Widget build(BuildContext context) {
+    final carrier = sim.carrierName.isNotEmpty ? sim.carrierName : 'Unknown carrier';
+    final name = sim.displayName.isNotEmpty ? sim.displayName : carrier;
+    return Card(
+      child: ListTile(
+        leading: Icon(sim.isEmbedded ? Icons.sim_card_download : Icons.sim_card),
+        title: Text(name),
+        subtitle: Text(
+          'Carrier: $carrier\n'
+          'Slot ${sim.slotIndex} · subId ${sim.subscriptionId} · '
+          '${sim.isEmbedded ? 'eSIM' : 'physical'}',
+        ),
+        trailing: Chip(label: Text(sim.simState)),
+        isThreeLine: true,
+      ),
     );
   }
 }
