@@ -381,6 +381,60 @@ data class NetworkStatus (
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
+data class OutboxEntry (
+  val id: String,
+  val recipient: String,
+  val status: String,
+  val lastError: String? = null,
+  val attempt: Long,
+  val createdAt: Long
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): OutboxEntry {
+      val id = pigeonVar_list[0] as String
+      val recipient = pigeonVar_list[1] as String
+      val status = pigeonVar_list[2] as String
+      val lastError = pigeonVar_list[3] as String?
+      val attempt = pigeonVar_list[4] as Long
+      val createdAt = pigeonVar_list[5] as Long
+      return OutboxEntry(id, recipient, status, lastError, attempt, createdAt)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      id,
+      recipient,
+      status,
+      lastError,
+      attempt,
+      createdAt,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as OutboxEntry
+    return LunoApiPigeonUtils.deepEquals(this.id, other.id) && LunoApiPigeonUtils.deepEquals(this.recipient, other.recipient) && LunoApiPigeonUtils.deepEquals(this.status, other.status) && LunoApiPigeonUtils.deepEquals(this.lastError, other.lastError) && LunoApiPigeonUtils.deepEquals(this.attempt, other.attempt) && LunoApiPigeonUtils.deepEquals(this.createdAt, other.createdAt)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.id)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.recipient)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.status)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.lastError)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.attempt)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.createdAt)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
 data class DeviceState (
   val sims: List<SimInfo>,
   val battery: BatteryStatus? = null,
@@ -450,6 +504,11 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
       }
       133.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
+          OutboxEntry.fromList(it)
+        }
+      }
+      134.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
           DeviceState.fromList(it)
         }
       }
@@ -474,8 +533,12 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         stream.write(132)
         writeValue(stream, value.toList())
       }
-      is DeviceState -> {
+      is OutboxEntry -> {
         stream.write(133)
+        writeValue(stream, value.toList())
+      }
+      is DeviceState -> {
+        stream.write(134)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -493,6 +556,10 @@ interface LunoHostApi {
   fun getDeviceState(): DeviceState
   fun hasPhonePermission(): Boolean
   fun requestPhonePermission()
+  fun hasSmsPermission(): Boolean
+  fun requestSmsPermission()
+  fun sendSms(recipient: String, body: String, subscriptionId: Long?): String
+  fun getRecentOutbox(): List<OutboxEntry>
 
   companion object {
     /** The codec used by LunoHostApi. */
@@ -620,6 +687,71 @@ interface LunoHostApi {
             val wrapped: List<Any?> = try {
               api.requestPhonePermission()
               listOf(null)
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.hasSmsPermission$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.hasSmsPermission())
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.requestSmsPermission$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.requestSmsPermission()
+              listOf(null)
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.sendSms$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val recipientArg = args[0] as String
+            val bodyArg = args[1] as String
+            val subscriptionIdArg = args[2] as Long?
+            val wrapped: List<Any?> = try {
+              listOf(api.sendSms(recipientArg, bodyArg, subscriptionIdArg))
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.getRecentOutbox$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.getRecentOutbox())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }

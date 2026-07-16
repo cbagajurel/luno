@@ -3,7 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../bridge/generated/luno_api.g.dart'
-    show BatteryStatus, DeviceState, NetworkStatus, SignalInfo, SimInfo;
+    show
+        BatteryStatus,
+        DeviceState,
+        NetworkStatus,
+        OutboxEntry,
+        SignalInfo,
+        SimInfo;
 import '../../bridge/luno_bridge.dart';
 
 /// Temporary demo surface for M2–M5; replaced by the real dashboard in M17.
@@ -21,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<int>? _tickSub;
   StreamSubscription<AgentRunState>? _agentSub;
   StreamSubscription<int>? _deviceSub;
+  StreamSubscription<int>? _outboxSub;
 
   String _pingResult = '(not called yet)';
   int? _lastTick;
@@ -28,6 +35,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _hasPhonePermission = false;
   DeviceState? _deviceState;
+
+  final TextEditingController _recipientController = TextEditingController();
+  final TextEditingController _bodyController = TextEditingController();
+  bool _hasSmsPermission = false;
+  int? _selectedSubId;
+  List<OutboxEntry> _outbox = const <OutboxEntry>[];
 
   @override
   void initState() {
@@ -40,7 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _agentState = state);
     });
     _deviceSub = _bridge.deviceStateEvents.listen((_) => _refreshDeviceState());
+    _outboxSub = _bridge.outboxEvents.listen((_) => _refreshOutbox());
     _refreshDeviceState();
+    _refreshOutbox();
   }
 
   @override
@@ -48,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _tickSub?.cancel();
     _agentSub?.cancel();
     _deviceSub?.cancel();
+    _outboxSub?.cancel();
+    _recipientController.dispose();
+    _bodyController.dispose();
     super.dispose();
   }
 
@@ -69,13 +87,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refreshDeviceState() async {
     final hasPermission = await _bridge.hasPhonePermission();
+    final hasSms = await _bridge.hasSmsPermission();
     final state = await _bridge.getDeviceState();
     if (mounted) {
       setState(() {
         _hasPhonePermission = hasPermission;
+        _hasSmsPermission = hasSms;
         _deviceState = state;
       });
     }
+  }
+
+  Future<void> _refreshOutbox() async {
+    final rows = await _bridge.getRecentOutbox();
+    if (mounted) setState(() => _outbox = rows);
+  }
+
+  Future<void> _sendTestSms() async {
+    final recipient = _recipientController.text.trim();
+    final body = _bodyController.text;
+    if (recipient.isEmpty || body.isEmpty) return;
+    if (!_hasSmsPermission) {
+      await _bridge.requestSmsPermission();
+      await _refreshDeviceState();
+      if (!_hasSmsPermission) return;
+    }
+    await _bridge.sendSms(recipient, body, subscriptionId: _selectedSubId);
+    _bodyController.clear();
+    await _refreshOutbox();
   }
 
   @override
@@ -127,6 +166,21 @@ class _HomeScreenState extends State<HomeScreen> {
               await _bridge.requestPhonePermission();
               await _refreshDeviceState();
             },
+          ),
+          const Divider(height: 40),
+          _SendSmsSection(
+            hasPermission: _hasSmsPermission,
+            recipientController: _recipientController,
+            bodyController: _bodyController,
+            sims: sims,
+            selectedSubId: _selectedSubId,
+            onSubChanged: (v) => setState(() => _selectedSubId = v),
+            onSend: _sendTestSms,
+            onGrant: () async {
+              await _bridge.requestSmsPermission();
+              await _refreshDeviceState();
+            },
+            outbox: _outbox,
           ),
           const Divider(height: 40),
           const Text('HostApi.ping →'),
@@ -315,5 +369,147 @@ class _SimTile extends StatelessWidget {
     if (signal == null) return 'unknown';
     final bars = '${signal.level}/4';
     return signal.dbm != null ? '${signal.dbm} dBm ($bars)' : bars;
+  }
+}
+
+class _SendSmsSection extends StatelessWidget {
+  const _SendSmsSection({
+    required this.hasPermission,
+    required this.recipientController,
+    required this.bodyController,
+    required this.sims,
+    required this.selectedSubId,
+    required this.onSubChanged,
+    required this.onSend,
+    required this.onGrant,
+    required this.outbox,
+  });
+
+  final bool hasPermission;
+  final TextEditingController recipientController;
+  final TextEditingController bodyController;
+  final List<SimInfo> sims;
+  final int? selectedSubId;
+  final ValueChanged<int?> onSubChanged;
+  final Future<void> Function() onSend;
+  final Future<void> Function() onGrant;
+  final List<OutboxEntry> outbox;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Send test SMS', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (!hasPermission)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Text(
+                    'SMS permission is needed to send messages.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onGrant,
+                    icon: const Icon(Icons.sms),
+                    label: const Text('Grant SMS permission'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: recipientController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Recipient number',
+                      hintText: '+15551112222',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: bodyController,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Message'),
+                  ),
+                  if (sims.length > 1) ...[
+                    const SizedBox(height: 8),
+                    DropdownButton<int?>(
+                      isExpanded: true,
+                      value: selectedSubId,
+                      hint: const Text('Default SIM'),
+                      onChanged: onSubChanged,
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('Default SIM'),
+                        ),
+                        for (final sim in sims)
+                          DropdownMenuItem<int?>(
+                            value: sim.subscriptionId,
+                            child: Text(
+                              'Slot ${sim.slotIndex} · '
+                              '${sim.carrierName.isNotEmpty ? sim.carrierName : 'SIM'}',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onSend,
+                    icon: const Icon(Icons.send),
+                    label: const Text('Send'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (outbox.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('Recent', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+          ...outbox.map((e) => _OutboxTile(entry: e)),
+        ],
+      ],
+    );
+  }
+}
+
+class _OutboxTile extends StatelessWidget {
+  const _OutboxTile({required this.entry});
+
+  final OutboxEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, icon) = switch (entry.status) {
+      'SENT' || 'DELIVERED' => (Colors.green, Icons.check_circle),
+      'SENDING' || 'QUEUED' => (Colors.orange, Icons.schedule),
+      'FAILED_TERMINAL' ||
+      'FAILED_RETRYABLE' ||
+      'UNDELIVERED' =>
+        (Colors.red, Icons.error),
+      _ => (Colors.grey, Icons.help),
+    };
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: color),
+      title: Text(entry.recipient),
+      subtitle: entry.lastError != null ? Text(entry.lastError!) : null,
+      trailing: Text(entry.status),
+    );
   }
 }

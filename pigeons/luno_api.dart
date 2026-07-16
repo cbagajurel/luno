@@ -56,6 +56,24 @@ class NetworkStatus {
   final bool metered;
 }
 
+class OutboxEntry {
+  OutboxEntry({
+    required this.id,
+    required this.recipient,
+    required this.status,
+    this.lastError,
+    required this.attempt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String recipient;
+  final String status;
+  final String? lastError;
+  final int attempt;
+  final int createdAt;
+}
+
 class DeviceState {
   DeviceState({
     required this.sims,
@@ -96,4 +114,12 @@ abstract class LunoHostApi {
   bool hasPhonePermission();
 
   void requestPhonePermission();
+
+  bool hasSmsPermission();
+
+  void requestSmsPermission();
+
+  String sendSms(String recipient, String body, int? subscriptionId);
+
+  List<OutboxEntry> getRecentOutbox();
 }

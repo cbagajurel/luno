@@ -41,6 +41,12 @@ class FakeOutboxDao : OutboxDao {
     override suspend fun findByStatus(status: OutboxStatus): List<OutboxEntity> =
         rows.values.filter { it.status == status }.sortedBy { it.createdAt }
 
+    override suspend fun recent(limit: Int): List<OutboxEntity> =
+        rows.values.sortedByDescending { it.createdAt }.take(limit)
+
+    override fun observeRecent(limit: Int): Flow<List<OutboxEntity>> =
+        flowOf(rows.values.sortedByDescending { it.createdAt }.take(limit))
+
     override fun observeDepth(statuses: List<OutboxStatus>): Flow<Int> =
         flowOf(rows.values.count { it.status in statuses })
 

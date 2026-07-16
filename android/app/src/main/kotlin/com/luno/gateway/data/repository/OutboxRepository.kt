@@ -86,6 +86,10 @@ class OutboxRepository(
 
     suspend fun queued(): List<OutboxEntity> = dao.findByStatus(OutboxStatus.QUEUED)
 
+    suspend fun recent(limit: Int = DEFAULT_RECENT_LIMIT): List<OutboxEntity> = dao.recent(limit)
+
+    fun observeRecent(limit: Int = DEFAULT_RECENT_LIMIT): Flow<List<OutboxEntity>> = dao.observeRecent(limit)
+
     fun observeQueueDepth(): Flow<Int> =
         dao.observeDepth(listOf(OutboxStatus.QUEUED, OutboxStatus.SENDING, OutboxStatus.FAILED_RETRYABLE))
 
@@ -125,5 +129,6 @@ class OutboxRepository(
     companion object {
         private const val TAG = "OutboxRepository"
         private const val DEFAULT_MAX_TERMINAL_RETAINED = 500
+        private const val DEFAULT_RECENT_LIMIT = 50
     }
 }

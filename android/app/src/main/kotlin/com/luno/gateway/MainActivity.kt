@@ -11,6 +11,7 @@ import com.luno.gateway.bridge.AgentStateChannel
 import com.luno.gateway.bridge.DeviceStateChannel
 import com.luno.gateway.bridge.FlutterEventBridge
 import com.luno.gateway.bridge.LunoHostApiImpl
+import com.luno.gateway.bridge.OutboxChannel
 import com.luno.gateway.bridge.generated.LunoHostApi
 import com.luno.gateway.di.AgentGraph
 import io.flutter.embedding.android.FlutterActivity
@@ -20,6 +21,7 @@ class MainActivity : FlutterActivity(), AgentHost {
     private var eventBridge: FlutterEventBridge? = null
     private var agentStateChannel: AgentStateChannel? = null
     private var deviceStateChannel: DeviceStateChannel? = null
+    private var outboxChannel: OutboxChannel? = null
 
     private val graph: AgentGraph
         get() = (application as LunoApplication).graph
@@ -27,8 +29,12 @@ class MainActivity : FlutterActivity(), AgentHost {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        LunoHostApi.setUp(messenger, LunoHostApiImpl(this, graph.deviceStateStore))
+        LunoHostApi.setUp(
+            messenger,
+            LunoHostApiImpl(this, graph.deviceStateStore, graph.outboxRepository, graph.outboxDispatcher),
+        )
         eventBridge = FlutterEventBridge(messenger).also { it.attach() }
+        outboxChannel = OutboxChannel(messenger, graph.outboxRepository).also { it.attach() }
         agentStateChannel = AgentStateChannel(messenger, graph.agentController).also { it.attach() }
         deviceStateChannel = DeviceStateChannel(
             messenger,
@@ -49,6 +55,8 @@ class MainActivity : FlutterActivity(), AgentHost {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        outboxChannel?.detach()
+        outboxChannel = null
         deviceStateChannel?.detach()
         deviceStateChannel = null
         agentStateChannel?.detach()
@@ -88,6 +96,18 @@ class MainActivity : FlutterActivity(), AgentHost {
         }
     }
 
+    override fun hasSmsPermission(): Boolean = isGranted(Manifest.permission.SEND_SMS)
+
+    override fun requestSmsPermission() {
+        if (!hasSmsPermission()) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.SEND_SMS),
+                REQ_SEND_SMS,
+            )
+        }
+    }
+
     private fun isGranted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
@@ -104,6 +124,7 @@ class MainActivity : FlutterActivity(), AgentHost {
                 graph.logger.i(TAG, "READ_PHONE_STATE granted=$granted")
                 if (granted) graph.simInfoManager.start()
             }
+            REQ_SEND_SMS -> graph.logger.i(TAG, "SEND_SMS granted=$granted")
         }
     }
 
@@ -111,5 +132,6 @@ class MainActivity : FlutterActivity(), AgentHost {
         private const val TAG = "MainActivity"
         private const val REQ_POST_NOTIFICATIONS = 1001
         private const val REQ_READ_PHONE_STATE = 1002
+        private const val REQ_SEND_SMS = 1003
     }
 }

@@ -26,10 +26,23 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-This is currently a stock `flutter create` scaffold (`lib/main.dart` is the
-default counter-app template, `applicationId`/`namespace` is still
-`com.example.sms_gateway`). No telephony integration, Pigeon interface,
-networking, or backend communication exists yet — all of it is greenfield.
+**Progress: M1–M9 complete (as of 2026-07-16). Next up: M10** (multipart +
+multi-SIM send + delivery reports). See [`docs/milestones.md`](docs/milestones.md)
+for the authoritative status table — build one milestone at a time, don't skip ahead.
+
+Done so far:
+- **M1** package renamed to `com.luno.gateway`; LICENSE/CONTRIBUTING/CI.
+- **M2** Pigeon bridge (`LunoHostApi.ping` round-trip + native tick `EventChannel`).
+- **M3** foreground service (`GatewayForegroundService`) that survives swipe + agent-state bridge.
+- **M4** SIM information via `SubscriptionManager` (live updates, multi-SIM).
+- **M5** battery status; telemetry coalesced into one `DeviceState` stream.
+- **M6** per-SIM signal strength (`TelephonyCallback` 31+ / `PhoneStateListener` fallback).
+- **M7** network state (default network callback: validated/transport/metered).
+- **M8** durable Room outbox/inbox + `Transport` interface with `FakeTransport`.
+- **M9** single-part SMS send: `transport/sms/{SmsSender,SentReportRouter,SmsResultCodes,SmsTransport}`,
+  `OutboxDispatcher` (QUEUED→SENDING→SENT/FAILED), `SEND_SMS` runtime flow, Pigeon
+  `sendSms`/`getRecentOutbox` + `OutboxChannel`, and a Flutter debug send control.
+  Real-SMS end-to-end verification still needs a physical device/SIM.
 
 ## Commands
 

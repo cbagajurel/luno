@@ -32,6 +32,12 @@ interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE status = :status ORDER BY createdAt ASC")
     suspend fun findByStatus(status: OutboxStatus): List<OutboxEntity>
 
+    @Query("SELECT * FROM outbox ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun recent(limit: Int): List<OutboxEntity>
+
+    @Query("SELECT * FROM outbox ORDER BY createdAt DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<OutboxEntity>>
+
     @Query("SELECT COUNT(*) FROM outbox WHERE status IN (:statuses)")
     fun observeDepth(statuses: List<OutboxStatus>): Flow<Int>
 

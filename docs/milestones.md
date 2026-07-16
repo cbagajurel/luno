@@ -7,26 +7,28 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-| # | Milestone | Phase | Independently testable by |
-|---|---|---|---|
-| M1 | Project identity & hygiene | 0 | App builds under new package; CI green |
-| M2 | Pigeon bridge: "hello from Kotlin" | 1 | Round-trip call + event visible |
-| M3 | Foreground service that stays alive | 1 | Notification persists after swipe |
-| M4 | SIM information | 2 | Live SIM list in UI, multi-SIM correct |
-| M5 | Battery status | 2 | Live battery in UI, updates on unplug |
-| M6 | Signal strength | 2 | Live signal in UI, updates in a Faraday-ish spot |
-| M7 | Network state | 2 | Connectivity flips on airplane mode |
-| M8 | Durable queue + transport interface | 3 | State machine tests w/ FakeTransport; survives kill |
-| M9 | Send SMS (single-part) | 4 | UI button sends a real SMS, reaches SENT |
-| M10 | Multipart + multi-SIM send + delivery reports | 4 | Long SMS from chosen SIM reaches DELIVERED |
-| M11 | Receive SMS | 5 | Inbound SMS captured with app closed |
-| M12 | Wire protocol codec + connection SM | 6 | Codec round-trip tests; SM transitions |
-| M13 | Pairing/auth + WebSocket connect | 6 | Node enrolls and reaches READY |
-| M14 | Protocol wired to SMS + heartbeat | 6 | Backend command → SMS → events back |
-| M15 | Boot + WorkManager + resync | 7 | Reboot/offline/kill → lossless recovery |
-| M16 | Security hardening | 8 | Threat-model checklist passes |
-| M17 | Flutter dashboard | 9 | Operator runs a node from the UI |
-| M18 | Observability, tests, release | 10 | Signed v1.0 APK, docs, E2E on real devices |
+**Status (2026-07-16): M1–M9 complete. Next up: M10.**
+
+| # | Milestone | Phase | Status | Independently testable by |
+|---|---|---|---|---|
+| M1 | Project identity & hygiene | 0 | ✅ done | App builds under new package; CI green |
+| M2 | Pigeon bridge: "hello from Kotlin" | 1 | ✅ done | Round-trip call + event visible |
+| M3 | Foreground service that stays alive | 1 | ✅ done | Notification persists after swipe |
+| M4 | SIM information | 2 | ✅ done | Live SIM list in UI, multi-SIM correct |
+| M5 | Battery status | 2 | ✅ done | Live battery in UI, updates on unplug |
+| M6 | Signal strength | 2 | ✅ done | Live signal in UI, updates in a Faraday-ish spot |
+| M7 | Network state | 2 | ✅ done | Connectivity flips on airplane mode |
+| M8 | Durable queue + transport interface | 3 | ✅ done | State machine tests w/ FakeTransport; survives kill |
+| M9 | Send SMS (single-part) | 4 | ✅ done | UI button sends a real SMS, reaches SENT |
+| M10 | Multipart + multi-SIM send + delivery reports | 4 | ⬜ next | Long SMS from chosen SIM reaches DELIVERED |
+| M11 | Receive SMS | 5 | ⬜ todo | Inbound SMS captured with app closed |
+| M12 | Wire protocol codec + connection SM | 6 | ⬜ todo | Codec round-trip tests; SM transitions |
+| M13 | Pairing/auth + WebSocket connect | 6 | ⬜ todo | Node enrolls and reaches READY |
+| M14 | Protocol wired to SMS + heartbeat | 6 | ⬜ todo | Backend command → SMS → events back |
+| M15 | Boot + WorkManager + resync | 7 | ⬜ todo | Reboot/offline/kill → lossless recovery |
+| M16 | Security hardening | 8 | ⬜ todo | Threat-model checklist passes |
+| M17 | Flutter dashboard | 9 | ⬜ todo | Operator runs a node from the UI |
+| M18 | Observability, tests, release | 10 | ⬜ todo | Signed v1.0 APK, docs, E2E on real devices |
 
 ---
 
@@ -201,7 +203,17 @@ discipline or transactions); large bodies.
 
 ---
 
-## M9 — Send SMS (single-part)
+## M9 — Send SMS (single-part) — ✅ done
+
+**Implemented:** `transport/sms/{SmsSender,SentReportRouter,SmsResultCodes,SmsTransport}.kt`
+(single-part send via `SmsManager`, `sentIntent` `PendingIntent` correlated back to
+the message, result codes mapped to the §10 error taxonomy);
+`data/repository/OutboxDispatcher.kt` drives QUEUED→SENDING→SENT/FAILED through the
+`TransportRegistry`; `SEND_SMS` runtime-permission flow (`MainActivity`,
+`AgentHost`); Pigeon `sendSms`/`getRecentOutbox`/`hasSmsPermission`/
+`requestSmsPermission` + `OutboxChannel`; Flutter debug "Send test SMS" control with a
+recent-outbox status list. Unit tests: `SmsResultCodesTest`, `OutboxDispatcherTest`.
+The real-device checkbox items below need a physical SIM to close out.
 
 **Files:** `transport/sms/SmsTransport.kt`, `SmsSender.kt`,
 `SentReportRouter.kt`; wire into `OutboxRepository`; debug send control.
