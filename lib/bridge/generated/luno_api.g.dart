@@ -330,6 +330,8 @@ class OutboxEntry {
     this.lastError,
     required this.attempt,
     required this.createdAt,
+    required this.partCount,
+    required this.deliveredCount,
   });
 
   String id;
@@ -344,6 +346,10 @@ class OutboxEntry {
 
   int createdAt;
 
+  int partCount;
+
+  int deliveredCount;
+
   List<Object?> _toList() {
     return <Object?>[
       id,
@@ -352,6 +358,8 @@ class OutboxEntry {
       lastError,
       attempt,
       createdAt,
+      partCount,
+      deliveredCount,
     ];
   }
 
@@ -367,6 +375,8 @@ class OutboxEntry {
       lastError: result[3] as String?,
       attempt: result[4]! as int,
       createdAt: result[5]! as int,
+      partCount: result[6]! as int,
+      deliveredCount: result[7]! as int,
     );
   }
 
@@ -379,7 +389,7 @@ class OutboxEntry {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(id, other.id) && _deepEquals(recipient, other.recipient) && _deepEquals(status, other.status) && _deepEquals(lastError, other.lastError) && _deepEquals(attempt, other.attempt) && _deepEquals(createdAt, other.createdAt);
+    return _deepEquals(id, other.id) && _deepEquals(recipient, other.recipient) && _deepEquals(status, other.status) && _deepEquals(lastError, other.lastError) && _deepEquals(attempt, other.attempt) && _deepEquals(createdAt, other.createdAt) && _deepEquals(partCount, other.partCount) && _deepEquals(deliveredCount, other.deliveredCount);
   }
 
   @override

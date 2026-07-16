@@ -4,6 +4,7 @@ import com.luno.gateway.data.db.entity.OutboxEntity
 import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.model.OutboundMessage
 import com.luno.gateway.model.SendHandle
+import com.luno.gateway.model.SentPart
 import com.luno.gateway.transport.TransportId
 import com.luno.gateway.transport.TransportRegistry
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,7 @@ class OutboxDispatcher(
     private val logger: LunoLogger,
     private val scope: CoroutineScope,
     private val transportId: TransportId = TransportId.SMS,
+    private val onSent: suspend (messageId: String, parts: List<SentPart>) -> Unit = { _, _ -> },
 ) {
     /** Enqueue then dispatch off the caller's thread; returns the durable id immediately. */
     fun submit(message: OutboundMessage): String {
@@ -48,7 +50,11 @@ class OutboxDispatcher(
         if (!outbox.markSending(id)) return false
         val handle = transport.send(row.toOutboundMessage())
         return when (handle) {
-            is SendHandle.Sent -> outbox.markSent(id)
+            is SendHandle.Sent -> {
+                val sent = outbox.markSent(id)
+                if (sent) onSent(id, handle.parts)
+                sent
+            }
             is SendHandle.Failed -> outbox.markFailed(id, handle.error)
         }
     }

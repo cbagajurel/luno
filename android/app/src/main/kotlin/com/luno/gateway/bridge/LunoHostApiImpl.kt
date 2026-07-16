@@ -1,6 +1,7 @@
 package com.luno.gateway.bridge
 
 import com.luno.gateway.bridge.generated.LunoHostApi
+import com.luno.gateway.data.db.dao.OutboxPartDao
 import com.luno.gateway.data.db.entity.OutboxEntity
 import com.luno.gateway.data.repository.OutboxDispatcher
 import com.luno.gateway.data.repository.OutboxRepository
@@ -16,6 +17,7 @@ class LunoHostApiImpl(
     private val deviceStateStore: DeviceStateStore,
     private val outboxRepository: OutboxRepository,
     private val outboxDispatcher: OutboxDispatcher,
+    private val outboxPartDao: OutboxPartDao,
 ) : LunoHostApi {
     override fun ping(message: String): String = "$ECHO_PREFIX$message"
 
@@ -47,19 +49,27 @@ class LunoHostApiImpl(
         return outboxDispatcher.submit(message)
     }
 
-    override fun getRecentOutbox(): List<OutboxEntryDto> =
-        runBlocking { outboxRepository.recent() }.map { it.toDto() }
+    override fun getRecentOutbox(): List<OutboxEntryDto> = runBlocking {
+        outboxRepository.recent().map { row ->
+            row.toDto(
+                partCount = outboxPartDao.countFor(row.id),
+                deliveredCount = outboxPartDao.deliveredCountFor(row.id),
+            )
+        }
+    }
 
     companion object {
         const val ECHO_PREFIX = "Luno-Kotlin echo: "
     }
 }
 
-private fun OutboxEntity.toDto() = OutboxEntryDto(
+private fun OutboxEntity.toDto(partCount: Int, deliveredCount: Int) = OutboxEntryDto(
     id = id,
     recipient = recipient,
     status = status.name,
     lastError = lastError,
     attempt = attempt.toLong(),
     createdAt = createdAt,
+    partCount = partCount.toLong(),
+    deliveredCount = deliveredCount.toLong(),
 )

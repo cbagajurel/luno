@@ -26,9 +26,9 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M9 complete (as of 2026-07-16). Next up: M10** (multipart +
-multi-SIM send + delivery reports). See [`docs/milestones.md`](docs/milestones.md)
-for the authoritative status table — build one milestone at a time, don't skip ahead.
+**Progress: M1–M10 complete (as of 2026-07-16). Next up: M11** (receive SMS).
+See [`docs/milestones.md`](docs/milestones.md) for the authoritative status table —
+build one milestone at a time, don't skip ahead.
 
 Done so far:
 - **M1** package renamed to `com.luno.gateway`; LICENSE/CONTRIBUTING/CI.
@@ -42,7 +42,11 @@ Done so far:
 - **M9** single-part SMS send: `transport/sms/{SmsSender,SentReportRouter,SmsResultCodes,SmsTransport}`,
   `OutboxDispatcher` (QUEUED→SENDING→SENT/FAILED), `SEND_SMS` runtime flow, Pigeon
   `sendSms`/`getRecentOutbox` + `OutboxChannel`, and a Flutter debug send control.
-  Real-SMS end-to-end verification still needs a physical device/SIM.
+- **M10** multipart + multi-SIM send + delivery reports: `MultipartAssembler`,
+  `SmsSender.sendMultipart`, sent-report rollup in `SmsTransport`; `DeliveryReportRouter`
+  + `Transport.deliveryReports()`; durable per-part `outbox_part` table (Room **v2**,
+  `MIGRATION_1_2`) + `DeliveryTracker` rollup to DELIVERED/UNDELIVERED with a
+  delivery-timeout. Real dual-SIM + carrier delivery reports still need a physical device.
 
 ## Commands
 

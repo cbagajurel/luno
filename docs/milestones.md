@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-16): M1–M9 complete. Next up: M10.**
+**Status (2026-07-16): M1–M10 complete. Next up: M11.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -20,8 +20,8 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M7 | Network state | 2 | ✅ done | Connectivity flips on airplane mode |
 | M8 | Durable queue + transport interface | 3 | ✅ done | State machine tests w/ FakeTransport; survives kill |
 | M9 | Send SMS (single-part) | 4 | ✅ done | UI button sends a real SMS, reaches SENT |
-| M10 | Multipart + multi-SIM send + delivery reports | 4 | ⬜ next | Long SMS from chosen SIM reaches DELIVERED |
-| M11 | Receive SMS | 5 | ⬜ todo | Inbound SMS captured with app closed |
+| M10 | Multipart + multi-SIM send + delivery reports | 4 | ✅ done | Long SMS from chosen SIM reaches DELIVERED |
+| M11 | Receive SMS | 5 | ⬜ next | Inbound SMS captured with app closed |
 | M12 | Wire protocol codec + connection SM | 6 | ⬜ todo | Codec round-trip tests; SM transitions |
 | M13 | Pairing/auth + WebSocket connect | 6 | ⬜ todo | Node enrolls and reaches READY |
 | M14 | Protocol wired to SMS + heartbeat | 6 | ⬜ todo | Backend command → SMS → events back |
@@ -237,7 +237,22 @@ carrier length/encoding limits (GSM-7 vs UCS-2).
 
 ---
 
-## M10 — Multipart + multi-SIM send + delivery reports
+## M10 — Multipart + multi-SIM send + delivery reports — ✅ done
+
+**Implemented:** `transport/sms/MultipartAssembler.kt` (`divideMessage`, GSM-7/UCS-2
+aware) + `SmsSender.sendMultipart` (`sendMultipartTextMessage` with per-part sent
+**and** delivery `PendingIntent`s, on the chosen SIM via `createForSubscriptionId`);
+`SmsTransport` rolls all *sent* reports up into one `SendHandle` (all sent → SENT,
+any failure → worst-case). Delivery: `DeliveryReportRouter` parses the TP-Status PDU
+(`SmsDeliveryStatus.classify`) and emits `DeliveryReport`s on the new
+`Transport.deliveryReports()` stream; a durable `outbox_part` table (DB **v2**,
+`MIGRATION_1_2`) holds per-part state; `DeliveryTracker` folds reports in and rolls
+the message up to DELIVERED/UNDELIVERED, with a `deliveryTimeout` flipping
+never-reported parts to UNDELIVERED so nothing hangs (§7.3). SIM picker + per-part
+"N/M delivered" shown in the debug UI. Tests: `OutboxDeliveryRollupTest`,
+`DeliveryTrackerTest` (delivered / worst-case / timeout / untracked),
+`SmsResultCodesTest` (delivery-status bands). Real dual-SIM + carrier delivery
+reports still need physical devices to close out.
 
 **Files:** `transport/sms/MultipartAssembler.kt` (outbound),
 `DeliveryReportRouter.kt`; extend `SmsSender`.

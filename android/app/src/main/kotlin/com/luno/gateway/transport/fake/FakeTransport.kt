@@ -1,5 +1,6 @@
 package com.luno.gateway.transport.fake
 
+import com.luno.gateway.model.DeliveryReport
 import com.luno.gateway.model.InboundMessage
 import com.luno.gateway.model.OutboundMessage
 import com.luno.gateway.model.SendHandle
@@ -31,6 +32,7 @@ class FakeTransport(
     }
 
     private val inbound = MutableSharedFlow<InboundMessage>(extraBufferCapacity = 64)
+    private val deliveries = MutableSharedFlow<DeliveryReport>(extraBufferCapacity = 64)
 
     override suspend fun send(request: OutboundMessage): SendHandle {
         sent += request
@@ -41,7 +43,13 @@ class FakeTransport(
 
     override fun state(): Flow<TransportState> = transportState.asStateFlow()
 
+    override fun deliveryReports(): Flow<DeliveryReport> = deliveries
+
     suspend fun deliver(message: InboundMessage) {
         inbound.emit(message)
+    }
+
+    suspend fun deliverReport(report: DeliveryReport) {
+        deliveries.emit(report)
     }
 }

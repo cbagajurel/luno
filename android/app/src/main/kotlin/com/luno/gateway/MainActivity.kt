@@ -31,7 +31,13 @@ class MainActivity : FlutterActivity(), AgentHost {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         LunoHostApi.setUp(
             messenger,
-            LunoHostApiImpl(this, graph.deviceStateStore, graph.outboxRepository, graph.outboxDispatcher),
+            LunoHostApiImpl(
+                this,
+                graph.deviceStateStore,
+                graph.outboxRepository,
+                graph.outboxDispatcher,
+                graph.outboxPartDao,
+            ),
         )
         eventBridge = FlutterEventBridge(messenger).also { it.attach() }
         outboxChannel = OutboxChannel(messenger, graph.outboxRepository).also { it.attach() }

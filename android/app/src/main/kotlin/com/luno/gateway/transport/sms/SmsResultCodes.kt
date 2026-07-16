@@ -42,3 +42,18 @@ object SmsResultCodes {
     private fun failed(errorClass: ErrorClass, code: String, message: String) =
         SmsSendResult.Failed(DomainError(errorClass, code, message))
 }
+
+enum class DeliveryOutcome { DELIVERED, FAILED, PENDING }
+
+/**
+ * Classifies a GSM/3GPP delivery-report TP-Status: 0x00–0x1F = delivered,
+ * 0x20–0x3F = still trying (keep waiting), 0x40+ = permanent failure. A final
+ * report resolves the part; PENDING is ignored until one arrives (or timeout).
+ */
+object SmsDeliveryStatus {
+    fun classify(tpStatus: Int): DeliveryOutcome = when {
+        tpStatus < 0x20 -> DeliveryOutcome.DELIVERED
+        tpStatus < 0x40 -> DeliveryOutcome.PENDING
+        else -> DeliveryOutcome.FAILED
+    }
+}

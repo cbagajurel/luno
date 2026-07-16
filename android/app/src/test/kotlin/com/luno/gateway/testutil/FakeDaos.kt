@@ -2,10 +2,13 @@ package com.luno.gateway.testutil
 
 import com.luno.gateway.data.db.dao.InboxDao
 import com.luno.gateway.data.db.dao.OutboxDao
+import com.luno.gateway.data.db.dao.OutboxPartDao
 import com.luno.gateway.data.db.entity.InboxEntity
 import com.luno.gateway.data.db.entity.OutboxEntity
+import com.luno.gateway.data.db.entity.OutboxPartEntity
 import com.luno.gateway.model.InboxStatus
 import com.luno.gateway.model.OutboxStatus
+import com.luno.gateway.model.PartDeliveryStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -55,6 +58,46 @@ class FakeOutboxDao : OutboxDao {
 
     override suspend fun deleteByIds(ids: List<String>) {
         ids.forEach { rows.remove(it) }
+    }
+}
+
+class FakeOutboxPartDao : OutboxPartDao {
+    val rows = LinkedHashMap<String, OutboxPartEntity>()
+
+    private fun key(messageId: String, partIndex: Int) = "$messageId#$partIndex"
+
+    override suspend fun upsertAll(parts: List<OutboxPartEntity>) {
+        parts.forEach { rows[key(it.messageId, it.partIndex)] = it }
+    }
+
+    override suspend fun partsFor(messageId: String): List<OutboxPartEntity> =
+        rows.values.filter { it.messageId == messageId }.sortedBy { it.partIndex }
+
+    override suspend fun countFor(messageId: String): Int =
+        rows.values.count { it.messageId == messageId }
+
+    override suspend fun deliveredCountFor(messageId: String): Int =
+        rows.values.count { it.messageId == messageId && it.deliveryStatus == PartDeliveryStatus.DELIVERED }
+
+    override suspend fun updateDeliveryStatus(
+        messageId: String,
+        partIndex: Int,
+        status: PartDeliveryStatus,
+        updatedAt: Long,
+    ) {
+        val k = key(messageId, partIndex)
+        rows[k]?.let { rows[k] = it.copy(deliveryStatus = status, updatedAt = updatedAt) }
+    }
+
+    override suspend fun resolvePending(
+        messageId: String,
+        from: PartDeliveryStatus,
+        to: PartDeliveryStatus,
+        updatedAt: Long,
+    ) {
+        rows.values.filter { it.messageId == messageId && it.deliveryStatus == from }.forEach {
+            rows[key(it.messageId, it.partIndex)] = it.copy(deliveryStatus = to, updatedAt = updatedAt)
+        }
     }
 }
 

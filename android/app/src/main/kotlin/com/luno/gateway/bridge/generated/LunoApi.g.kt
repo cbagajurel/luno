@@ -387,7 +387,9 @@ data class OutboxEntry (
   val status: String,
   val lastError: String? = null,
   val attempt: Long,
-  val createdAt: Long
+  val createdAt: Long,
+  val partCount: Long,
+  val deliveredCount: Long
 )
  {
   companion object {
@@ -398,7 +400,9 @@ data class OutboxEntry (
       val lastError = pigeonVar_list[3] as String?
       val attempt = pigeonVar_list[4] as Long
       val createdAt = pigeonVar_list[5] as Long
-      return OutboxEntry(id, recipient, status, lastError, attempt, createdAt)
+      val partCount = pigeonVar_list[6] as Long
+      val deliveredCount = pigeonVar_list[7] as Long
+      return OutboxEntry(id, recipient, status, lastError, attempt, createdAt, partCount, deliveredCount)
     }
   }
   fun toList(): List<Any?> {
@@ -409,6 +413,8 @@ data class OutboxEntry (
       lastError,
       attempt,
       createdAt,
+      partCount,
+      deliveredCount,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -419,7 +425,7 @@ data class OutboxEntry (
       return true
     }
     val other = other as OutboxEntry
-    return LunoApiPigeonUtils.deepEquals(this.id, other.id) && LunoApiPigeonUtils.deepEquals(this.recipient, other.recipient) && LunoApiPigeonUtils.deepEquals(this.status, other.status) && LunoApiPigeonUtils.deepEquals(this.lastError, other.lastError) && LunoApiPigeonUtils.deepEquals(this.attempt, other.attempt) && LunoApiPigeonUtils.deepEquals(this.createdAt, other.createdAt)
+    return LunoApiPigeonUtils.deepEquals(this.id, other.id) && LunoApiPigeonUtils.deepEquals(this.recipient, other.recipient) && LunoApiPigeonUtils.deepEquals(this.status, other.status) && LunoApiPigeonUtils.deepEquals(this.lastError, other.lastError) && LunoApiPigeonUtils.deepEquals(this.attempt, other.attempt) && LunoApiPigeonUtils.deepEquals(this.createdAt, other.createdAt) && LunoApiPigeonUtils.deepEquals(this.partCount, other.partCount) && LunoApiPigeonUtils.deepEquals(this.deliveredCount, other.deliveredCount)
   }
 
   override fun hashCode(): Int {
@@ -430,6 +436,8 @@ data class OutboxEntry (
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.lastError)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.attempt)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.createdAt)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.partCount)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.deliveredCount)
     return result
   }
 }

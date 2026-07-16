@@ -3,6 +3,8 @@ package com.luno.gateway.transport
 import android.app.Activity
 import android.telephony.SmsManager
 import com.luno.gateway.model.ErrorClass
+import com.luno.gateway.transport.sms.DeliveryOutcome
+import com.luno.gateway.transport.sms.SmsDeliveryStatus
 import com.luno.gateway.transport.sms.SmsResultCodes
 import com.luno.gateway.transport.sms.SmsSendResult
 import org.junit.Assert.assertEquals
@@ -43,5 +45,15 @@ class SmsResultCodesTest {
         val result = SmsResultCodes.fromSentResultCode(9999) as SmsSendResult.Failed
         assertEquals(ErrorClass.TRANSIENT, result.error.errorClass)
         assertEquals("unknown_9999", result.error.code)
+    }
+
+    @Test
+    fun `delivery TP-Status maps to delivered, pending, failed by band`() {
+        assertEquals(DeliveryOutcome.DELIVERED, SmsDeliveryStatus.classify(0x00))
+        assertEquals(DeliveryOutcome.DELIVERED, SmsDeliveryStatus.classify(0x1F))
+        assertEquals(DeliveryOutcome.PENDING, SmsDeliveryStatus.classify(0x20))
+        assertEquals(DeliveryOutcome.PENDING, SmsDeliveryStatus.classify(0x3F))
+        assertEquals(DeliveryOutcome.FAILED, SmsDeliveryStatus.classify(0x40))
+        assertEquals(DeliveryOutcome.FAILED, SmsDeliveryStatus.classify(0x60))
     }
 }

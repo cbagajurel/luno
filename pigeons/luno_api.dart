@@ -64,6 +64,8 @@ class OutboxEntry {
     this.lastError,
     required this.attempt,
     required this.createdAt,
+    required this.partCount,
+    required this.deliveredCount,
   });
 
   final String id;
@@ -72,6 +74,8 @@ class OutboxEntry {
   final String? lastError;
   final int attempt;
   final int createdAt;
+  final int partCount;
+  final int deliveredCount;
 }
 
 class DeviceState {

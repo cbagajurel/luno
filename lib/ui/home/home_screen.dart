@@ -504,11 +504,15 @@ class _OutboxTile extends StatelessWidget {
         (Colors.red, Icons.error),
       _ => (Colors.grey, Icons.help),
     };
+    final parts = entry.partCount > 1
+        ? '${entry.partCount} parts · ${entry.deliveredCount}/${entry.partCount} delivered'
+        : null;
+    final subtitle = entry.lastError ?? parts;
     return ListTile(
       dense: true,
       leading: Icon(icon, color: color),
       title: Text(entry.recipient),
-      subtitle: entry.lastError != null ? Text(entry.lastError!) : null,
+      subtitle: subtitle != null ? Text(subtitle) : null,
       trailing: Text(entry.status),
     );
   }
