@@ -2,7 +2,9 @@ package com.luno.gateway.bridge
 
 import com.luno.gateway.bridge.generated.LunoHostApi
 import com.luno.gateway.data.db.dao.OutboxPartDao
+import com.luno.gateway.data.db.entity.InboxEntity
 import com.luno.gateway.data.db.entity.OutboxEntity
+import com.luno.gateway.data.repository.InboxRepository
 import com.luno.gateway.data.repository.OutboxDispatcher
 import com.luno.gateway.data.repository.OutboxRepository
 import com.luno.gateway.model.OutboundMessage
@@ -10,6 +12,7 @@ import com.luno.gateway.telephony.DeviceStateStore
 import com.luno.gateway.util.Ids
 import kotlinx.coroutines.runBlocking
 import com.luno.gateway.bridge.generated.DeviceState as DeviceStateDto
+import com.luno.gateway.bridge.generated.InboundEntry as InboundEntryDto
 import com.luno.gateway.bridge.generated.OutboxEntry as OutboxEntryDto
 
 class LunoHostApiImpl(
@@ -18,6 +21,7 @@ class LunoHostApiImpl(
     private val outboxRepository: OutboxRepository,
     private val outboxDispatcher: OutboxDispatcher,
     private val outboxPartDao: OutboxPartDao,
+    private val inboxRepository: InboxRepository,
 ) : LunoHostApi {
     override fun ping(message: String): String = "$ECHO_PREFIX$message"
 
@@ -58,10 +62,26 @@ class LunoHostApiImpl(
         }
     }
 
+    override fun hasReceiveSmsPermission(): Boolean = host.hasReceiveSmsPermission()
+
+    override fun requestReceiveSmsPermission() = host.requestReceiveSmsPermission()
+
+    override fun getRecentInbox(): List<InboundEntryDto> =
+        runBlocking { inboxRepository.recent() }.map { it.toDto() }
+
     companion object {
         const val ECHO_PREFIX = "Luno-Kotlin echo: "
     }
 }
+
+private fun InboxEntity.toDto() = InboundEntryDto(
+    id = id,
+    sender = sender,
+    body = body,
+    subscriptionId = subscriptionId?.toLong(),
+    receivedAt = receivedAt,
+    parts = parts.toLong(),
+)
 
 private fun OutboxEntity.toDto(partCount: Int, deliveredCount: Int) = OutboxEntryDto(
     id = id,

@@ -397,6 +397,71 @@ class OutboxEntry {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class InboundEntry {
+  InboundEntry({
+    required this.id,
+    required this.sender,
+    required this.body,
+    this.subscriptionId,
+    required this.receivedAt,
+    required this.parts,
+  });
+
+  String id;
+
+  String sender;
+
+  String body;
+
+  int? subscriptionId;
+
+  int receivedAt;
+
+  int parts;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      id,
+      sender,
+      body,
+      subscriptionId,
+      receivedAt,
+      parts,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static InboundEntry decode(Object result) {
+    result as List<Object?>;
+    return InboundEntry(
+      id: result[0]! as String,
+      sender: result[1]! as String,
+      body: result[2]! as String,
+      subscriptionId: result[3] as int?,
+      receivedAt: result[4]! as int,
+      parts: result[5]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! InboundEntry || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(id, other.id) && _deepEquals(sender, other.sender) && _deepEquals(body, other.body) && _deepEquals(subscriptionId, other.subscriptionId) && _deepEquals(receivedAt, other.receivedAt) && _deepEquals(parts, other.parts);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 class DeviceState {
   DeviceState({
     required this.sims,
@@ -475,8 +540,11 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is OutboxEntry) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    }    else if (value is DeviceState) {
+    }    else if (value is InboundEntry) {
       buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    }    else if (value is DeviceState) {
+      buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -497,6 +565,8 @@ class _PigeonCodec extends StandardMessageCodec {
       case 133:
         return OutboxEntry.decode(readValue(buffer)!);
       case 134:
+        return InboundEntry.decode(readValue(buffer)!);
+      case 135:
         return DeviceState.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -738,5 +808,61 @@ class LunoHostApi {
     )
     ;
     return (pigeonVar_replyValue! as List<Object?>).cast<OutboxEntry>();
+  }
+
+  Future<bool> hasReceiveSmsPermission() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasReceiveSmsPermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
+  Future<void> requestReceiveSmsPermission() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestReceiveSmsPermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<List<InboundEntry>> getRecentInbox() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.getRecentInbox$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return (pigeonVar_replyValue! as List<Object?>).cast<InboundEntry>();
   }
 }

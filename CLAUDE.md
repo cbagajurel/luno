@@ -26,9 +26,9 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M10 complete (as of 2026-07-16). Next up: M11** (receive SMS).
-See [`docs/milestones.md`](docs/milestones.md) for the authoritative status table —
-build one milestone at a time, don't skip ahead.
+**Progress: M1–M11 complete (as of 2026-07-16). Next up: M12** (wire protocol
+codec + connection state machine). See [`docs/milestones.md`](docs/milestones.md)
+for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
 - **M1** package renamed to `com.luno.gateway`; LICENSE/CONTRIBUTING/CI.
@@ -47,6 +47,10 @@ Done so far:
   + `Transport.deliveryReports()`; durable per-part `outbox_part` table (Room **v2**,
   `MIGRATION_1_2`) + `DeliveryTracker` rollup to DELIVERED/UNDELIVERED with a
   delivery-timeout. Real dual-SIM + carrier delivery reports still need a physical device.
+- **M11** receive SMS: manifest `SmsReceiver` (SMS_RECEIVED, `goAsync` capture),
+  `MultipartAssembler.reassemble` + pure `SmsReceiver.buildInbound`, `RECEIVE_SMS` runtime
+  flow, Pigeon `getRecentInbox` + `InboxChannel`, read-only received-messages list.
+  Capture-only (backend reporting is M14).
 
 ## Commands
 

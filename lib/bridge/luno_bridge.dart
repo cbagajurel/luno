@@ -24,6 +24,7 @@ class LunoBridge {
     EventChannel? agentStateChannel,
     EventChannel? deviceStateChannel,
     EventChannel? outboxChannel,
+    EventChannel? inboxChannel,
   })  : _hostApi = hostApi ?? LunoHostApi(),
         _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
         _agentStateChannel =
@@ -31,7 +32,8 @@ class LunoBridge {
         _deviceStateChannel =
             deviceStateChannel ?? const EventChannel(deviceStateChannelName),
         _outboxChannel =
-            outboxChannel ?? const EventChannel(outboxChannelName);
+            outboxChannel ?? const EventChannel(outboxChannelName),
+        _inboxChannel = inboxChannel ?? const EventChannel(inboxChannelName);
 
   // Channel names must match the native side.
   static const String tickChannelName = 'com.luno.gateway/events/tick';
@@ -40,12 +42,14 @@ class LunoBridge {
   static const String deviceStateChannelName =
       'com.luno.gateway/events/device_state';
   static const String outboxChannelName = 'com.luno.gateway/events/outbox';
+  static const String inboxChannelName = 'com.luno.gateway/events/inbox';
 
   final LunoHostApi _hostApi;
   final EventChannel _tickChannel;
   final EventChannel _agentStateChannel;
   final EventChannel _deviceStateChannel;
   final EventChannel _outboxChannel;
+  final EventChannel _inboxChannel;
 
   Future<String> ping(String message) => _hostApi.ping(message);
 
@@ -91,4 +95,15 @@ class LunoBridge {
   /// Ticks a revision counter on any outbox change; re-query [getRecentOutbox].
   Stream<int> get outboxEvents =>
       _outboxChannel.receiveBroadcastStream().map((event) => event as int);
+
+  Future<bool> hasReceiveSmsPermission() => _hostApi.hasReceiveSmsPermission();
+
+  Future<void> requestReceiveSmsPermission() =>
+      _hostApi.requestReceiveSmsPermission();
+
+  Future<List<InboundEntry>> getRecentInbox() => _hostApi.getRecentInbox();
+
+  /// Ticks a revision counter when a message arrives; re-query [getRecentInbox].
+  Stream<int> get inboxEvents =>
+      _inboxChannel.receiveBroadcastStream().map((event) => event as int);
 }

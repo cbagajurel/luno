@@ -25,4 +25,10 @@ interface InboxDao {
 
     @Query("SELECT * FROM inbox ORDER BY receivedAt DESC")
     fun observeAll(): Flow<List<InboxEntity>>
+
+    @Query("SELECT * FROM inbox ORDER BY receivedAt DESC LIMIT :limit")
+    suspend fun recent(limit: Int): List<InboxEntity>
+
+    @Query("SELECT * FROM inbox ORDER BY receivedAt DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<InboxEntity>>
 }

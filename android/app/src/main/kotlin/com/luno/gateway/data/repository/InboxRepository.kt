@@ -7,6 +7,7 @@ import com.luno.gateway.model.InboundMessage
 import com.luno.gateway.model.InboxStatus
 import com.luno.gateway.util.Clock
 import com.luno.gateway.util.SystemClock
+import kotlinx.coroutines.flow.Flow
 
 sealed interface CaptureResult {
     val id: String
@@ -52,7 +53,12 @@ class InboxRepository(
 
     suspend fun count(): Int = dao.count()
 
+    suspend fun recent(limit: Int = DEFAULT_RECENT_LIMIT): List<InboxEntity> = dao.recent(limit)
+
+    fun observeRecent(limit: Int = DEFAULT_RECENT_LIMIT): Flow<List<InboxEntity>> = dao.observeRecent(limit)
+
     companion object {
         private const val TAG = "InboxRepository"
+        private const val DEFAULT_RECENT_LIMIT = 50
     }
 }

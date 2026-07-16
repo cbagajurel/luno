@@ -120,4 +120,10 @@ class FakeInboxDao : InboxDao {
     override suspend fun count(): Int = rows.size
 
     override fun observeAll(): Flow<List<InboxEntity>> = flowOf(rows.values.toList())
+
+    override suspend fun recent(limit: Int): List<InboxEntity> =
+        rows.values.sortedByDescending { it.receivedAt }.take(limit)
+
+    override fun observeRecent(limit: Int): Flow<List<InboxEntity>> =
+        flowOf(rows.values.sortedByDescending { it.receivedAt }.take(limit))
 }

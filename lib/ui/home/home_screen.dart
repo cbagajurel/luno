@@ -6,6 +6,7 @@ import '../../bridge/generated/luno_api.g.dart'
     show
         BatteryStatus,
         DeviceState,
+        InboundEntry,
         NetworkStatus,
         OutboxEntry,
         SignalInfo,
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<AgentRunState>? _agentSub;
   StreamSubscription<int>? _deviceSub;
   StreamSubscription<int>? _outboxSub;
+  StreamSubscription<int>? _inboxSub;
 
   String _pingResult = '(not called yet)';
   int? _lastTick;
@@ -42,6 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int? _selectedSubId;
   List<OutboxEntry> _outbox = const <OutboxEntry>[];
 
+  bool _hasReceiveSmsPermission = false;
+  List<InboundEntry> _inbox = const <InboundEntry>[];
+
   @override
   void initState() {
     super.initState();
@@ -54,8 +59,10 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _deviceSub = _bridge.deviceStateEvents.listen((_) => _refreshDeviceState());
     _outboxSub = _bridge.outboxEvents.listen((_) => _refreshOutbox());
+    _inboxSub = _bridge.inboxEvents.listen((_) => _refreshInbox());
     _refreshDeviceState();
     _refreshOutbox();
+    _refreshInbox();
   }
 
   @override
@@ -64,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _agentSub?.cancel();
     _deviceSub?.cancel();
     _outboxSub?.cancel();
+    _inboxSub?.cancel();
     _recipientController.dispose();
     _bodyController.dispose();
     super.dispose();
@@ -88,11 +96,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refreshDeviceState() async {
     final hasPermission = await _bridge.hasPhonePermission();
     final hasSms = await _bridge.hasSmsPermission();
+    final hasReceive = await _bridge.hasReceiveSmsPermission();
     final state = await _bridge.getDeviceState();
     if (mounted) {
       setState(() {
         _hasPhonePermission = hasPermission;
         _hasSmsPermission = hasSms;
+        _hasReceiveSmsPermission = hasReceive;
         _deviceState = state;
       });
     }
@@ -101,6 +111,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refreshOutbox() async {
     final rows = await _bridge.getRecentOutbox();
     if (mounted) setState(() => _outbox = rows);
+  }
+
+  Future<void> _refreshInbox() async {
+    final rows = await _bridge.getRecentInbox();
+    if (mounted) setState(() => _inbox = rows);
   }
 
   Future<void> _sendTestSms() async {
@@ -181,6 +196,15 @@ class _HomeScreenState extends State<HomeScreen> {
               await _refreshDeviceState();
             },
             outbox: _outbox,
+          ),
+          const Divider(height: 40),
+          _InboxSection(
+            hasPermission: _hasReceiveSmsPermission,
+            inbox: _inbox,
+            onGrant: () async {
+              await _bridge.requestReceiveSmsPermission();
+              await _refreshDeviceState();
+            },
           ),
           const Divider(height: 40),
           const Text('HostApi.ping →'),
@@ -484,6 +508,78 @@ class _SendSmsSection extends StatelessWidget {
           ...outbox.map((e) => _OutboxTile(entry: e)),
         ],
       ],
+    );
+  }
+}
+
+class _InboxSection extends StatelessWidget {
+  const _InboxSection({
+    required this.hasPermission,
+    required this.inbox,
+    required this.onGrant,
+  });
+
+  final bool hasPermission;
+  final List<InboundEntry> inbox;
+  final Future<void> Function() onGrant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Received messages', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (!hasPermission)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Text(
+                    'SMS receive permission is needed to capture inbound messages.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onGrant,
+                    icon: const Icon(Icons.inbox),
+                    label: const Text('Grant receive permission'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (inbox.isEmpty)
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.mark_email_unread_outlined),
+              title: Text('No messages received yet'),
+            ),
+          )
+        else
+          ...inbox.map((e) => _InboxTile(entry: e)),
+      ],
+    );
+  }
+}
+
+class _InboxTile extends StatelessWidget {
+  const _InboxTile({required this.entry});
+
+  final InboundEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = entry.parts > 1 ? ' · ${entry.parts} parts' : '';
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.sms_outlined),
+        title: Text(entry.sender),
+        subtitle: Text(entry.body),
+        trailing: Text('subId ${entry.subscriptionId ?? '—'}$parts'),
+        isThreeLine: entry.body.length > 40,
+      ),
     );
   }
 }

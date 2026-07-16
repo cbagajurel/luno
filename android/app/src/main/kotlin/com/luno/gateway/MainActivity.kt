@@ -10,6 +10,7 @@ import com.luno.gateway.bridge.AgentHost
 import com.luno.gateway.bridge.AgentStateChannel
 import com.luno.gateway.bridge.DeviceStateChannel
 import com.luno.gateway.bridge.FlutterEventBridge
+import com.luno.gateway.bridge.InboxChannel
 import com.luno.gateway.bridge.LunoHostApiImpl
 import com.luno.gateway.bridge.OutboxChannel
 import com.luno.gateway.bridge.generated.LunoHostApi
@@ -22,6 +23,7 @@ class MainActivity : FlutterActivity(), AgentHost {
     private var agentStateChannel: AgentStateChannel? = null
     private var deviceStateChannel: DeviceStateChannel? = null
     private var outboxChannel: OutboxChannel? = null
+    private var inboxChannel: InboxChannel? = null
 
     private val graph: AgentGraph
         get() = (application as LunoApplication).graph
@@ -37,10 +39,12 @@ class MainActivity : FlutterActivity(), AgentHost {
                 graph.outboxRepository,
                 graph.outboxDispatcher,
                 graph.outboxPartDao,
+                graph.inboxRepository,
             ),
         )
         eventBridge = FlutterEventBridge(messenger).also { it.attach() }
         outboxChannel = OutboxChannel(messenger, graph.outboxRepository).also { it.attach() }
+        inboxChannel = InboxChannel(messenger, graph.inboxRepository).also { it.attach() }
         agentStateChannel = AgentStateChannel(messenger, graph.agentController).also { it.attach() }
         deviceStateChannel = DeviceStateChannel(
             messenger,
@@ -61,6 +65,8 @@ class MainActivity : FlutterActivity(), AgentHost {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        inboxChannel?.detach()
+        inboxChannel = null
         outboxChannel?.detach()
         outboxChannel = null
         deviceStateChannel?.detach()
@@ -114,6 +120,18 @@ class MainActivity : FlutterActivity(), AgentHost {
         }
     }
 
+    override fun hasReceiveSmsPermission(): Boolean = isGranted(Manifest.permission.RECEIVE_SMS)
+
+    override fun requestReceiveSmsPermission() {
+        if (!hasReceiveSmsPermission()) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECEIVE_SMS),
+                REQ_RECEIVE_SMS,
+            )
+        }
+    }
+
     private fun isGranted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
@@ -131,6 +149,7 @@ class MainActivity : FlutterActivity(), AgentHost {
                 if (granted) graph.simInfoManager.start()
             }
             REQ_SEND_SMS -> graph.logger.i(TAG, "SEND_SMS granted=$granted")
+            REQ_RECEIVE_SMS -> graph.logger.i(TAG, "RECEIVE_SMS granted=$granted")
         }
     }
 
@@ -139,5 +158,6 @@ class MainActivity : FlutterActivity(), AgentHost {
         private const val REQ_POST_NOTIFICATIONS = 1001
         private const val REQ_READ_PHONE_STATE = 1002
         private const val REQ_SEND_SMS = 1003
+        private const val REQ_RECEIVE_SMS = 1004
     }
 }

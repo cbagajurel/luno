@@ -29,7 +29,7 @@ class AgentGraph(context: Context) {
     val logger: LunoLogger = LunoLogger(LogcatSink())
     val agentController: AgentController = AgentController(logger)
 
-    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val deviceStateStore: DeviceStateStore = DeviceStateStore()
     val simInfoManager: SimInfoManager = SimInfoManager(appContext, deviceStateStore, logger)

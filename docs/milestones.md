@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-16): M1–M10 complete. Next up: M11.**
+**Status (2026-07-16): M1–M11 complete. Next up: M12.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -21,8 +21,8 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M8 | Durable queue + transport interface | 3 | ✅ done | State machine tests w/ FakeTransport; survives kill |
 | M9 | Send SMS (single-part) | 4 | ✅ done | UI button sends a real SMS, reaches SENT |
 | M10 | Multipart + multi-SIM send + delivery reports | 4 | ✅ done | Long SMS from chosen SIM reaches DELIVERED |
-| M11 | Receive SMS | 5 | ⬜ next | Inbound SMS captured with app closed |
-| M12 | Wire protocol codec + connection SM | 6 | ⬜ todo | Codec round-trip tests; SM transitions |
+| M11 | Receive SMS | 5 | ✅ done | Inbound SMS captured with app closed |
+| M12 | Wire protocol codec + connection SM | 6 | ⬜ next | Codec round-trip tests; SM transitions |
 | M13 | Pairing/auth + WebSocket connect | 6 | ⬜ todo | Node enrolls and reaches READY |
 | M14 | Protocol wired to SMS + heartbeat | 6 | ⬜ todo | Backend command → SMS → events back |
 | M15 | Boot + WorkManager + resync | 7 | ⬜ todo | Reboot/offline/kill → lossless recovery |
@@ -274,7 +274,19 @@ part size to 70 chars; one part fails while others succeed; per-part idempotency
 
 ---
 
-## M11 — Receive SMS
+## M11 — Receive SMS — ✅ done
+
+**Implemented:** manifest-registered `transport/sms/SmsReceiver.kt` (SMS_RECEIVED,
+`BROADCAST_SMS`-guarded, `exported`) — wakes the app even when killed; `goAsync()` +
+timeout hands off to `appScope` so the broadcast thread never ANRs. Concatenated
+segments arrive in one broadcast and are reassembled via `MultipartAssembler.reassemble`;
+`SmsReceiver.buildInbound` (pure, tested) derives the sender+timestamp dedupe key and
+captures to the inbox before anything else (persist-before-act). `RECEIVE_SMS` runtime
+flow (`AgentHost`/`MainActivity`); Pigeon `getRecentInbox`/`hasReceiveSmsPermission` +
+`InboxChannel`; a read-only "Received messages" list in the debug UI. Reporting to the
+backend is deferred to M14 (capture-only here). Tests: `InboundSmsTest` (reassembly,
+build, dedupe-key stability, null-sender fallback). Capturing with the app closed /
+screen locked still needs on-device verification.
 
 **Files:** `transport/sms/SmsReceiver.kt`, inbound path in
 `MultipartAssembler.kt`; manifest `<receiver>`; `InboxRepository` wiring.

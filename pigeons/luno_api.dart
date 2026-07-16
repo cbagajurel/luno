@@ -78,6 +78,24 @@ class OutboxEntry {
   final int deliveredCount;
 }
 
+class InboundEntry {
+  InboundEntry({
+    required this.id,
+    required this.sender,
+    required this.body,
+    this.subscriptionId,
+    required this.receivedAt,
+    required this.parts,
+  });
+
+  final String id;
+  final String sender;
+  final String body;
+  final int? subscriptionId;
+  final int receivedAt;
+  final int parts;
+}
+
 class DeviceState {
   DeviceState({
     required this.sims,
@@ -126,4 +144,10 @@ abstract class LunoHostApi {
   String sendSms(String recipient, String body, int? subscriptionId);
 
   List<OutboxEntry> getRecentOutbox();
+
+  bool hasReceiveSmsPermission();
+
+  void requestReceiveSmsPermission();
+
+  List<InboundEntry> getRecentInbox();
 }
