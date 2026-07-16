@@ -26,8 +26,8 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M11 complete (as of 2026-07-16). Next up: M12** (wire protocol
-codec + connection state machine). See [`docs/milestones.md`](docs/milestones.md)
+**Progress: M1–M12 complete (as of 2026-07-16). Next up: M13** (pairing/auth +
+WebSocket connect). See [`docs/milestones.md`](docs/milestones.md)
 for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
@@ -51,6 +51,13 @@ Done so far:
   `MultipartAssembler.reassemble` + pure `SmsReceiver.buildInbound`, `RECEIVE_SMS` runtime
   flow, Pigeon `getRecentInbox` + `InboxChannel`, read-only received-messages list.
   Capture-only (backend reporting is M14).
+- **M12** wire protocol codec + connection SM (pure Kotlin, `kotlinx.serialization`):
+  `backend/protocol/{Envelope,Command,Event,Ack,Control,ProtocolCodec}` (§8 DTOs +
+  single (kind,type)→serializer registry, `DecodeResult.Ok|Unsupported|Malformed`,
+  forward-compat/quarantine, `ProtocolVersion.negotiate`); `agent/ConnectionStateMachine`
+  (pure §6 transition table); `backend/ws/ReconnectPolicy` (capped backoff + full jitter,
+  reset only after a stable READY). No live connection yet (M13). Wire DTOs are decoupled
+  from domain models — mapping is M14.
 
 ## Commands
 

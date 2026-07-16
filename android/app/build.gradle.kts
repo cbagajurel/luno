@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -60,6 +61,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     // StateFlow/coroutines for the agent's state source of truth.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // Wire protocol codec: JSON over WSS is the node<->backend contract (§8).
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     // Room: the durable outbox/inbox spine (persist-before-act).
     implementation("androidx.room:room-runtime:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")

@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-16): M1–M11 complete. Next up: M12.**
+**Status (2026-07-16): M1–M12 complete. Next up: M13.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -22,8 +22,8 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M9 | Send SMS (single-part) | 4 | ✅ done | UI button sends a real SMS, reaches SENT |
 | M10 | Multipart + multi-SIM send + delivery reports | 4 | ✅ done | Long SMS from chosen SIM reaches DELIVERED |
 | M11 | Receive SMS | 5 | ✅ done | Inbound SMS captured with app closed |
-| M12 | Wire protocol codec + connection SM | 6 | ⬜ next | Codec round-trip tests; SM transitions |
-| M13 | Pairing/auth + WebSocket connect | 6 | ⬜ todo | Node enrolls and reaches READY |
+| M12 | Wire protocol codec + connection SM | 6 | ✅ done | Codec round-trip tests; SM transitions |
+| M13 | Pairing/auth + WebSocket connect | 6 | ⬜ next | Node enrolls and reaches READY |
 | M14 | Protocol wired to SMS + heartbeat | 6 | ⬜ todo | Backend command → SMS → events back |
 | M15 | Boot + WorkManager + resync | 7 | ⬜ todo | Reboot/offline/kill → lossless recovery |
 | M16 | Security hardening | 8 | ⬜ todo | Threat-model checklist passes |
@@ -309,7 +309,23 @@ sender+timestamp+ref.
 
 ---
 
-## M12 — Wire protocol codec + connection state machine
+## M12 — Wire protocol codec + connection state machine — ✅ done
+
+**Implemented:** `backend/protocol/` wire contract (§8) as pure `kotlinx.serialization`
+DTOs — `Envelope` (raw `JsonObject` payload, §8.1) + `FrameKind` + `ProtocolVersion.negotiate`;
+`Command` (send_sms/cancel_sms/get_status/config_update/revoke/wipe), `Event`
+(sms_accepted/sms_sent/delivery_report/sms_received/device_status/heartbeat/log/error,
+with their sub-DTOs), `Ack`, `Control` (resync/version_negotiate/ping/pong). `ProtocolCodec`
+is the single (kind,type)→serializer registry: `encode(ProtocolFrame)`/`decode` →
+`DecodeResult.Ok|Unsupported|Malformed` — unknown fields ignored (`ignoreUnknownKeys`),
+unknown types and malformed frames quarantined, never thrown. `agent/ConnectionStateMachine`
+is a pure §6 transition table (`transition(state,event): ConnectionState?`, NETWORK_LOST wins
+from any state); `backend/ws/ReconnectPolicy` is capped exponential backoff + full jitter that
+resets **only after a READY held ≥ `stableReadyMillis`**. Wire DTOs are kept separate from the
+Kotlin domain models — domain↔wire mapping is M14. Added the `kotlin.plugin.serialization`
+plugin + `kotlinx-serialization-json`. No live connection yet. Tests: `ProtocolCodecTest`
+(round-trips every type, forward-compat, quarantine, version negotiation),
+`ConnectionStateMachineTest`, `ReconnectPolicyTest` (backoff cap, jitter bounds, stable-READY reset).
 
 **Files:** `backend/protocol/Envelope.kt`, `Command.kt`, `Event.kt`, `Ack.kt`,
 `Control.kt`, `ProtocolCodec.kt`; `agent/ConnectionStateMachine.kt`;
