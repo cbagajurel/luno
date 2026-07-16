@@ -7,10 +7,11 @@ import android.telephony.SmsManager
 
 /**
  * Thin wrapper over [SmsManager]: resolves the right manager (default or a
- * specific subscription) and hands a message — split into [parts] — to the
- * radio. Outcomes arrive asynchronously through the sent/delivery intents; this
- * call only starts them. A revoked `SEND_SMS` surfaces here as a
- * [SecurityException].
+ * specific subscription) and hands a message to the radio. Single-part goes
+ * through [sendSinglePart] (`sendTextMessage`) and only genuinely long bodies
+ * through [sendMultipart] (`sendMultipartTextMessage`) — some RILs choke on a
+ * single-segment multipart send. Outcomes arrive asynchronously through the
+ * sent/delivery intents; a revoked `SEND_SMS` surfaces here as a [SecurityException].
  */
 class SmsSender(private val context: Context) {
 
@@ -27,9 +28,17 @@ class SmsSender(private val context: Context) {
         }
     }
 
-    /**
-     * @param deliveryIntents one per part, or null when no delivery report was requested.
-     */
+    fun sendSinglePart(
+        manager: SmsManager,
+        destination: String,
+        body: String,
+        sentIntent: PendingIntent,
+        deliveryIntent: PendingIntent?,
+    ) {
+        manager.sendTextMessage(destination, null, body, sentIntent, deliveryIntent)
+    }
+
+    /** @param deliveryIntents one per part, or null when no delivery report was requested. */
     fun sendMultipart(
         manager: SmsManager,
         destination: String,

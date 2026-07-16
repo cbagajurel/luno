@@ -41,6 +41,24 @@ class SmsResultCodesTest {
     }
 
     @Test
+    fun `network error (code 17) is transient, not unknown`() {
+        val result = SmsResultCodes.fromSentResultCode(17) as SmsSendResult.Failed
+        assertEquals(ErrorClass.TRANSIENT, result.error.errorClass)
+        assertEquals("network_error", result.error.code)
+    }
+
+    @Test
+    fun `result code 0 (ERROR_NONE) is treated as sent`() {
+        assertEquals(SmsSendResult.Sent, SmsResultCodes.fromSentResultCode(0))
+    }
+
+    @Test
+    fun `encoding error is terminal (not retryable)`() {
+        val result = SmsResultCodes.fromSentResultCode(18) as SmsSendResult.Failed
+        assertEquals(ErrorClass.TERMINAL, result.error.errorClass)
+    }
+
+    @Test
     fun `unknown code falls back to transient with a labelled code`() {
         val result = SmsResultCodes.fromSentResultCode(9999) as SmsSendResult.Failed
         assertEquals(ErrorClass.TRANSIENT, result.error.errorClass)

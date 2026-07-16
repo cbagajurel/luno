@@ -32,6 +32,7 @@ class SentReportRouter(
         override fun onReceive(context: Context?, intent: Intent?) {
             val requestId = intent?.getStringExtra(EXTRA_REQUEST_ID) ?: return
             val result = SmsResultCodes.fromSentResultCode(resultCode)
+            logger.i(TAG, "sent report: code=$resultCode (${SmsResultCodes.name(resultCode)})")
             pending.remove(requestId)?.complete(result)
         }
     }

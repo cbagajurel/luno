@@ -55,7 +55,16 @@ class SmsTransport(
             } else {
                 null
             }
-            sender.sendMultipart(manager, request.recipient, parts, armed.map { it.sentIntent }, deliveryIntents)
+            logger.i(
+                TAG,
+                "sending ${request.id}: ${parts.size} part(s), ${request.body.length} chars, " +
+                    "subId=${request.subscriptionId ?: "default"}",
+            )
+            if (parts.size == 1) {
+                sender.sendSinglePart(manager, request.recipient, parts[0], armed[0].sentIntent, deliveryIntents?.get(0))
+            } else {
+                sender.sendMultipart(manager, request.recipient, parts, armed.map { it.sentIntent }, deliveryIntents)
+            }
 
             val results = withTimeoutOrNull(sendTimeoutMillis) { deferreds.awaitAll() }
                 ?: return SendHandle.Failed(
