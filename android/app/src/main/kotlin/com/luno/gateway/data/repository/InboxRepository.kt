@@ -47,6 +47,9 @@ class InboxRepository(
         }
     }
 
+    /** Inbound captured but not yet reported to the backend — the sms_received work list. */
+    fun observePending(): Flow<List<InboxEntity>> = dao.observeByStatus(InboxStatus.RECEIVED)
+
     suspend fun markReported(id: String) = dao.updateStatus(id, InboxStatus.REPORTED)
 
     suspend fun markAcked(id: String) = dao.updateStatus(id, InboxStatus.ACKED)

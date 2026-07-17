@@ -4,8 +4,10 @@ import com.luno.gateway.agent.ConnectionEvent
 import com.luno.gateway.agent.ConnectionState
 import com.luno.gateway.agent.ConnectionStateMachine
 import com.luno.gateway.backend.auth.DeviceCredential
+import com.luno.gateway.backend.protocol.Ack
 import com.luno.gateway.backend.protocol.Control
 import com.luno.gateway.backend.protocol.DecodeResult
+import com.luno.gateway.backend.protocol.Event
 import com.luno.gateway.backend.protocol.FrameBody
 import com.luno.gateway.backend.protocol.ProtocolCodec
 import com.luno.gateway.backend.protocol.ProtocolFrame
@@ -14,6 +16,7 @@ import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.util.Clock
 import com.luno.gateway.util.Ids
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -48,7 +51,9 @@ class ConnectionManager(
     private val online: StateFlow<Boolean>,
     private val credentialProvider: () -> DeviceCredential?,
     private val logger: LunoLogger,
-) {
+    private val lastAckedInboundSeq: () -> Long = { 0L },
+    private val outstandingOutboxIds: () -> List<String> = { emptyList() },
+) : EventSink {
     private val _state = MutableStateFlow(ConnectionState.DISCONNECTED)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
@@ -61,7 +66,9 @@ class ConnectionManager(
     private var backoffJob: Job? = null
 
     private var generation = 0
-    private var seq = 0L
+    private val seq = AtomicLong(0)
+
+    override val isReady: Boolean get() = _state.value == ConnectionState.READY
 
     private sealed interface Internal {
         data class Net(val online: Boolean) : Internal
@@ -97,8 +104,17 @@ class ConnectionManager(
         events.trySend(Internal.Disconnect)
     }
 
-    /** Send an application frame (M14). Only meaningful once READY. */
-    fun send(frame: ProtocolFrame): Boolean = socket.send(codec.encode(frame))
+    /**
+     * Send a node→backend event. [id] is the stable idempotency key (reused across
+     * resends so the backend dedupes); returns false if there's no credential yet.
+     * Only meaningful once READY — callers gate on [isReady]/[state].
+     */
+    override fun sendEvent(event: Event, id: String): Boolean =
+        sendFrame(id, FrameBody.EventBody(event))
+
+    /** Acknowledge receipt of a specific backend frame (§8.4). Fire-and-forget. */
+    override fun sendAck(ackedId: String): Boolean =
+        sendFrame(Ids.newId(), FrameBody.AckBody(Ack(ackedId)))
 
     private suspend fun loop() {
         for (event in events) {
@@ -176,7 +192,14 @@ class ConnectionManager(
         when (_state.value) {
             ConnectionState.CONNECTED ->
                 if (body is FrameBody.ControlBody && body.control is Control.VersionNegotiate) {
-                    if (apply(ConnectionEvent.AUTH_OK)) sendControl(Control.Resync(lastAckedInboundSeq = 0))
+                    if (apply(ConnectionEvent.AUTH_OK)) {
+                        sendControl(
+                            Control.Resync(
+                                lastAckedInboundSeq = lastAckedInboundSeq(),
+                                outstandingOutboxIds = outstandingOutboxIds(),
+                            ),
+                        )
+                    }
                 }
 
             ConnectionState.AUTHENTICATED ->
@@ -191,7 +214,13 @@ class ConnectionManager(
         }
 
         if (body is FrameBody.ControlBody && body.control is Control.Ping) sendControl(Control.Pong)
-        if (body is FrameBody.CommandBody || body is FrameBody.EventBody) _incoming.tryEmit(frame)
+        // Commands/events are forwarded to the agent; backend acks are forwarded only
+        // once READY, so the AUTHENTICATED-state handshake ack isn't mistaken for an
+        // application ack (the EventPublisher ignores unknown ackedIds either way).
+        when {
+            body is FrameBody.CommandBody || body is FrameBody.EventBody -> _incoming.tryEmit(frame)
+            body is FrameBody.AckBody && _state.value == ConnectionState.READY -> _incoming.tryEmit(frame)
+        }
     }
 
     private fun onFailure(httpCode: Int?) {
@@ -269,17 +298,22 @@ class ConnectionManager(
     }
 
     private fun sendControl(control: Control) {
-        val credential = credentialProvider() ?: return
+        sendFrame(Ids.newId(), FrameBody.ControlBody(control))
+    }
+
+    /** Stamps [body] with a fresh envelope (device id, monotonic seq, ts) and sends it. */
+    private fun sendFrame(id: String, body: FrameBody): Boolean {
+        val credential = credentialProvider() ?: return false
         val frame =
-            ProtocolFrame.control(
+            ProtocolFrame(
                 v = ProtocolVersion.CURRENT,
-                id = Ids.newId(),
+                id = id,
                 ts = Instant.ofEpochMilli(clock.nowMillis()).toString(),
                 deviceId = credential.deviceId,
-                seq = ++seq,
-                control = control,
+                seq = seq.incrementAndGet(),
+                body = body,
             )
-        socket.send(codec.encode(frame))
+        return socket.send(codec.encode(frame))
     }
 
     private fun apply(event: ConnectionEvent): Boolean {

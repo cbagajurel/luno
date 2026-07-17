@@ -23,6 +23,9 @@ interface InboxDao {
     @Query("SELECT COUNT(*) FROM inbox")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM inbox WHERE status = :status ORDER BY receivedAt ASC")
+    fun observeByStatus(status: InboxStatus): Flow<List<InboxEntity>>
+
     @Query("SELECT * FROM inbox ORDER BY receivedAt DESC")
     fun observeAll(): Flow<List<InboxEntity>>
 

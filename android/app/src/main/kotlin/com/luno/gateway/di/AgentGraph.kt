@@ -3,13 +3,18 @@ package com.luno.gateway.di
 import android.content.Context
 import android.os.Build
 import com.luno.gateway.agent.AgentController
+import com.luno.gateway.agent.CommandRouter
 import com.luno.gateway.backend.auth.DeviceCredentialStore
 import com.luno.gateway.backend.auth.PairingManager
 import com.luno.gateway.backend.auth.SharedPrefsStore
+import com.luno.gateway.backend.protocol.Event
+import com.luno.gateway.backend.protocol.PartSent
 import com.luno.gateway.backend.protocol.ProtocolCodec
 import com.luno.gateway.backend.rest.DeviceInfo
 import com.luno.gateway.backend.rest.RestClient
 import com.luno.gateway.backend.ws.ConnectionManager
+import com.luno.gateway.backend.ws.EventPublisher
+import com.luno.gateway.backend.ws.Heartbeat
 import com.luno.gateway.backend.ws.ReconnectPolicy
 import com.luno.gateway.backend.ws.WebSocketClient
 import com.luno.gateway.data.db.LunoDatabase
@@ -17,6 +22,7 @@ import com.luno.gateway.data.repository.DeliveryTracker
 import com.luno.gateway.data.repository.InboxRepository
 import com.luno.gateway.data.repository.OutboxDispatcher
 import com.luno.gateway.data.repository.OutboxRepository
+import com.luno.gateway.agent.EventKeys
 import com.luno.gateway.logging.LogcatSink
 import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.telephony.BatteryMonitor
@@ -43,7 +49,6 @@ class AgentGraph(context: Context) {
     private val appContext: Context = context.applicationContext
 
     val logger: LunoLogger = LunoLogger(LogcatSink())
-    val agentController: AgentController = AgentController(logger)
 
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -76,15 +81,7 @@ class AgentGraph(context: Context) {
         DeliveryTracker(outboxRepository, outboxPartDao, appScope, logger)
             .also { it.start(smsTransport) }
 
-    val outboxDispatcher: OutboxDispatcher = OutboxDispatcher(
-        outboxRepository,
-        transportRegistry,
-        logger,
-        appScope,
-        onSent = deliveryTracker::onSent,
-    )
-
-    // --- backend connection (M13) ---
+    // --- backend connection (M13/M14) ---
     val credentialStore: DeviceCredentialStore =
         DeviceCredentialStore(
             SharedPrefsStore(appContext.getSharedPreferences("luno_secure_prefs", Context.MODE_PRIVATE)),
@@ -120,5 +117,71 @@ class AgentGraph(context: Context) {
             online = online,
             credentialProvider = { credentialStore.load() },
             logger = logger,
+            lastAckedInboundSeq = { agentController.lastAckedInboundSeq() },
         )
+
+    private val eventPublisher: EventPublisher = EventPublisher(connectionManager, appScope, logger)
+
+    // --- M14: protocol wired to SMS + heartbeat ---
+    val outboxDispatcher: OutboxDispatcher = OutboxDispatcher(
+        outboxRepository,
+        transportRegistry,
+        logger,
+        appScope,
+        onSent = { messageId, parts ->
+            deliveryTracker.onSent(messageId, parts)
+            eventPublisher.reliable(
+                Event.SmsSent(messageId, parts.map { PartSent(it.index, STATUS_SENT) }),
+                EventKeys.sent(messageId),
+            )
+        },
+        onFailed = { messageId, error ->
+            eventPublisher.reliable(
+                Event.Error(code = error.code, message = error.message, ref = messageId),
+                EventKeys.error(messageId),
+            )
+        },
+    )
+
+    private val queueDepth: StateFlow<Int> =
+        outboxRepository.observeQueueDepth().stateIn(appScope, SharingStarted.Eagerly, 0)
+
+    private val heartbeat: Heartbeat =
+        Heartbeat(
+            events = eventPublisher,
+            deviceState = { deviceStateStore.state.value },
+            queueDepth = { queueDepth.value },
+            transports = { transportRegistry.all().map { it.id.name } },
+            scope = appScope,
+            logger = logger,
+        )
+
+    private val commandRouter: CommandRouter =
+        CommandRouter(
+            outbox = outboxRepository,
+            dispatcher = outboxDispatcher,
+            events = eventPublisher,
+            ack = connectionManager,
+            deviceState = { deviceStateStore.state.value },
+            onHeartbeatInterval = heartbeat::setIntervalSeconds,
+            logger = logger,
+        )
+
+    val agentController: AgentController =
+        AgentController(
+            logger = logger,
+            scope = appScope,
+            incoming = connectionManager.incoming,
+            connectionState = connectionManager.state,
+            events = eventPublisher,
+            router = commandRouter,
+            heartbeat = heartbeat,
+            dispatcher = outboxDispatcher,
+            inbox = inboxRepository,
+            deliveryReports = smsTransport.deliveryReports(),
+        )
+
+    companion object {
+        private const val STATUS_SENT = "sent"
+    }
 }

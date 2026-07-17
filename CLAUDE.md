@@ -26,8 +26,8 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M12 complete (as of 2026-07-16). Next up: M13** (pairing/auth +
-WebSocket connect). See [`docs/milestones.md`](docs/milestones.md)
+**Progress: M1–M14 complete (as of 2026-07-17). Next up: M15** (boot +
+WorkManager + resync). See [`docs/milestones.md`](docs/milestones.md)
 for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
@@ -58,6 +58,17 @@ Done so far:
   (pure §6 transition table); `backend/ws/ReconnectPolicy` (capped backoff + full jitter,
   reset only after a stable READY). No live connection yet (M13). Wire DTOs are decoupled
   from domain models — mapping is M14.
+- **M13** pairing/auth + live WSS: `backend/auth/{PairingManager,DeviceCredentialStore}`
+  (Keystore-bound credential, `POST /enroll` via `backend/rest/RestClient`),
+  `backend/ws/{WebSocketClient,ConnectionManager}` (OkHttp WSS, single-consumer loop driving
+  the §6 SM: version_negotiate→AUTHENTICATED→resync→READY, 401/403 pauses instead of looping),
+  `security/KeystoreManager`; pairing UI.
+- **M14** protocol wired to SMS + heartbeat: `agent/{AgentController(full),CommandRouter,
+  EventKeys,DeviceStatusMapper}`, `backend/ws/{EventPublisher,Heartbeat}`. Backend `send_sms`
+  → durable outbox → SMS → `sms_accepted`/`sms_sent`/`delivery_report`; inbound inbox →
+  `sms_received`; every node→backend event is at-least-once (stable id, buffered-until-acked,
+  resent on READY — in-memory; durable resync is M15). `ConnectionManager` now sends
+  events/acks (one monotonic seq) and forwards backend acks.
 
 ## Commands
 

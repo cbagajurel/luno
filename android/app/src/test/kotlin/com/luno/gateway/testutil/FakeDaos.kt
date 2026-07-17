@@ -119,6 +119,9 @@ class FakeInboxDao : InboxDao {
 
     override suspend fun count(): Int = rows.size
 
+    override fun observeByStatus(status: InboxStatus): Flow<List<InboxEntity>> =
+        flowOf(rows.values.filter { it.status == status }.sortedBy { it.receivedAt })
+
     override fun observeAll(): Flow<List<InboxEntity>> = flowOf(rows.values.toList())
 
     override suspend fun recent(limit: Int): List<InboxEntity> =

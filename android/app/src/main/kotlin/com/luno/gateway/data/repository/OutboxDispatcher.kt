@@ -2,6 +2,7 @@ package com.luno.gateway.data.repository
 
 import com.luno.gateway.data.db.entity.OutboxEntity
 import com.luno.gateway.logging.LunoLogger
+import com.luno.gateway.model.DomainError
 import com.luno.gateway.model.OutboundMessage
 import com.luno.gateway.model.SendHandle
 import com.luno.gateway.model.SentPart
@@ -24,6 +25,7 @@ class OutboxDispatcher(
     private val scope: CoroutineScope,
     private val transportId: TransportId = TransportId.SMS,
     private val onSent: suspend (messageId: String, parts: List<SentPart>) -> Unit = { _, _ -> },
+    private val onFailed: suspend (messageId: String, error: DomainError) -> Unit = { _, _ -> },
 ) {
     /** Enqueue then dispatch off the caller's thread; returns the durable id immediately. */
     fun submit(message: OutboundMessage): String {
@@ -55,7 +57,11 @@ class OutboxDispatcher(
                 if (sent) onSent(id, handle.parts)
                 sent
             }
-            is SendHandle.Failed -> outbox.markFailed(id, handle.error)
+            is SendHandle.Failed -> {
+                val marked = outbox.markFailed(id, handle.error)
+                if (marked) onFailed(id, handle.error)
+                marked
+            }
         }
     }
 

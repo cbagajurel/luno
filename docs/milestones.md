@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-16): M1–M12 complete. Next up: M13.**
+**Status (2026-07-17): M1–M14 complete. Next up: M15.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -23,9 +23,9 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M10 | Multipart + multi-SIM send + delivery reports | 4 | ✅ done | Long SMS from chosen SIM reaches DELIVERED |
 | M11 | Receive SMS | 5 | ✅ done | Inbound SMS captured with app closed |
 | M12 | Wire protocol codec + connection SM | 6 | ✅ done | Codec round-trip tests; SM transitions |
-| M13 | Pairing/auth + WebSocket connect | 6 | ⬜ next | Node enrolls and reaches READY |
-| M14 | Protocol wired to SMS + heartbeat | 6 | ⬜ todo | Backend command → SMS → events back |
-| M15 | Boot + WorkManager + resync | 7 | ⬜ todo | Reboot/offline/kill → lossless recovery |
+| M13 | Pairing/auth + WebSocket connect | 6 | ✅ done | Node enrolls and reaches READY |
+| M14 | Protocol wired to SMS + heartbeat | 6 | ✅ done | Backend command → SMS → events back |
+| M15 | Boot + WorkManager + resync | 7 | ⬜ next | Reboot/offline/kill → lossless recovery |
 | M16 | Security hardening | 8 | ⬜ todo | Threat-model checklist passes |
 | M17 | Flutter dashboard | 9 | ⬜ todo | Operator runs a node from the UI |
 | M18 | Observability, tests, release | 10 | ⬜ todo | Signed v1.0 APK, docs, E2E on real devices |
@@ -372,7 +372,29 @@ Keystore key invalidated (e.g., after biometric/lockscreen change) → recover.
 
 ---
 
-## M14 — Protocol wired to SMS + heartbeat
+## M14 — Protocol wired to SMS + heartbeat — ✅ done
+
+**Implemented:** `agent/AgentController.kt` is now the orchestration hub — on service
+start it wires (on `appScope`, process-scoped, guarded) the live link to the durable
+SMS layer: backend command frames → `agent/CommandRouter` (`send_sms` enqueues on the
+frame id as idempotency key → `ack` + `sms_accepted` → dispatch; `cancel_sms`,
+`get_status`→`device_status`, `config_update`→heartbeat interval, `revoke`/`wipe`
+logged for M16); outbox `onSent`→`sms_sent`, `onFailed`→`error`; `deliveryReports()`→
+`delivery_report`; inbox `RECEIVED`→`sms_received` then `REPORTED`, backend `ack`→
+`ACKED`. `backend/ws/EventPublisher` gives every node→backend event **at-least-once
+delivery**: a caller-supplied *stable* idempotency id (`agent/EventKeys`), buffered
+while unacked, resent on each READY, cleared on the backend ack (running a per-event
+follow-up) — so a socket dropped mid-exchange loses/dupes nothing (buffer is in-memory;
+durable resync across process death is M15). `backend/ws/Heartbeat` sends an ephemeral
+`heartbeat{queueDepth, battery, signals, transports}` every ~30s while READY.
+`ConnectionManager` gained `sendEvent`/`sendAck` (single monotonic per-direction seq via
+`AtomicLong`), forwards backend acks once READY, and carries the real `lastAckedInboundSeq`
+resync cursor. Wire↔domain mapping (`DeviceStatusMapper`) lives in the agent. Tests:
+`EventPublisherTest` (buffer/resend/ack-clear, stable ids, ephemeral bypass),
+`CommandRouterTest` (accept+ack+dispatch, redelivery dedupe, cancel, get_status,
+config_update), `HeartbeatTest`, `AgentControllerTest` (send→SMS→accepted, inbound→
+received→acked-once, delivery→event). Real end-to-end against a live backend + physical
+SIM still needs a stub/real server to close the on-device checkbox items below.
 
 **Files:** `agent/AgentController.kt` (full), `backend/ws/Heartbeat.kt`; connect
 `OutboxRepository`/`InboxRepository` ↔ protocol events.

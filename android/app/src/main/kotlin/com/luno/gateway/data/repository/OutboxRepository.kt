@@ -75,6 +75,13 @@ class OutboxRepository(
 
     suspend fun cancel(id: String): Boolean = transition(id, OutboxStatus.CANCELLED)
 
+    suspend fun cancelByCommandId(commandId: String): Boolean {
+        val row = dao.findByCommandId(commandId) ?: return false
+        return cancel(row.id)
+    }
+
+    suspend fun findByCommandId(commandId: String): OutboxEntity? = dao.findByCommandId(commandId)
+
     suspend fun requeue(id: String): Boolean = transition(id, OutboxStatus.QUEUED)
 
     suspend fun markFailed(id: String, error: DomainError): Boolean {
