@@ -73,10 +73,12 @@ class SmsTransport(
                 )
             rollUp(request, armed, results)
         } catch (e: SecurityException) {
+            // SEND_SMS can be revoked (or auto-reset) at any time; surface it as AUTH so
+            // it prompts a re-grant instead of failing terminally or crashing (§10).
             logger.w(TAG, "SEND_SMS denied for ${request.id}: ${e.message}")
             SendHandle.Failed(
                 request.id,
-                DomainError(ErrorClass.TERMINAL, "permission_denied", "SEND_SMS permission not granted"),
+                DomainError(ErrorClass.AUTH, "sms_permission_revoked", "SEND_SMS permission not granted"),
             )
         } finally {
             armed.forEach { sentReportRouter.disarm(it.requestId) }

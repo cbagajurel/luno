@@ -9,6 +9,7 @@ import com.luno.gateway.model.OutboxStatus
 import com.luno.gateway.util.Clock
 import com.luno.gateway.util.SystemClock
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -30,6 +31,11 @@ class OutboxRepository(
     private val logger: LunoLogger,
     private val clock: Clock = SystemClock,
     private val maxTerminalRetained: Int = DEFAULT_MAX_TERMINAL_RETAINED,
+    // PII-at-rest boundary: body + recipient are sealed on the way in and opened on
+    // the way out. Identity by default so unit tests see plaintext; AgentGraph injects
+    // the Keystore-backed CryptoBox.
+    private val seal: (String) -> String = { it },
+    private val open: (String) -> String = { it },
 ) {
     private val writeMutex = Mutex()
 
@@ -45,8 +51,8 @@ class OutboxRepository(
             OutboxEntity(
                 id = message.id,
                 commandId = message.commandId,
-                recipient = message.recipient,
-                body = message.body,
+                recipient = seal(message.recipient),
+                body = seal(message.body),
                 subscriptionId = message.subscriptionId,
                 requestDeliveryReport = message.requestDeliveryReport,
                 ref = message.ref,
@@ -80,7 +86,7 @@ class OutboxRepository(
         return cancel(row.id)
     }
 
-    suspend fun findByCommandId(commandId: String): OutboxEntity? = dao.findByCommandId(commandId)
+    suspend fun findByCommandId(commandId: String): OutboxEntity? = dao.findByCommandId(commandId)?.let(::decrypt)
 
     suspend fun requeue(id: String): Boolean = transition(id, OutboxStatus.QUEUED)
 
@@ -89,13 +95,19 @@ class OutboxRepository(
         return transition(id, target, incrementAttempt = true, error = error)
     }
 
-    suspend fun findById(id: String): OutboxEntity? = dao.findById(id)
+    suspend fun findById(id: String): OutboxEntity? = dao.findById(id)?.let(::decrypt)
 
-    suspend fun queued(): List<OutboxEntity> = dao.findByStatus(OutboxStatus.QUEUED)
+    suspend fun queued(): List<OutboxEntity> = dao.findByStatus(OutboxStatus.QUEUED).map(::decrypt)
 
-    suspend fun recent(limit: Int = DEFAULT_RECENT_LIMIT): List<OutboxEntity> = dao.recent(limit)
+    suspend fun recent(limit: Int = DEFAULT_RECENT_LIMIT): List<OutboxEntity> = dao.recent(limit).map(::decrypt)
 
-    fun observeRecent(limit: Int = DEFAULT_RECENT_LIMIT): Flow<List<OutboxEntity>> = dao.observeRecent(limit)
+    fun observeRecent(limit: Int = DEFAULT_RECENT_LIMIT): Flow<List<OutboxEntity>> =
+        dao.observeRecent(limit).map { rows -> rows.map(::decrypt) }
+
+    suspend fun clearAll() = dao.deleteAll()
+
+    private fun decrypt(row: OutboxEntity): OutboxEntity =
+        row.copy(recipient = open(row.recipient), body = open(row.body))
 
     fun observeQueueDepth(): Flow<Int> =
         dao.observeDepth(listOf(OutboxStatus.QUEUED, OutboxStatus.SENDING, OutboxStatus.FAILED_RETRYABLE))

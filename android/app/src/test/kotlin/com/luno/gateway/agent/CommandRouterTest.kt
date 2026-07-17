@@ -8,6 +8,7 @@ import com.luno.gateway.data.repository.OutboxDispatcher
 import com.luno.gateway.data.repository.OutboxRepository
 import com.luno.gateway.model.DeviceState
 import com.luno.gateway.model.OutboxStatus
+import com.luno.gateway.security.RateLimiter
 import com.luno.gateway.testutil.FakeEventOutboxDao
 import com.luno.gateway.testutil.FakeEventSink
 import com.luno.gateway.testutil.FakeOutboxDao
@@ -24,7 +25,12 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CommandRouterTest {
-    private class Fixture(scope: CoroutineScope, val transport: FakeTransport = FakeTransport()) {
+    private class Fixture(
+        scope: CoroutineScope,
+        val transport: FakeTransport = FakeTransport(),
+        rateLimiter: RateLimiter = RateLimiter(),
+        allowlist: () -> Set<String> = { emptySet() },
+    ) {
         val dao = FakeOutboxDao()
         val outbox = OutboxRepository(dao, testLogger())
         val sink = FakeEventSink(ready = true)
@@ -32,6 +38,8 @@ class CommandRouterTest {
         val registry = TransportRegistry().apply { register(transport) }
         val dispatcher = OutboxDispatcher(outbox, registry, testLogger(), scope, TransportId.FAKE)
         var heartbeatSeconds = 0
+        var wiped = 0
+        val policyApplied = mutableListOf<Pair<Int?, List<String>?>>()
         val router = CommandRouter(
             outbox = outbox,
             dispatcher = dispatcher,
@@ -40,6 +48,10 @@ class CommandRouterTest {
             deviceState = { DeviceState() },
             onHeartbeatInterval = { heartbeatSeconds = it },
             logger = testLogger(),
+            rateLimiter = rateLimiter,
+            allowlist = allowlist,
+            applyPolicy = { rate, allow -> policyApplied += rate to allow },
+            onWipe = { wiped++ },
         )
     }
 
@@ -100,6 +112,62 @@ class CommandRouterTest {
         f.router.handle(ProtocolFrame.command(1, "c4", TS, "dev-1", 6, Command.ConfigUpdate(heartbeatSec = 45)))
 
         assertEquals(45, f.heartbeatSeconds)
+    }
+
+    @Test
+    fun `config_update pushes the rate limit and allowlist to policy`() = runTest {
+        val f = Fixture(this)
+
+        f.router.handle(
+            ProtocolFrame.command(
+                1, "c5", TS, "dev-1", 7,
+                Command.ConfigUpdate(rateLimitPerMinute = 20, allowlist = listOf("+15551112222")),
+            ),
+        )
+
+        assertEquals(listOf<Pair<Int?, List<String>?>>(20 to listOf("+15551112222")), f.policyApplied)
+    }
+
+    @Test
+    fun `a recipient off the allowlist is rejected, not sent`() = runTest {
+        val f = Fixture(this, allowlist = { setOf("+15559999999") })
+
+        f.router.handle(sendFrame("cmd-1", to = "+15551112222"))
+
+        assertEquals(0, f.transport.sent.size)
+        assertEquals(listOf("err:cmd-1"), f.sink.idsFor(Event.Error.TYPE))
+        assertEquals(listOf("cmd-1"), f.sink.acks) // still acknowledged as received
+    }
+
+    @Test
+    fun `an allowlisted recipient sends normally`() = runTest {
+        val f = Fixture(this, allowlist = { setOf("+15551112222") })
+
+        f.router.handle(sendFrame("cmd-1", to = "+15551112222"))
+
+        assertEquals(1, f.transport.sent.size)
+    }
+
+    @Test
+    fun `sends past the rate limit are rejected, not sent`() = runTest {
+        val f = Fixture(this, rateLimiter = RateLimiter(perMinute = 1))
+
+        f.router.handle(sendFrame("cmd-1"))
+        f.router.handle(sendFrame("cmd-2"))
+
+        assertEquals(1, f.transport.sent.size)
+        assertTrue(f.sink.idsFor(Event.Error.TYPE).contains("err:cmd-2"))
+    }
+
+    @Test
+    fun `wipe and revoke both trigger the node reset`() = runTest {
+        val f = Fixture(this)
+
+        f.router.handle(ProtocolFrame.command(1, "w1", TS, "dev-1", 8, Command.Wipe))
+        f.router.handle(ProtocolFrame.command(1, "r1", TS, "dev-1", 9, Command.Revoke))
+
+        assertEquals(2, f.wiped)
+        assertEquals(listOf("w1", "r1"), f.sink.acks)
     }
 
     companion object {

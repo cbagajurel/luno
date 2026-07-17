@@ -23,4 +23,7 @@ interface EventOutboxDao {
 
     @Query("SELECT COUNT(*) FROM event_outbox")
     suspend fun count(): Int
+
+    @Query("DELETE FROM event_outbox")
+    suspend fun deleteAll()
 }

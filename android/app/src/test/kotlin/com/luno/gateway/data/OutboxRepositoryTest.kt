@@ -28,6 +28,34 @@ class OutboxRepositoryTest {
         OutboundMessage(id = id, recipient = "+15551234567", body = "hi", commandId = commandId)
 
     @Test
+    fun `body and recipient are sealed at rest but returned in the clear`() = runTest {
+        val sealed = FakeOutboxDao()
+        val repo = OutboxRepository(
+            sealed, testLogger(), clock,
+            seal = { "sealed:$it" },
+            open = { it.removePrefix("sealed:") },
+        )
+        repo.enqueue(message("m1")) // body "hi", recipient "+15551234567"
+
+        val stored = sealed.rows.getValue("m1")
+        assertEquals("sealed:hi", stored.body)
+        assertEquals("sealed:+15551234567", stored.recipient)
+
+        val readBack = repo.findById("m1")!!
+        assertEquals("hi", readBack.body)
+        assertEquals("+15551234567", readBack.recipient)
+    }
+
+    @Test
+    fun `clearAll empties the outbox`() = runTest {
+        val repo = repo()
+        repo.enqueue(message("m1"))
+        repo.enqueue(message("m2"))
+        repo.clearAll()
+        assertTrue(dao.rows.isEmpty())
+    }
+
+    @Test
     fun `enqueue persists as QUEUED before returning`() = runTest {
         val result = repo().enqueue(message("m1"))
         assertTrue(result is EnqueueResult.Enqueued)

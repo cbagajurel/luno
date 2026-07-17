@@ -25,6 +25,12 @@ import com.luno.gateway.data.repository.OutboxRepository
 import com.luno.gateway.agent.EventKeys
 import com.luno.gateway.logging.LogcatSink
 import com.luno.gateway.logging.LunoLogger
+import com.luno.gateway.logging.Redaction
+import com.luno.gateway.security.CryptoBox
+import com.luno.gateway.security.Pinning
+import com.luno.gateway.security.PolicyStore
+import com.luno.gateway.security.RateLimiter
+import com.luno.gateway.work.AgentWatchdogWorker
 import com.luno.gateway.telephony.BatteryMonitor
 import com.luno.gateway.telephony.DeviceStateStore
 import com.luno.gateway.telephony.NetworkMonitor
@@ -48,9 +54,13 @@ import kotlinx.coroutines.flow.stateIn
 class AgentGraph(context: Context) {
     private val appContext: Context = context.applicationContext
 
-    val logger: LunoLogger = LunoLogger(LogcatSink())
+    val logger: LunoLogger = LunoLogger(listOf(LogcatSink()), Redaction::redact)
 
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // PII-at-rest key, distinct from the credential key. seal on write / open on read.
+    private val dataCrypto: CryptoBox = CryptoBox(KeystoreManager(DATA_KEY_ALIAS))
+    private fun openOrBlank(sealed: String): String = dataCrypto.openOrNull(sealed) ?: ""
 
     val deviceStateStore: DeviceStateStore = DeviceStateStore()
     val simInfoManager: SimInfoManager = SimInfoManager(appContext, deviceStateStore, logger)
@@ -60,9 +70,11 @@ class AgentGraph(context: Context) {
     val networkMonitor: NetworkMonitor = NetworkMonitor(appContext, deviceStateStore, logger)
 
     private val database: LunoDatabase = LunoDatabase.build(appContext)
-    val outboxRepository: OutboxRepository = OutboxRepository(database.outboxDao(), logger)
+    val outboxRepository: OutboxRepository =
+        OutboxRepository(database.outboxDao(), logger, seal = dataCrypto::seal, open = ::openOrBlank)
     val outboxPartDao = database.outboxPartDao()
-    val inboxRepository: InboxRepository = InboxRepository(database.inboxDao(), logger)
+    val inboxRepository: InboxRepository =
+        InboxRepository(database.inboxDao(), logger, seal = dataCrypto::seal, open = ::openOrBlank)
     private val eventOutboxDao = database.eventOutboxDao()
 
     private val codec: ProtocolCodec = ProtocolCodec()
@@ -114,9 +126,10 @@ class AgentGraph(context: Context) {
         outboxRepository.observeOutstandingCommandIds()
             .stateIn(appScope, SharingStarted.Eagerly, emptyList())
 
+    // Cert pinning seam (off by default — no pins configured yet; delivered via config later).
     val connectionManager: ConnectionManager =
         ConnectionManager(
-            socket = WebSocketClient(logger = logger),
+            socket = WebSocketClient(logger = logger, pinner = Pinning.buildPinner(CERT_PIN_HOST, CERT_PINS)),
             codec = codec,
             reconnectPolicy = ReconnectPolicy(),
             scope = appScope,
@@ -140,7 +153,15 @@ class AgentGraph(context: Context) {
                     inboxRepository.markAcked(correlationId)
                 }
             },
+            seal = dataCrypto::seal,
+            open = ::openOrBlank,
         )
+
+    // Backend-authoritative-but-client-enforced send safety (§ threat model).
+    private val policyStore: PolicyStore =
+        PolicyStore(SharedPrefsStore(appContext.getSharedPreferences("luno_policy", Context.MODE_PRIVATE)))
+    private val rateLimiter: RateLimiter =
+        RateLimiter().apply { setLimit(policyStore.load().rateLimitPerMinute) }
 
     // --- M14: protocol wired to SMS + heartbeat ---
     val outboxDispatcher: OutboxDispatcher = OutboxDispatcher(
@@ -185,6 +206,13 @@ class AgentGraph(context: Context) {
             deviceState = { deviceStateStore.state.value },
             onHeartbeatInterval = heartbeat::setIntervalSeconds,
             logger = logger,
+            rateLimiter = rateLimiter,
+            allowlist = { policyStore.load().allowlist.toSet() },
+            applyPolicy = { rate, allow ->
+                val updated = policyStore.update(rate, allow)
+                rateLimiter.setLimit(updated.rateLimitPerMinute)
+            },
+            onWipe = { wipeNode() },
         )
 
     val agentController: AgentController =
@@ -201,7 +229,24 @@ class AgentGraph(context: Context) {
             deliveryReports = smsTransport.deliveryReports(),
         )
 
+    /** Remote revoke/wipe (§8.2): clear credential + all queues + policy, drop the link, return to unpaired. */
+    private suspend fun wipeNode() {
+        outboxRepository.clearAll()
+        inboxRepository.clearAll()
+        eventOutboxDao.deleteAll()
+        credentialStore.clear()
+        policyStore.clear()
+        rateLimiter.setLimit(0)
+        connectionManager.disconnect()
+        AgentWatchdogWorker.cancel(appContext)
+        logger.i(TAG, "node wiped; returned to unpaired")
+    }
+
     companion object {
+        private const val TAG = "AgentGraph"
         private const val STATUS_SENT = "sent"
+        private const val DATA_KEY_ALIAS = "luno_data_key"
+        private const val CERT_PIN_HOST = ""
+        private val CERT_PINS = emptyList<String>()
     }
 }

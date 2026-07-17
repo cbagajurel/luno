@@ -26,8 +26,8 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M15 complete (as of 2026-07-17). Next up: M16** (security
-hardening). See [`docs/milestones.md`](docs/milestones.md)
+**Progress: M1–M16 complete (as of 2026-07-17). Next up: M17** (Flutter
+dashboard). See [`docs/milestones.md`](docs/milestones.md)
 for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
@@ -79,6 +79,15 @@ Done so far:
   is keyed off a persisted `correlationId`. `ProtocolCodec.encode/decodeEventPayload`;
   resync now carries real `outstandingOutboxIds`
   (`OutboxRepository.observeOutstandingCommandIds`) + `lastAckedInboundSeq`.
+- **M16** security hardening: `logging/Redaction` (central phone-number masker wired as
+  `LunoLogger`'s redactor); `security/CryptoBox` seals PII at rest with a Keystore key
+  (`luno_data_key`) — outbox/inbox/event-payload bodies + numbers sealed on write,
+  opened on read (no schema change; dedup keys stay plaintext); `security/RateLimiter`
+  + `security/PolicyStore` enforce client-side backend-authoritative rate-limit +
+  allowlist in `CommandRouter` (reject → `error`, no enqueue); `revoke`/`wipe` do a full
+  node reset (credential + queues + policy cleared, disconnect, cancel watchdog);
+  `SmsTransport` maps revoked `SEND_SMS` to `AUTH`; `security/Pinning` + optional
+  `CertificatePinner` on `WebSocketClient` is a cert-pinning seam (off by default).
 
 ## Commands
 

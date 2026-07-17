@@ -34,4 +34,7 @@ interface InboxDao {
 
     @Query("SELECT * FROM inbox ORDER BY receivedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<InboxEntity>>
+
+    @Query("DELETE FROM inbox")
+    suspend fun deleteAll()
 }

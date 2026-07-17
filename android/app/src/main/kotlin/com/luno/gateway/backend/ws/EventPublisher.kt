@@ -39,6 +39,10 @@ class EventPublisher(
     private val codec: ProtocolCodec = ProtocolCodec(),
     private val clock: Clock = SystemClock,
     private val onEventAcked: suspend (type: String, correlationId: String?) -> Unit = { _, _ -> },
+    // PII-at-rest boundary: the serialized payload (an sms_received carries a body/number)
+    // is sealed before it's stored. Identity by default (tests); AgentGraph injects CryptoBox.
+    private val seal: (String) -> String = { it },
+    private val open: (String) -> String = { it },
 ) {
     private var resendJob: Job? = null
 
@@ -55,7 +59,7 @@ class EventPublisher(
             EventOutboxEntity(
                 id = id,
                 type = event.type,
-                payload = codec.encodeEventPayload(event),
+                payload = seal(codec.encodeEventPayload(event)),
                 correlationId = correlationId,
                 createdAt = clock.nowMillis(),
             ),
@@ -82,7 +86,7 @@ class EventPublisher(
         if (rows.isEmpty()) return
         logger.i(TAG, "resending ${rows.size} unacked event(s) after READY")
         for (row in rows) {
-            val event = codec.decodeEventPayload(row.type, row.payload)
+            val event = codec.decodeEventPayload(row.type, open(row.payload))
             if (event == null) {
                 logger.w(TAG, "dropping unrecoverable event ${row.type} (${row.id})")
                 dao.deleteById(row.id)
