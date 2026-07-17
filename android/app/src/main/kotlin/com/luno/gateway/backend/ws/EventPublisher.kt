@@ -2,35 +2,44 @@ package com.luno.gateway.backend.ws
 
 import com.luno.gateway.agent.ConnectionState
 import com.luno.gateway.backend.protocol.Event
+import com.luno.gateway.backend.protocol.ProtocolCodec
+import com.luno.gateway.data.db.dao.EventOutboxDao
+import com.luno.gateway.data.db.entity.EventOutboxEntity
 import com.luno.gateway.logging.LunoLogger
+import com.luno.gateway.util.Clock
 import com.luno.gateway.util.Ids
+import com.luno.gateway.util.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
- * The node→backend event path with at-least-once delivery (§7.1). A [reliable]
- * event is buffered under a caller-supplied *stable* idempotency id, sent when the
- * link is READY, resent on every reconnect, and cleared only when the backend acks
- * it — so a socket dropped mid-exchange never loses or duplicates an event (the
- * backend dedupes on the id). The buffer is in-memory: surviving process death is
- * the durable-resync job of M15.
+ * The node→backend event path with at-least-once, *durable* delivery (§7.1, §7.4).
+ * A [reliable] event is persisted to the [EventOutboxDao] under a caller-supplied
+ * *stable* idempotency id, sent when the link is READY, resent on every reconnect,
+ * and deleted only when the backend acks it — so a socket dropped mid-exchange, a
+ * force-stop, or a reboot never loses or duplicates an event (the backend dedupes
+ * on the id). Because the buffer lives in Room, unacked events survive process
+ * death and resend on the next READY.
  *
- * [ephemeral] events (heartbeat, status snapshots) skip the buffer — dropping one
+ * On ack, [onEventAcked] runs the one durable follow-up we have — marking an inbox
+ * row ACKED for `sms_received` — keyed off the persisted `correlationId` rather
+ * than an in-memory closure (a closure can't survive the restart the durability is
+ * for).
+ *
+ * [ephemeral] events (heartbeat, status snapshots) skip the store — dropping one
  * is harmless because the next supersedes it.
  */
 class EventPublisher(
     private val sink: EventSink,
     private val scope: CoroutineScope,
     private val logger: LunoLogger,
+    private val dao: EventOutboxDao,
+    private val codec: ProtocolCodec = ProtocolCodec(),
+    private val clock: Clock = SystemClock,
+    private val onEventAcked: suspend (type: String, correlationId: String?) -> Unit = { _, _ -> },
 ) {
-    private class Pending(val event: Event, val id: String, val onAck: suspend () -> Unit)
-
-    private val unacked = LinkedHashMap<String, Pending>()
-    private val mutex = Mutex()
     private var resendJob: Job? = null
 
     /** Resend everything unacked whenever the link (re)reaches READY. */
@@ -41,8 +50,16 @@ class EventPublisher(
         }
     }
 
-    suspend fun reliable(event: Event, id: String, onAck: suspend () -> Unit = {}) {
-        mutex.withLock { unacked[id] = Pending(event, id, onAck) }
+    suspend fun reliable(event: Event, id: String, correlationId: String? = null) {
+        dao.insertOrReplace(
+            EventOutboxEntity(
+                id = id,
+                type = event.type,
+                payload = codec.encodeEventPayload(event),
+                correlationId = correlationId,
+                createdAt = clock.nowMillis(),
+            ),
+        )
         if (sink.isReady) sink.sendEvent(event, id)
     }
 
@@ -52,18 +69,27 @@ class EventPublisher(
 
     /** A backend ack for one of our event frames: run its follow-up and stop resending. */
     suspend fun onBackendAck(ackedId: String) {
-        val pending = mutex.withLock { unacked.remove(ackedId) } ?: return
-        pending.onAck()
-        logger.i(TAG, "event ${pending.event.type} ($ackedId) acked")
+        val row = dao.findById(ackedId) ?: return
+        dao.deleteById(ackedId)
+        onEventAcked(row.type, row.correlationId)
+        logger.i(TAG, "event ${row.type} ($ackedId) acked")
     }
 
-    suspend fun outstandingCount(): Int = mutex.withLock { unacked.size }
+    suspend fun outstandingCount(): Int = dao.count()
 
     private suspend fun resendUnacked() {
-        val pendings = mutex.withLock { unacked.values.toList() }
-        if (pendings.isEmpty()) return
-        logger.i(TAG, "resending ${pendings.size} unacked event(s) after READY")
-        pendings.forEach { sink.sendEvent(it.event, it.id) }
+        val rows = dao.getAllOrdered()
+        if (rows.isEmpty()) return
+        logger.i(TAG, "resending ${rows.size} unacked event(s) after READY")
+        for (row in rows) {
+            val event = codec.decodeEventPayload(row.type, row.payload)
+            if (event == null) {
+                logger.w(TAG, "dropping unrecoverable event ${row.type} (${row.id})")
+                dao.deleteById(row.id)
+                continue
+            }
+            sink.sendEvent(event, row.id)
+        }
     }
 
     companion object {

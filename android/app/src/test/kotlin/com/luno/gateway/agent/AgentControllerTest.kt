@@ -3,6 +3,7 @@ package com.luno.gateway.agent
 import com.luno.gateway.backend.protocol.Ack
 import com.luno.gateway.backend.protocol.Command
 import com.luno.gateway.backend.protocol.Event
+import com.luno.gateway.backend.protocol.ProtocolCodec
 import com.luno.gateway.backend.protocol.ProtocolFrame
 import com.luno.gateway.backend.ws.EventPublisher
 import com.luno.gateway.data.repository.InboxRepository
@@ -12,6 +13,7 @@ import com.luno.gateway.model.DeliveryReport
 import com.luno.gateway.model.DeviceState
 import com.luno.gateway.model.InboundMessage
 import com.luno.gateway.model.InboxStatus
+import com.luno.gateway.testutil.FakeEventOutboxDao
 import com.luno.gateway.testutil.FakeEventSink
 import com.luno.gateway.testutil.FakeInboxDao
 import com.luno.gateway.testutil.FakeOutboxDao
@@ -32,11 +34,21 @@ import org.junit.Test
 class AgentControllerTest {
     private class Fixture(scope: CoroutineScope) {
         val sink = FakeEventSink(ready = true)
-        val events = EventPublisher(sink, scope, testLogger())
         val outboxDao = FakeOutboxDao()
         val outbox = OutboxRepository(outboxDao, testLogger())
         val inboxDao = FakeInboxDao()
         val inbox = InboxRepository(inboxDao, testLogger())
+        val eventDao = FakeEventOutboxDao()
+        val events = EventPublisher(
+            sink = sink,
+            scope = scope,
+            logger = testLogger(),
+            dao = eventDao,
+            codec = ProtocolCodec(),
+            onEventAcked = { type, corr ->
+                if (type == Event.SmsReceived.TYPE && corr != null) inbox.markAcked(corr)
+            },
+        )
         val transport = FakeTransport()
         val registry = TransportRegistry().apply { register(transport) }
         val dispatcher = OutboxDispatcher(outbox, registry, testLogger(), scope, TransportId.FAKE)

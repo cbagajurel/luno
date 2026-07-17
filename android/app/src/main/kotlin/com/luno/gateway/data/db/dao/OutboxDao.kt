@@ -41,6 +41,9 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox WHERE status IN (:statuses)")
     fun observeDepth(statuses: List<OutboxStatus>): Flow<Int>
 
+    @Query("SELECT commandId FROM outbox WHERE commandId IS NOT NULL AND status IN (:statuses) ORDER BY createdAt ASC")
+    fun observeCommandIdsByStatus(statuses: List<OutboxStatus>): Flow<List<String>>
+
     @Query("SELECT id FROM outbox WHERE status IN (:statuses) ORDER BY updatedAt ASC")
     suspend fun terminalIdsOldestFirst(statuses: List<OutboxStatus>): List<String>
 

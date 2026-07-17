@@ -135,7 +135,7 @@ class AgentController(
                     parts = row.parts,
                 ),
                 EventKeys.received(row.id),
-                onAck = { inbox.markAcked(row.id) },
+                correlationId = row.id,
             )
             inbox.markReported(row.id)
         }

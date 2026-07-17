@@ -5,6 +5,7 @@ import com.luno.gateway.backend.ws.EventPublisher
 import com.luno.gateway.backend.ws.Heartbeat
 import com.luno.gateway.model.BatteryStatus
 import com.luno.gateway.model.DeviceState
+import com.luno.gateway.testutil.FakeEventOutboxDao
 import com.luno.gateway.testutil.FakeEventSink
 import com.luno.gateway.testutil.testLogger
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,7 +22,7 @@ class HeartbeatTest {
     @Test
     fun `emits a heartbeat carrying queue depth and battery while ready`() = runTest {
         val sink = FakeEventSink(ready = true)
-        val events = EventPublisher(sink, backgroundScope, testLogger())
+        val events = EventPublisher(sink, backgroundScope, testLogger(), dao = FakeEventOutboxDao())
         val hb = Heartbeat(events, ::deviceState, queueDepth = { 3 }, transports = { listOf("SMS") }, scope = backgroundScope, logger = testLogger(), initialIntervalSeconds = 1)
 
         hb.start()
@@ -39,7 +40,7 @@ class HeartbeatTest {
     @Test
     fun `no heartbeat is sent while the link is down`() = runTest {
         val sink = FakeEventSink(ready = false)
-        val events = EventPublisher(sink, backgroundScope, testLogger())
+        val events = EventPublisher(sink, backgroundScope, testLogger(), dao = FakeEventOutboxDao())
         val hb = Heartbeat(events, ::deviceState, queueDepth = { 0 }, transports = { emptyList() }, scope = backgroundScope, logger = testLogger(), initialIntervalSeconds = 1)
 
         hb.start()

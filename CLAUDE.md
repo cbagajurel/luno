@@ -26,8 +26,8 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M14 complete (as of 2026-07-17). Next up: M15** (boot +
-WorkManager + resync). See [`docs/milestones.md`](docs/milestones.md)
+**Progress: M1–M15 complete (as of 2026-07-17). Next up: M16** (security
+hardening). See [`docs/milestones.md`](docs/milestones.md)
 for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
@@ -69,6 +69,16 @@ Done so far:
   `sms_received`; every node→backend event is at-least-once (stable id, buffered-until-acked,
   resent on READY — in-memory; durable resync is M15). `ConnectionManager` now sends
   events/acks (one monotonic seq) and forwards backend acks.
+- **M15** boot + WorkManager + resync: `receiver/BootReceiver` (BOOT_COMPLETED →
+  start FGS when paired), `work/AgentWatchdogWorker` (+ pure `WatchdogDecision`) — a
+  periodic backstop that revives the FGS or drains the outbox headless when a
+  background FGS-start is disallowed. **Durable resync (§7.4):** new `event_outbox`
+  table (Room **v3**, `MIGRATION_2_3`) makes `EventPublisher` durable — reliable events
+  persist under their stable id, resend from disk on each READY, clear on ack, and
+  survive process death (closing M14's in-memory gap); the `sms_received` ack follow-up
+  is keyed off a persisted `correlationId`. `ProtocolCodec.encode/decodeEventPayload`;
+  resync now carries real `outstandingOutboxIds`
+  (`OutboxRepository.observeOutstandingCommandIds`) + `lastAckedInboundSeq`.
 
 ## Commands
 
