@@ -26,8 +26,8 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M16 complete (as of 2026-07-17). Next up: M17** (Flutter
-dashboard). See [`docs/milestones.md`](docs/milestones.md)
+**Progress: M1–M17 complete (as of 2026-07-17). Next up: M18** (observability,
+tests, release). See [`docs/milestones.md`](docs/milestones.md)
 for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
@@ -88,6 +88,14 @@ Done so far:
   node reset (credential + queues + policy cleared, disconnect, cancel watchdog);
   `SmsTransport` maps revoked `SEND_SMS` to `AUTH`; `security/Pinning` + optional
   `CertificatePinner` on `WebSocketClient` is a cert-pinning seam (off by default).
+- **M17** Flutter dashboard (UI-only): replaced the demo `ui/home` with `main.dart`
+  (`ProviderScope` + `ScreenUtilInit`), `app/{luno_app,theme,router}` (Material 3 +
+  `google_fonts`; `go_router` `isPaired` gate + `StatefulShellRoute` bottom nav),
+  `state/*` (manual Riverpod snapshot-then-stream mirrors; native = sole source of
+  truth), and `features/{pairing,dashboard,messages,logs,settings}`. One new native
+  seam for the in-app log viewer: `logging/RingBufferLogSink` + Pigeon `getRecentLogs`
+  /`LogEntry` + `bridge/LogChannel` (`events/logs`). 13 Dart tests via a
+  `FakeLunoBridge`. QR pairing / default-SIM / battery-exemption + on-device pass → M18.
 
 ## Commands
 
