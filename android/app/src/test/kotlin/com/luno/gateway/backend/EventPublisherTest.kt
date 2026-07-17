@@ -3,6 +3,7 @@ package com.luno.gateway.backend
 import com.luno.gateway.agent.ConnectionState
 import com.luno.gateway.backend.protocol.Event
 import com.luno.gateway.backend.ws.EventPublisher
+import com.luno.gateway.testutil.FakeEventOutboxDao
 import com.luno.gateway.testutil.FakeEventSink
 import com.luno.gateway.testutil.testLogger
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,7 +20,8 @@ class EventPublisherTest {
     @Test
     fun `reliable event is sent once when ready and cleared on ack`() = runTest {
         val sink = FakeEventSink(ready = true)
-        val publisher = EventPublisher(sink, backgroundScope, testLogger())
+        val dao = FakeEventOutboxDao()
+        val publisher = EventPublisher(sink, backgroundScope, testLogger(), dao = dao)
 
         publisher.reliable(event("A"), "rcv:A")
         assertEquals(listOf("rcv:A"), sink.idsFor(Event.SmsReceived.TYPE))
@@ -32,7 +34,7 @@ class EventPublisherTest {
     @Test
     fun `an event buffered while offline is sent on the next READY`() = runTest(UnconfinedTestDispatcher()) {
         val sink = FakeEventSink(ready = false)
-        val publisher = EventPublisher(sink, backgroundScope, testLogger())
+        val publisher = EventPublisher(sink, backgroundScope, testLogger(), dao = FakeEventOutboxDao())
         val state = MutableStateFlow(ConnectionState.CONNECTING)
         publisher.start(state)
 
@@ -48,7 +50,7 @@ class EventPublisherTest {
     @Test
     fun `unacked events resend with the same stable id after a reconnect`() = runTest(UnconfinedTestDispatcher()) {
         val sink = FakeEventSink(ready = true)
-        val publisher = EventPublisher(sink, backgroundScope, testLogger())
+        val publisher = EventPublisher(sink, backgroundScope, testLogger(), dao = FakeEventOutboxDao())
         val state = MutableStateFlow(ConnectionState.READY)
         publisher.start(state)
 
@@ -62,27 +64,69 @@ class EventPublisherTest {
     }
 
     @Test
-    fun `an ack runs the follow-up exactly once`() = runTest {
+    fun `an acked event is not resent after a later reconnect`() = runTest(UnconfinedTestDispatcher()) {
         val sink = FakeEventSink(ready = true)
-        val publisher = EventPublisher(sink, backgroundScope, testLogger())
-        var acks = 0
+        val publisher = EventPublisher(sink, backgroundScope, testLogger(), dao = FakeEventOutboxDao())
+        val state = MutableStateFlow(ConnectionState.READY)
+        publisher.start(state)
 
-        publisher.reliable(event("A"), "rcv:A", onAck = { acks++ })
+        publisher.reliable(event("A"), "rcv:A")
         publisher.onBackendAck("rcv:A")
-        publisher.onBackendAck("rcv:A") // duplicate ack: no-op
 
-        assertEquals(1, acks)
+        state.value = ConnectionState.BACKING_OFF
+        state.value = ConnectionState.READY
+
+        assertEquals(listOf("rcv:A"), sink.idsFor(Event.SmsReceived.TYPE)) // sent once, never resent
     }
 
     @Test
-    fun `ephemeral events are never buffered or resent`() = runTest(UnconfinedTestDispatcher()) {
+    fun `an ack runs the durable follow-up keyed off correlationId exactly once`() = runTest {
         val sink = FakeEventSink(ready = true)
-        val publisher = EventPublisher(sink, backgroundScope, testLogger())
+        val acked = mutableListOf<String?>()
+        val publisher = EventPublisher(
+            sink,
+            backgroundScope,
+            testLogger(),
+            dao = FakeEventOutboxDao(),
+            onEventAcked = { _, correlationId -> acked += correlationId },
+        )
+
+        publisher.reliable(event("A"), "rcv:A", correlationId = "in-A")
+        publisher.onBackendAck("rcv:A")
+        publisher.onBackendAck("rcv:A") // duplicate ack: no-op
+
+        assertEquals(listOf("in-A"), acked)
+    }
+
+    @Test
+    fun `an unacked event survives process death and resends from a fresh publisher`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val dao = FakeEventOutboxDao() // stands in for the durable Room table across a restart
+
+            // First "process": persist an event while offline, then die before any ack.
+            val before = EventPublisher(FakeEventSink(ready = false), backgroundScope, testLogger(), dao = dao)
+            before.reliable(event("A"), "rcv:A")
+
+            // Fresh process over the same durable store — the in-memory publisher is gone.
+            val sink = FakeEventSink(ready = true)
+            val after = EventPublisher(sink, backgroundScope, testLogger(), dao = dao)
+            after.start(MutableStateFlow(ConnectionState.READY))
+
+            assertEquals(listOf("rcv:A"), sink.idsFor(Event.SmsReceived.TYPE))
+            assertEquals(1, after.outstandingCount())
+        }
+
+    @Test
+    fun `ephemeral events are never persisted or resent`() = runTest(UnconfinedTestDispatcher()) {
+        val sink = FakeEventSink(ready = true)
+        val dao = FakeEventOutboxDao()
+        val publisher = EventPublisher(sink, backgroundScope, testLogger(), dao = dao)
         val state = MutableStateFlow(ConnectionState.READY)
         publisher.start(state)
 
         publisher.ephemeral(Event.Heartbeat(queueDepth = 0))
         assertEquals(0, publisher.outstandingCount())
+        assertEquals(0, dao.rows.size)
 
         state.value = ConnectionState.BACKING_OFF
         state.value = ConnectionState.READY

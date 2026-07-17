@@ -100,6 +100,10 @@ class OutboxRepository(
     fun observeQueueDepth(): Flow<Int> =
         dao.observeDepth(listOf(OutboxStatus.QUEUED, OutboxStatus.SENDING, OutboxStatus.FAILED_RETRYABLE))
 
+    /** Command ids of messages the node has accepted but not yet completed — the resync cursor (§7.4). */
+    fun observeOutstandingCommandIds(): Flow<List<String>> =
+        dao.observeCommandIdsByStatus(OutboxStatus.entries.filterNot { it.isTerminal })
+
     private suspend fun transition(
         id: String,
         to: OutboxStatus,

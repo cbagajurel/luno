@@ -94,6 +94,13 @@ class ProtocolCodec(
         return json.encodeToString(Envelope.serializer(), envelope)
     }
 
+    /** Serialize a node→backend event's payload for durable storage (§7.4). */
+    fun encodeEventPayload(event: Event): String = json.encodeToString(JsonObject.serializer(), encodeEvent(event))
+
+    /** Restore a durably-stored event by its wire [type]; null if the type is unknown. */
+    fun decodeEventPayload(type: String, payload: String): Event? =
+        decodeEvent(type, json.decodeFromString(JsonObject.serializer(), payload))
+
     fun decode(text: String): DecodeResult {
         val envelope =
             try {

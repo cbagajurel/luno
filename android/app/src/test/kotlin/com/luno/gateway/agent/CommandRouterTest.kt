@@ -8,6 +8,7 @@ import com.luno.gateway.data.repository.OutboxDispatcher
 import com.luno.gateway.data.repository.OutboxRepository
 import com.luno.gateway.model.DeviceState
 import com.luno.gateway.model.OutboxStatus
+import com.luno.gateway.testutil.FakeEventOutboxDao
 import com.luno.gateway.testutil.FakeEventSink
 import com.luno.gateway.testutil.FakeOutboxDao
 import com.luno.gateway.testutil.testLogger
@@ -27,7 +28,7 @@ class CommandRouterTest {
         val dao = FakeOutboxDao()
         val outbox = OutboxRepository(dao, testLogger())
         val sink = FakeEventSink(ready = true)
-        val events = EventPublisher(sink, scope, testLogger())
+        val events = EventPublisher(sink, scope, testLogger(), dao = FakeEventOutboxDao())
         val registry = TransportRegistry().apply { register(transport) }
         val dispatcher = OutboxDispatcher(outbox, registry, testLogger(), scope, TransportId.FAKE)
         var heartbeatSeconds = 0

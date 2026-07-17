@@ -2,6 +2,7 @@ package com.luno.gateway
 
 import android.app.Application
 import com.luno.gateway.di.AgentGraph
+import com.luno.gateway.work.AgentWatchdogWorker
 
 class LunoApplication : Application() {
     lateinit var graph: AgentGraph
@@ -10,6 +11,7 @@ class LunoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AgentGraph(this)
+        AgentWatchdogWorker.schedule(this)
         graph.logger.i(TAG, "LunoApplication created")
     }
 

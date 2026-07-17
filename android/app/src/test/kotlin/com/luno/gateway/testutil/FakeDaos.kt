@@ -1,8 +1,10 @@
 package com.luno.gateway.testutil
 
+import com.luno.gateway.data.db.dao.EventOutboxDao
 import com.luno.gateway.data.db.dao.InboxDao
 import com.luno.gateway.data.db.dao.OutboxDao
 import com.luno.gateway.data.db.dao.OutboxPartDao
+import com.luno.gateway.data.db.entity.EventOutboxEntity
 import com.luno.gateway.data.db.entity.InboxEntity
 import com.luno.gateway.data.db.entity.OutboxEntity
 import com.luno.gateway.data.db.entity.OutboxPartEntity
@@ -52,6 +54,14 @@ class FakeOutboxDao : OutboxDao {
 
     override fun observeDepth(statuses: List<OutboxStatus>): Flow<Int> =
         flowOf(rows.values.count { it.status in statuses })
+
+    override fun observeCommandIdsByStatus(statuses: List<OutboxStatus>): Flow<List<String>> =
+        flowOf(
+            rows.values
+                .filter { it.commandId != null && it.status in statuses }
+                .sortedBy { it.createdAt }
+                .mapNotNull { it.commandId },
+        )
 
     override suspend fun terminalIdsOldestFirst(statuses: List<OutboxStatus>): List<String> =
         rows.values.filter { it.status in statuses }.sortedBy { it.updatedAt }.map { it.id }
@@ -129,4 +139,24 @@ class FakeInboxDao : InboxDao {
 
     override fun observeRecent(limit: Int): Flow<List<InboxEntity>> =
         flowOf(rows.values.sortedByDescending { it.receivedAt }.take(limit))
+}
+
+/** In-memory EventOutboxDao mirroring Room's REPLACE-on-conflict upsert. */
+class FakeEventOutboxDao : EventOutboxDao {
+    val rows = LinkedHashMap<String, EventOutboxEntity>()
+
+    override suspend fun insertOrReplace(entity: EventOutboxEntity) {
+        rows[entity.id] = entity
+    }
+
+    override suspend fun findById(id: String): EventOutboxEntity? = rows[id]
+
+    override suspend fun getAllOrdered(): List<EventOutboxEntity> =
+        rows.values.sortedBy { it.createdAt }
+
+    override suspend fun deleteById(id: String) {
+        rows.remove(id)
+    }
+
+    override suspend fun count(): Int = rows.size
 }

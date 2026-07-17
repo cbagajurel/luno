@@ -9,6 +9,7 @@ import com.luno.gateway.model.OutboxStatus
 import com.luno.gateway.testutil.FakeOutboxDao
 import com.luno.gateway.testutil.testLogger
 import com.luno.gateway.util.Clock
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -94,6 +95,22 @@ class OutboxRepositoryTest {
         repo.markFailed("m1", DomainError(ErrorClass.TERMINAL, "bad_number", "invalid"))
         assertEquals(OutboxStatus.FAILED_TERMINAL, dao.findById("m1")!!.status)
         assertFalse(repo.requeue("m1"))
+    }
+
+    @Test
+    fun `outstanding cursor lists non-terminal command ids and drops completed ones`() = runTest {
+        val repo = repo()
+        repo.enqueue(message("m1", commandId = "cmd-A")) // QUEUED — outstanding
+        repo.enqueue(message("m2", commandId = "cmd-B"))
+        repo.markSending("m2")
+        repo.markSent("m2") // SENT — still outstanding (awaiting delivery)
+        repo.enqueue(message("m3", commandId = "cmd-C"))
+        repo.markSending("m3")
+        repo.markSent("m3")
+        repo.markDelivered("m3") // terminal — dropped
+        repo.enqueue(message("m4")) // no commandId — never listed
+
+        assertEquals(listOf("cmd-A", "cmd-B"), repo.observeOutstandingCommandIds().first())
     }
 
     @Test

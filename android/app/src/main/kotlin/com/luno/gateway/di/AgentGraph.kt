@@ -63,6 +63,9 @@ class AgentGraph(context: Context) {
     val outboxRepository: OutboxRepository = OutboxRepository(database.outboxDao(), logger)
     val outboxPartDao = database.outboxPartDao()
     val inboxRepository: InboxRepository = InboxRepository(database.inboxDao(), logger)
+    private val eventOutboxDao = database.eventOutboxDao()
+
+    private val codec: ProtocolCodec = ProtocolCodec()
 
     // App-scoped so sent/delivery reports still route if the PendingIntent fires
     // after the debug UI is gone. Unregistered on process death (app-lifetime singleton).
@@ -107,10 +110,14 @@ class AgentGraph(context: Context) {
             .map { it.network?.connected == true }
             .stateIn(appScope, SharingStarted.Eagerly, false)
 
+    private val outstandingOutboxIds: StateFlow<List<String>> =
+        outboxRepository.observeOutstandingCommandIds()
+            .stateIn(appScope, SharingStarted.Eagerly, emptyList())
+
     val connectionManager: ConnectionManager =
         ConnectionManager(
             socket = WebSocketClient(logger = logger),
-            codec = ProtocolCodec(),
+            codec = codec,
             reconnectPolicy = ReconnectPolicy(),
             scope = appScope,
             clock = SystemClock,
@@ -118,9 +125,22 @@ class AgentGraph(context: Context) {
             credentialProvider = { credentialStore.load() },
             logger = logger,
             lastAckedInboundSeq = { agentController.lastAckedInboundSeq() },
+            outstandingOutboxIds = { outstandingOutboxIds.value },
         )
 
-    private val eventPublisher: EventPublisher = EventPublisher(connectionManager, appScope, logger)
+    private val eventPublisher: EventPublisher =
+        EventPublisher(
+            sink = connectionManager,
+            scope = appScope,
+            logger = logger,
+            dao = eventOutboxDao,
+            codec = codec,
+            onEventAcked = { type, correlationId ->
+                if (type == Event.SmsReceived.TYPE && correlationId != null) {
+                    inboxRepository.markAcked(correlationId)
+                }
+            },
+        )
 
     // --- M14: protocol wired to SMS + heartbeat ---
     val outboxDispatcher: OutboxDispatcher = OutboxDispatcher(

@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-17): M1–M14 complete. Next up: M15.**
+**Status (2026-07-17): M1–M15 complete. Next up: M16.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -25,7 +25,7 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M12 | Wire protocol codec + connection SM | 6 | ✅ done | Codec round-trip tests; SM transitions |
 | M13 | Pairing/auth + WebSocket connect | 6 | ✅ done | Node enrolls and reaches READY |
 | M14 | Protocol wired to SMS + heartbeat | 6 | ✅ done | Backend command → SMS → events back |
-| M15 | Boot + WorkManager + resync | 7 | ⬜ next | Reboot/offline/kill → lossless recovery |
+| M15 | Boot + WorkManager + resync | 7 | ✅ done | Reboot/offline/kill → lossless recovery |
 | M16 | Security hardening | 8 | ⬜ todo | Threat-model checklist passes |
 | M17 | Flutter dashboard | 9 | ⬜ todo | Operator runs a node from the UI |
 | M18 | Observability, tests, release | 10 | ⬜ todo | Signed v1.0 APK, docs, E2E on real devices |
@@ -415,7 +415,28 @@ out-of-policy recipients; ordering under reconnect.
 
 ---
 
-## M15 — Boot + WorkManager + resync
+## M15 — Boot + WorkManager + resync — ✅ done
+
+**Implemented:** `receiver/BootReceiver.kt` (BOOT_COMPLETED/QUICKBOOT → start the FGS
+when paired, via the pure `shouldAutoStart`; also schedules the watchdog);
+`work/AgentWatchdogWorker.kt` + pure `WatchdogDecision` — one periodic backstop
+(15-min floor, network-constrained) that revives the FGS when the agent is down and,
+if a background FGS-start is disallowed (Android 12+), drains the durable outbox
+headless instead. **Durable resync (§7.4):** a new `event_outbox` Room table (DB
+**v3**, `MIGRATION_2_3`) makes `EventPublisher` durable — every `reliable` event is
+persisted under its stable idempotency id, resent from disk on each READY, and deleted
+only on the backend ack, so events survive process death (closing the M14 in-memory
+gap); the ack follow-up (inbox→ACKED for `sms_received`) is keyed off a persisted
+`correlationId` rather than an in-memory closure. `ProtocolCodec` gained
+`encode/decodeEventPayload`; the resync handshake now carries real
+`outstandingOutboxIds` (non-terminal command ids via
+`OutboxRepository.observeOutstandingCommandIds`) alongside `lastAckedInboundSeq`. The
+watchdog is scheduled on app start and re-scheduled on boot. Tests: `EventPublisherTest`
+(persist / resend-on-READY / ack-clears / **survives process death via a fresh
+publisher over the same store** / ephemeral bypass), `BootReceiverTest`,
+`WatchdogDecisionTest`, `OutboxRepositoryTest` (outstanding cursor), `AgentControllerTest`
+(inbound acked-once via correlationId). Unattended reboot/airplane-mode/force-stop
+recovery still needs on-device runs to close the checkboxes below.
 
 **Files:** `receiver/BootReceiver.kt`; `work/OutboxDrainWorker.kt`,
 `ReconnectWorker.kt`; resync logic in `AgentController`; manifest `<receiver>`.
