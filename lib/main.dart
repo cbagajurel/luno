@@ -1,22 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-import 'ui/home/home_screen.dart';
+import 'app/luno_app.dart';
 
 void main() {
-  runApp(const LunoApp());
-}
-
-class LunoApp extends StatelessWidget {
-  const LunoApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Luno',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+  runApp(
+    ProviderScope(
+      child: ScreenUtilInit(
+        designSize: const Size(390, 844),
+        minTextAdapt: true,
+        builder: (context, child) => const LunoApp(),
       ),
-      home: const HomeScreen(),
-    );
-  }
+    ),
+  );
 }
