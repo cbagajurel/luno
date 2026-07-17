@@ -17,8 +17,12 @@ class NetworkMonitor(
 
     private var callback: ConnectivityManager.NetworkCallback? = null
 
+    // Shared by the UI telemetry stream and the backend connection (M13); ref-counted
+    // so one releasing it doesn't unregister the callback the other still needs.
+    private var refCount = 0
+
     fun start() {
-        if (callback != null) return
+        if (refCount++ > 0) return
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) = publish(capabilitiesOf(network))
             override fun onCapabilitiesChanged(
@@ -38,6 +42,8 @@ class NetworkMonitor(
     }
 
     fun stop() {
+        if (refCount == 0) return
+        if (--refCount > 0) return
         callback?.let { connectivityManager.unregisterNetworkCallback(it) }
         callback = null
     }

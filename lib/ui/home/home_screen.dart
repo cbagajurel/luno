@@ -234,9 +234,21 @@ class _AgentStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, icon) = switch (state) {
-      AgentRunState.running => ('Agent running', Colors.green, Icons.check_circle),
-      AgentRunState.stopped => ('Agent stopped', Colors.grey, Icons.stop_circle),
-      AgentRunState.unknown => ('Agent state unknown', Colors.orange, Icons.help),
+      AgentRunState.running => (
+        'Agent running',
+        Colors.green,
+        Icons.check_circle,
+      ),
+      AgentRunState.stopped => (
+        'Agent stopped',
+        Colors.grey,
+        Icons.stop_circle,
+      ),
+      AgentRunState.unknown => (
+        'Agent state unknown',
+        Colors.orange,
+        Icons.help,
+      ),
     };
     return Chip(
       avatar: Icon(icon, color: color, size: 20),
@@ -255,10 +267,7 @@ class _NetworkCard extends StatelessWidget {
     final n = network;
     if (n == null || !n.connected) {
       return const Card(
-        child: ListTile(
-          leading: Icon(Icons.cloud_off),
-          title: Text('Offline'),
-        ),
+        child: ListTile(leading: Icon(Icons.cloud_off), title: Text('Offline')),
       );
     }
     final online = n.validated;
@@ -295,7 +304,9 @@ class _BatteryCard extends StatelessWidget {
       );
     }
     final level = b.levelPercent >= 0 ? '${b.levelPercent}%' : 'unknown';
-    final source = b.plugged == 'NONE' ? 'on battery' : 'charging via ${b.plugged}';
+    final source = b.plugged == 'NONE'
+        ? 'on battery'
+        : 'charging via ${b.plugged}';
     return Card(
       child: ListTile(
         leading: Icon(
@@ -357,7 +368,9 @@ class _SimSection extends StatelessWidget {
             ),
           )
         else
-          ...sims.map((sim) => _SimTile(sim: sim, signal: signals[sim.subscriptionId])),
+          ...sims.map(
+            (sim) => _SimTile(sim: sim, signal: signals[sim.subscriptionId]),
+          ),
       ],
     );
   }
@@ -371,11 +384,15 @@ class _SimTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final carrier = sim.carrierName.isNotEmpty ? sim.carrierName : 'Unknown carrier';
+    final carrier = sim.carrierName.isNotEmpty
+        ? sim.carrierName
+        : 'Unknown carrier';
     final name = sim.displayName.isNotEmpty ? sim.displayName : carrier;
     return Card(
       child: ListTile(
-        leading: Icon(sim.isEmbedded ? Icons.sim_card_download : Icons.sim_card),
+        leading: Icon(
+          sim.isEmbedded ? Icons.sim_card_download : Icons.sim_card,
+        ),
         title: Text(name),
         subtitle: Text(
           'Carrier: $carrier\n'
@@ -528,7 +545,10 @@ class _InboxSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Received messages', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Received messages',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 8),
         if (!hasPermission)
           Card(
@@ -596,8 +616,7 @@ class _OutboxTile extends StatelessWidget {
       'SENDING' || 'QUEUED' => (Colors.orange, Icons.schedule),
       'FAILED_TERMINAL' ||
       'FAILED_RETRYABLE' ||
-      'UNDELIVERED' =>
-        (Colors.red, Icons.error),
+      'UNDELIVERED' => (Colors.red, Icons.error),
       _ => (Colors.grey, Icons.help),
     };
     final parts = entry.partCount > 1

@@ -541,6 +541,52 @@ data class DeviceState (
     return result
   }
 }
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class PairingResult (
+  val ok: Boolean,
+  val deviceId: String? = null,
+  val errorCode: String? = null,
+  val message: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): PairingResult {
+      val ok = pigeonVar_list[0] as Boolean
+      val deviceId = pigeonVar_list[1] as String?
+      val errorCode = pigeonVar_list[2] as String?
+      val message = pigeonVar_list[3] as String?
+      return PairingResult(ok, deviceId, errorCode, message)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      ok,
+      deviceId,
+      errorCode,
+      message,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as PairingResult
+    return LunoApiPigeonUtils.deepEquals(this.ok, other.ok) && LunoApiPigeonUtils.deepEquals(this.deviceId, other.deviceId) && LunoApiPigeonUtils.deepEquals(this.errorCode, other.errorCode) && LunoApiPigeonUtils.deepEquals(this.message, other.message)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.ok)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.deviceId)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.errorCode)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.message)
+    return result
+  }
+}
 private open class LunoApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -579,6 +625,11 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
           DeviceState.fromList(it)
         }
       }
+      136.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PairingResult.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -612,10 +663,15 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         stream.write(135)
         writeValue(stream, value.toList())
       }
+      is PairingResult -> {
+        stream.write(136)
+        writeValue(stream, value.toList())
+      }
       else -> super.writeValue(stream, value)
     }
   }
 }
+
 
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface LunoHostApi {
@@ -634,6 +690,9 @@ interface LunoHostApi {
   fun hasReceiveSmsPermission(): Boolean
   fun requestReceiveSmsPermission()
   fun getRecentInbox(): List<InboundEntry>
+  fun startPairing(backendUrl: String, pairingCode: String, callback: (Result<PairingResult>) -> Unit)
+  fun isPaired(): Boolean
+  fun unpair()
 
   companion object {
     /** The codec used by LunoHostApi. */
@@ -872,6 +931,58 @@ interface LunoHostApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.getRecentInbox())
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.startPairing$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val backendUrlArg = args[0] as String
+            val pairingCodeArg = args[1] as String
+            api.startPairing(backendUrlArg, pairingCodeArg) { result: Result<PairingResult> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(LunoApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(LunoApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.isPaired$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.isPaired())
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.unpair$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.unpair()
+              listOf(null)
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }

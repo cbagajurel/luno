@@ -63,6 +63,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // Wire protocol codec: JSON over WSS is the node<->backend contract (§8).
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // OkHttp: the WSS socket + HTTPS enrollment client to the backend.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Room: the durable outbox/inbox spine (persist-before-act).
     implementation("androidx.room:room-runtime:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")
@@ -70,4 +72,6 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // MockWebServer: drives the REST/WS clients in unit tests without a real backend.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

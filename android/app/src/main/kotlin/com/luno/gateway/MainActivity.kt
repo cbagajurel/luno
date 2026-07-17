@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import com.luno.gateway.agent.GatewayForegroundService
 import com.luno.gateway.bridge.AgentHost
 import com.luno.gateway.bridge.AgentStateChannel
+import com.luno.gateway.bridge.ConnectionStateChannel
 import com.luno.gateway.bridge.DeviceStateChannel
 import com.luno.gateway.bridge.FlutterEventBridge
 import com.luno.gateway.bridge.InboxChannel
@@ -24,6 +25,7 @@ class MainActivity : FlutterActivity(), AgentHost {
     private var deviceStateChannel: DeviceStateChannel? = null
     private var outboxChannel: OutboxChannel? = null
     private var inboxChannel: InboxChannel? = null
+    private var connectionStateChannel: ConnectionStateChannel? = null
 
     private val graph: AgentGraph
         get() = (application as LunoApplication).graph
@@ -40,12 +42,17 @@ class MainActivity : FlutterActivity(), AgentHost {
                 graph.outboxDispatcher,
                 graph.outboxPartDao,
                 graph.inboxRepository,
+                graph.pairingManager,
+                graph.connectionManager,
+                graph.appScope,
             ),
         )
         eventBridge = FlutterEventBridge(messenger).also { it.attach() }
         outboxChannel = OutboxChannel(messenger, graph.outboxRepository).also { it.attach() }
         inboxChannel = InboxChannel(messenger, graph.inboxRepository).also { it.attach() }
         agentStateChannel = AgentStateChannel(messenger, graph.agentController).also { it.attach() }
+        connectionStateChannel =
+            ConnectionStateChannel(messenger, graph.connectionManager).also { it.attach() }
         deviceStateChannel = DeviceStateChannel(
             messenger,
             graph.deviceStateStore,
@@ -65,6 +72,8 @@ class MainActivity : FlutterActivity(), AgentHost {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        connectionStateChannel?.detach()
+        connectionStateChannel = null
         inboxChannel?.detach()
         inboxChannel = null
         outboxChannel?.detach()

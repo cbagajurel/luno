@@ -1,7 +1,17 @@
 package com.luno.gateway.di
 
 import android.content.Context
+import android.os.Build
 import com.luno.gateway.agent.AgentController
+import com.luno.gateway.backend.auth.DeviceCredentialStore
+import com.luno.gateway.backend.auth.PairingManager
+import com.luno.gateway.backend.auth.SharedPrefsStore
+import com.luno.gateway.backend.protocol.ProtocolCodec
+import com.luno.gateway.backend.rest.DeviceInfo
+import com.luno.gateway.backend.rest.RestClient
+import com.luno.gateway.backend.ws.ConnectionManager
+import com.luno.gateway.backend.ws.ReconnectPolicy
+import com.luno.gateway.backend.ws.WebSocketClient
 import com.luno.gateway.data.db.LunoDatabase
 import com.luno.gateway.data.repository.DeliveryTracker
 import com.luno.gateway.data.repository.InboxRepository
@@ -18,10 +28,16 @@ import com.luno.gateway.transport.TransportRegistry
 import com.luno.gateway.transport.sms.DeliveryReportRouter
 import com.luno.gateway.transport.sms.SentReportRouter
 import com.luno.gateway.transport.sms.SmsSender
+import com.luno.gateway.security.KeystoreManager
 import com.luno.gateway.transport.sms.SmsTransport
+import com.luno.gateway.util.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 class AgentGraph(context: Context) {
     private val appContext: Context = context.applicationContext
@@ -67,4 +83,42 @@ class AgentGraph(context: Context) {
         appScope,
         onSent = deliveryTracker::onSent,
     )
+
+    // --- backend connection (M13) ---
+    val credentialStore: DeviceCredentialStore =
+        DeviceCredentialStore(
+            SharedPrefsStore(appContext.getSharedPreferences("luno_secure_prefs", Context.MODE_PRIVATE)),
+            KeystoreManager(),
+            logger,
+        )
+
+    private val deviceInfo =
+        DeviceInfo(
+            model = Build.MODEL ?: "unknown",
+            manufacturer = Build.MANUFACTURER ?: "unknown",
+            androidSdk = Build.VERSION.SDK_INT,
+            appVersion =
+                runCatching { appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName }
+                    .getOrNull() ?: "unknown",
+        )
+
+    val pairingManager: PairingManager =
+        PairingManager(RestClient(), credentialStore, deviceInfo, logger)
+
+    private val online: StateFlow<Boolean> =
+        deviceStateStore.state
+            .map { it.network?.connected == true }
+            .stateIn(appScope, SharingStarted.Eagerly, false)
+
+    val connectionManager: ConnectionManager =
+        ConnectionManager(
+            socket = WebSocketClient(logger = logger),
+            codec = ProtocolCodec(),
+            reconnectPolicy = ReconnectPolicy(),
+            scope = appScope,
+            clock = SystemClock,
+            online = online,
+            credentialProvider = { credentialStore.load() },
+            logger = logger,
+        )
 }

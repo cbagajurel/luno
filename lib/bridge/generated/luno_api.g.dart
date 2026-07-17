@@ -517,6 +517,61 @@ class DeviceState {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class PairingResult {
+  PairingResult({
+    required this.ok,
+    this.deviceId,
+    this.errorCode,
+    this.message,
+  });
+
+  bool ok;
+
+  String? deviceId;
+
+  String? errorCode;
+
+  String? message;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      ok,
+      deviceId,
+      errorCode,
+      message,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static PairingResult decode(Object result) {
+    result as List<Object?>;
+    return PairingResult(
+      ok: result[0]! as bool,
+      deviceId: result[1] as String?,
+      errorCode: result[2] as String?,
+      message: result[3] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PairingResult || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(ok, other.ok) && _deepEquals(deviceId, other.deviceId) && _deepEquals(errorCode, other.errorCode) && _deepEquals(message, other.message);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -546,6 +601,9 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is DeviceState) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
+    }    else if (value is PairingResult) {
+      buffer.putUint8(136);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -568,6 +626,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return InboundEntry.decode(readValue(buffer)!);
       case 135:
         return DeviceState.decode(readValue(buffer)!);
+      case 136:
+        return PairingResult.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -864,5 +924,61 @@ class LunoHostApi {
     )
     ;
     return (pigeonVar_replyValue! as List<Object?>).cast<InboundEntry>();
+  }
+
+  Future<PairingResult> startPairing(String backendUrl, String pairingCode) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.startPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[backendUrl, pairingCode]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as PairingResult;
+  }
+
+  Future<bool> isPaired() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.isPaired$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
+  Future<void> unpair() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.unpair$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 }

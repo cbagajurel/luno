@@ -52,19 +52,41 @@ class GatewayForegroundService : LifecycleService() {
             },
         )
         graph.agentController.onServiceStarted()
+        startConnection()
         logger.i(TAG, "foreground service started")
     }
 
     private fun shutdown() {
+        stopConnection()
         graph.agentController.onServiceStopped()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
+        stopConnection()
         graph.agentController.onServiceStopped()
         logger.i(TAG, "foreground service destroyed")
         super.onDestroy()
+    }
+
+    private var connectionActive = false
+
+    // The backend link is service-scoped: it must stay up (and keep an accurate
+    // network signal) even when the Flutter UI is gone. Guarded so a START_STICKY
+    // re-entry doesn't over-count the shared network monitor.
+    private fun startConnection() {
+        if (connectionActive) return
+        connectionActive = true
+        graph.networkMonitor.start()
+        graph.connectionManager.start()
+    }
+
+    private fun stopConnection() {
+        if (!connectionActive) return
+        connectionActive = false
+        graph.connectionManager.stop()
+        graph.networkMonitor.stop()
     }
 
     companion object {

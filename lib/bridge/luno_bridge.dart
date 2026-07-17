@@ -15,6 +15,42 @@ AgentRunState _agentStateFromName(String name) {
   }
 }
 
+/// Mirrors the native connection lifecycle (§6).
+enum ConnectionState {
+  offlineNoNetwork,
+  disconnected,
+  connecting,
+  connected,
+  authenticated,
+  ready,
+  reconnecting,
+  backingOff,
+  unknown,
+}
+
+ConnectionState _connectionStateFromName(String name) {
+  switch (name) {
+    case 'OFFLINE_NO_NETWORK':
+      return ConnectionState.offlineNoNetwork;
+    case 'DISCONNECTED':
+      return ConnectionState.disconnected;
+    case 'CONNECTING':
+      return ConnectionState.connecting;
+    case 'CONNECTED':
+      return ConnectionState.connected;
+    case 'AUTHENTICATED':
+      return ConnectionState.authenticated;
+    case 'READY':
+      return ConnectionState.ready;
+    case 'RECONNECTING':
+      return ConnectionState.reconnecting;
+    case 'BACKING_OFF':
+      return ConnectionState.backingOff;
+    default:
+      return ConnectionState.unknown;
+  }
+}
+
 /// The single Dart-side door to the native agent. Features go through this
 /// wrapper and never touch platform channels directly.
 class LunoBridge {
@@ -25,6 +61,7 @@ class LunoBridge {
     EventChannel? deviceStateChannel,
     EventChannel? outboxChannel,
     EventChannel? inboxChannel,
+    EventChannel? connectionStateChannel,
   })  : _hostApi = hostApi ?? LunoHostApi(),
         _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
         _agentStateChannel =
@@ -33,7 +70,9 @@ class LunoBridge {
             deviceStateChannel ?? const EventChannel(deviceStateChannelName),
         _outboxChannel =
             outboxChannel ?? const EventChannel(outboxChannelName),
-        _inboxChannel = inboxChannel ?? const EventChannel(inboxChannelName);
+        _inboxChannel = inboxChannel ?? const EventChannel(inboxChannelName),
+        _connectionStateChannel = connectionStateChannel ??
+            const EventChannel(connectionStateChannelName);
 
   // Channel names must match the native side.
   static const String tickChannelName = 'com.luno.gateway/events/tick';
@@ -43,6 +82,8 @@ class LunoBridge {
       'com.luno.gateway/events/device_state';
   static const String outboxChannelName = 'com.luno.gateway/events/outbox';
   static const String inboxChannelName = 'com.luno.gateway/events/inbox';
+  static const String connectionStateChannelName =
+      'com.luno.gateway/events/connection_state';
 
   final LunoHostApi _hostApi;
   final EventChannel _tickChannel;
@@ -50,6 +91,7 @@ class LunoBridge {
   final EventChannel _deviceStateChannel;
   final EventChannel _outboxChannel;
   final EventChannel _inboxChannel;
+  final EventChannel _connectionStateChannel;
 
   Future<String> ping(String message) => _hostApi.ping(message);
 
@@ -106,4 +148,17 @@ class LunoBridge {
   /// Ticks a revision counter when a message arrives; re-query [getRecentInbox].
   Stream<int> get inboxEvents =>
       _inboxChannel.receiveBroadcastStream().map((event) => event as int);
+
+  /// Enrolls this node with a backend. On success native starts connecting.
+  Future<PairingResult> startPairing(String backendUrl, String pairingCode) =>
+      _hostApi.startPairing(backendUrl, pairingCode);
+
+  Future<bool> isPaired() => _hostApi.isPaired();
+
+  Future<void> unpair() => _hostApi.unpair();
+
+  /// Emits the current connection state immediately on subscribe, then on change.
+  Stream<ConnectionState> get connectionStateEvents => _connectionStateChannel
+      .receiveBroadcastStream()
+      .map((event) => _connectionStateFromName(event as String));
 }

@@ -110,6 +110,15 @@ class DeviceState {
   final NetworkStatus? network;
 }
 
+class PairingResult {
+  PairingResult({required this.ok, this.deviceId, this.errorCode, this.message});
+
+  final bool ok;
+  final String? deviceId;
+  final String? errorCode;
+  final String? message;
+}
+
 @ConfigurePigeon(
   PigeonOptions(
     dartOut: 'lib/bridge/generated/luno_api.g.dart',
@@ -150,4 +159,11 @@ abstract class LunoHostApi {
   void requestReceiveSmsPermission();
 
   List<InboundEntry> getRecentInbox();
+
+  @async
+  PairingResult startPairing(String backendUrl, String pairingCode);
+
+  bool isPaired();
+
+  void unpair();
 }
