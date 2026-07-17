@@ -74,4 +74,6 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     // MockWebServer: drives the REST/WS clients in unit tests without a real backend.
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // okhttp-tls: self-signed cert so MockWebServer can serve the https:// RestClient demands.
+    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
 }
