@@ -21,6 +21,11 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    buildFeatures {
+        // BuildConfig.DEBUG gates the debug-only cleartext (http/ws) allowance for LAN pairing.
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.luno.gateway"
         // minSdk 26 is a locked decision (plan.md §Decisions): modern foreground

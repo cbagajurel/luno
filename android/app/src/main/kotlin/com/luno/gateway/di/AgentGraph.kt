@@ -2,6 +2,7 @@ package com.luno.gateway.di
 
 import android.content.Context
 import android.os.Build
+import com.luno.gateway.BuildConfig
 import com.luno.gateway.agent.AgentController
 import com.luno.gateway.agent.CommandRouter
 import com.luno.gateway.backend.auth.DeviceCredentialStore
@@ -117,7 +118,7 @@ class AgentGraph(context: Context) {
         )
 
     val pairingManager: PairingManager =
-        PairingManager(RestClient(), credentialStore, deviceInfo, logger)
+        PairingManager(RestClient(allowInsecure = BuildConfig.DEBUG), credentialStore, deviceInfo, logger)
 
     private val online: StateFlow<Boolean> =
         deviceStateStore.state
@@ -131,7 +132,12 @@ class AgentGraph(context: Context) {
     // Cert pinning seam (off by default — no pins configured yet; delivered via config later).
     val connectionManager: ConnectionManager =
         ConnectionManager(
-            socket = WebSocketClient(logger = logger, pinner = Pinning.buildPinner(CERT_PIN_HOST, CERT_PINS)),
+            socket =
+                WebSocketClient(
+                    logger = logger,
+                    pinner = Pinning.buildPinner(CERT_PIN_HOST, CERT_PINS),
+                    allowInsecure = BuildConfig.DEBUG,
+                ),
             codec = codec,
             reconnectPolicy = ReconnectPolicy(),
             scope = appScope,

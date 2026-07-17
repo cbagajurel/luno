@@ -31,12 +31,15 @@ interface Socket {
 /**
  * A single OkHttp WebSocket to the backend. Refuses anything but `wss://` — the
  * credential rides in the Authorization header and must never cross the wire in
- * the clear (§8, threat model). Owns no reconnect logic; that's [ConnectionManager].
+ * the clear (§8, threat model) — unless [allowInsecure] is set, which the app only
+ * does in debug builds for LAN pairing. Owns no reconnect logic; that's
+ * [ConnectionManager].
  */
 class WebSocketClient(
     baseClient: OkHttpClient = OkHttpClient(),
     private val logger: LunoLogger,
     pinner: CertificatePinner? = null,
+    private val allowInsecure: Boolean = false,
 ) : Socket {
     // Off by default (no pins configured yet); when the backend supplies pins the
     // socket enforces them on top of the usual CA validation.
@@ -46,7 +49,8 @@ class WebSocketClient(
     private var webSocket: WebSocket? = null
 
     override fun connect(wsUrl: String, credential: String, onEvent: (SocketEvent) -> Unit) {
-        if (!wsUrl.startsWith("wss://")) {
+        val secure = wsUrl.startsWith("wss://")
+        if (!secure && !(allowInsecure && wsUrl.startsWith("ws://"))) {
             onEvent(SocketEvent.Failure(null, IllegalArgumentException("WSS required, refused $wsUrl")))
             return
         }

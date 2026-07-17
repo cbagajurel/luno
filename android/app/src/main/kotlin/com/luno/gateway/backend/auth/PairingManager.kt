@@ -50,7 +50,10 @@ class PairingManager(
     fun isPaired(): Boolean = credentialStore.isPaired()
 
     private fun deriveWsUrl(backendUrl: String): String =
-        backendUrl.replaceFirst("https://", "wss://").trimEnd('/') + "/ws"
+        backendUrl
+            .replaceFirst("https://", "wss://")
+            .replaceFirst("http://", "ws://")
+            .trimEnd('/') + "/ws"
 
     companion object {
         private const val TAG = "PairingManager"

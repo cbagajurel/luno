@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug-only: permit cleartext (http/ws) so the app can pair against a
+         plain-http backend over LAN during development. Release builds never
+         merge this, so the node's https/wss requirement stays enforced. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

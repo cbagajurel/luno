@@ -41,15 +41,18 @@ class EnrollException(
 /**
  * HTTPS client for enrollment and (later) degraded event fallback. Plain HTTP is
  * refused — the credential must never cross the wire in the clear (§8, threat
- * model). Endpoints are runtime config from pairing, never compiled in.
+ * model) — unless [allowInsecure] is set, which the app only does in debug builds
+ * for LAN pairing. Endpoints are runtime config from pairing, never compiled in.
  */
 class RestClient(
     private val client: OkHttpClient = OkHttpClient(),
     private val json: Json = Json { ignoreUnknownKeys = true },
+    private val allowInsecure: Boolean = false,
 ) {
     suspend fun enroll(backendUrl: String, body: EnrollRequest): EnrollResponse =
         withContext(Dispatchers.IO) {
-            if (!backendUrl.startsWith("https://")) {
+            val secure = backendUrl.startsWith("https://")
+            if (!secure && !(allowInsecure && backendUrl.startsWith("http://"))) {
                 throw EnrollException(PairingError.NOT_SECURE, "enrollment must use https")
             }
             val url = backendUrl.trimEnd('/') + "/enroll"
