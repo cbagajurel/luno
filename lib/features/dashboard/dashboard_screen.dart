@@ -6,6 +6,7 @@ import '../../bridge/luno_bridge.dart';
 import '../../state/bridge_providers.dart';
 import '../../state/connection_providers.dart';
 import '../../state/device_providers.dart';
+import '../pairing/pairing_form.dart';
 import '../shared/status_ui.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -24,18 +25,35 @@ class DashboardScreen extends ConsumerWidget {
     final connection = ref.watch(connectionStateProvider);
     final agent = ref.watch(agentStateProvider);
     final device = ref.watch(deviceStateProvider);
+    final permissions = ref.watch(permissionsProvider);
 
     final agentState = agent.value ?? AgentRunState.unknown;
     final isRunning = agentState == AgentRunState.running;
+    final hasPhonePermission = permissions.value?.phone ?? true;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref.read(permissionsProvider.notifier).refresh(),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
-        onRefresh: () => ref.read(deviceStateProvider.future),
+        onRefresh: () async {
+          await ref.read(permissionsProvider.notifier).refresh();
+          await ref.read(deviceStateProvider.future);
+        },
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _ConnectionBanner(state: connection.value ?? ConnectionState.unknown),
+            _ConnectionBanner(
+              state: connection.value ?? ConnectionState.unknown,
+              onReconnect: () => showReconnectSheet(context),
+            ),
             const SizedBox(height: 16),
             _AgentControls(
               state: agentState,
@@ -43,14 +61,12 @@ class DashboardScreen extends ConsumerWidget {
               onStop: isRunning ? () => _stopAgent(ref) : null,
             ),
             const SizedBox(height: 16),
-            _SectionTitle('Network'),
-            _NetworkCard(network: device.value?.network),
-            const SizedBox(height: 16),
-            _SectionTitle('Battery'),
-            _BatteryCard(battery: device.value?.battery),
-            const SizedBox(height: 16),
-            _SectionTitle('SIMs'),
-            _SimList(device: device.value),
+            _PermissionsCard(
+              permissions: permissions,
+              onGrant: (p) => ref.read(permissionsProvider.notifier).request(p),
+              onRetry: () => ref.read(permissionsProvider.notifier).refresh(),
+            ),
+            _TelemetrySections(device: device, hasPhonePermission: hasPhonePermission),
           ],
         ),
       ),
@@ -65,25 +81,41 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(top: 16, bottom: 8),
         child: Text(text, style: Theme.of(context).textTheme.titleMedium),
       );
 }
 
+/// True when the connection isn't actively healthy or progressing, so a manual
+/// reconnect / re-pair is worth offering (a dead credential otherwise loops here).
+bool _needsReconnect(ConnectionState s) => switch (s) {
+      ConnectionState.disconnected ||
+      ConnectionState.reconnecting ||
+      ConnectionState.backingOff ||
+      ConnectionState.unknown =>
+        true,
+      _ => false,
+    };
+
 class _ConnectionBanner extends StatelessWidget {
-  const _ConnectionBanner({required this.state});
+  const _ConnectionBanner({required this.state, this.onReconnect});
 
   final ConnectionState state;
+  final VoidCallback? onReconnect;
 
   @override
   Widget build(BuildContext context) {
     final ui = connectionUi(state);
+    final showReconnect = onReconnect != null && _needsReconnect(state);
     return Card(
       color: ui.color.withValues(alpha: 0.12),
       child: ListTile(
         leading: Icon(ui.icon, color: ui.color),
         title: Text(ui.label, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: const Text('Backend connection'),
+        trailing: showReconnect
+            ? TextButton(onPressed: onReconnect, child: const Text('Reconnect'))
+            : null,
       ),
     );
   }
@@ -133,6 +165,120 @@ class _AgentControls extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shows only the permissions that still need granting; renders nothing once all
+/// are held. Surfaces its own loading/error so a failed read isn't silent.
+class _PermissionsCard extends StatelessWidget {
+  const _PermissionsCard({
+    required this.permissions,
+    required this.onGrant,
+    required this.onRetry,
+  });
+
+  final AsyncValue<Permissions> permissions;
+  final void Function(AppPermission) onGrant;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return permissions.when(
+      skipLoadingOnReload: true,
+      loading: () => const _LoadingCard('Checking permissions…'),
+      error: (e, _) => _ErrorCard(message: 'Could not read permissions', onRetry: onRetry),
+      data: (p) {
+        final missing = p.missing;
+        if (missing.isEmpty) return const SizedBox.shrink();
+        final scheme = Theme.of(context).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Card(
+            color: scheme.errorContainer.withValues(alpha: 0.4),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.lock_outline),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Permissions needed',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Luno needs these to send, receive, and read SIM state.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  for (final p in missing)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      leading: const Icon(Icons.cancel, color: Colors.grey),
+                      title: Text(p.label),
+                      subtitle: Text(p.rationale),
+                      trailing: FilledButton.tonal(
+                        onPressed: () => onGrant(p),
+                        child: const Text('Grant'),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Network / Battery / SIM sections, driven by the device-telemetry stream with
+/// its loading and error states rendered rather than collapsed to defaults.
+class _TelemetrySections extends StatelessWidget {
+  const _TelemetrySections({required this.device, required this.hasPhonePermission});
+
+  final AsyncValue<DeviceState> device;
+  final bool hasPhonePermission;
+
+  @override
+  Widget build(BuildContext context) {
+    return device.when(
+      skipLoadingOnReload: true,
+      loading: () => const Padding(
+        padding: EdgeInsets.only(top: 16),
+        child: _LoadingCard('Reading device telemetry…'),
+      ),
+      error: (e, _) => const Padding(
+        padding: EdgeInsets.only(top: 16),
+        child: _ErrorCard(message: 'Device telemetry unavailable'),
+      ),
+      data: (d) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionTitle('Network'),
+          _NetworkCard(network: d.network),
+          _SectionTitle('Battery'),
+          _BatteryCard(battery: d.battery),
+          _SectionTitle('SIMs'),
+          if (!hasPhonePermission)
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.sim_card_alert),
+                title: Text('Phone permission needed'),
+                subtitle: Text('Grant it above to list SIMs.'),
+              ),
+            )
+          else
+            _SimList(device: d),
+        ],
       ),
     );
   }
@@ -201,22 +347,22 @@ class _BatteryCard extends StatelessWidget {
 class _SimList extends StatelessWidget {
   const _SimList({required this.device});
 
-  final DeviceState? device;
+  final DeviceState device;
 
   @override
   Widget build(BuildContext context) {
-    final sims = device?.sims ?? const <SimInfo>[];
+    final sims = device.sims;
     if (sims.isEmpty) {
       return const Card(
         child: ListTile(
           leading: Icon(Icons.sim_card_alert),
           title: Text('No active SIM detected'),
-          subtitle: Text('Grant phone permission in Settings if this is unexpected.'),
+          subtitle: Text('Insert a SIM card, or check that it is enabled.'),
         ),
       );
     }
     final signals = {
-      for (final s in device?.signals ?? const <SignalInfo>[]) s.subscriptionId: s,
+      for (final s in device.signals) s.subscriptionId: s,
     };
     return Column(
       children: [
@@ -234,16 +380,12 @@ class _SimTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final carrier = sim.carrierName.isNotEmpty ? sim.carrierName : 'Unknown carrier';
-    final name = sim.displayName.isNotEmpty ? sim.displayName : carrier;
     return Card(
       child: ListTile(
         leading: Icon(sim.isEmbedded ? Icons.sim_card_download : Icons.sim_card),
-        title: Text(name),
+        title: Text(simLabel(sim)),
         subtitle: Text(
-          'Carrier: $carrier\n'
-          'Slot ${sim.slotIndex} · subId ${sim.subscriptionId} · '
-          '${sim.isEmbedded ? 'eSIM' : 'physical'}\n'
+          'Slot ${sim.slotIndex} · ${sim.isEmbedded ? 'eSIM' : 'physical'}\n'
           'Signal: ${_signalLabel(signal)}',
         ),
         trailing: Chip(label: Text(sim.simState)),
@@ -256,5 +398,46 @@ class _SimTile extends StatelessWidget {
     if (signal == null) return 'unknown';
     final bars = '${signal.level}/4';
     return signal.dbm != null ? '${signal.dbm} dBm ($bars)' : bars;
+  }
+}
+
+class _LoadingCard extends StatelessWidget {
+  const _LoadingCard(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        title: Text(message),
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
+      child: ListTile(
+        leading: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
+        title: Text(message),
+        trailing: onRetry == null
+            ? null
+            : TextButton(onPressed: onRetry, child: const Text('Retry')),
+      ),
+    );
   }
 }

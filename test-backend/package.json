@@ -1,0 +1,21 @@
+{
+  "name": "luno-test-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference Luno-protocol backend to demo pairing + live WSS against the Android node",
+  "scripts": {
+    "dev": "NODE_ENV=development node server.mjs",
+    "build": "next build",
+    "start": "NODE_ENV=production node server.mjs"
+  },
+  "dependencies": {
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

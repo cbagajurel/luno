@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../bridge/generated/luno_api.g.dart';
 import '../../state/bridge_providers.dart';
 import '../../state/device_providers.dart';
+import '../shared/status_ui.dart';
 
 Future<void> showComposeSheet(BuildContext context) {
   return showModalBottomSheet<void>(
@@ -43,7 +44,7 @@ class _ComposeSheetState extends ConsumerState<_ComposeSheet> {
     final permissions = ref.read(permissionsProvider.notifier);
     var perms = ref.read(permissionsProvider).value;
     if (perms == null || !perms.sms) {
-      await permissions.requestSms();
+      await permissions.request(AppPermission.sms);
       perms = ref.read(permissionsProvider).value;
       if (perms == null || !perms.sms) {
         if (mounted) {
@@ -92,7 +93,7 @@ class _ComposeSheetState extends ConsumerState<_ComposeSheet> {
               border: OutlineInputBorder(),
             ),
           ),
-          if (sims.length > 1) ...[
+          if (sims.isNotEmpty) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<int?>(
               initialValue: _subId,
@@ -106,10 +107,7 @@ class _ComposeSheetState extends ConsumerState<_ComposeSheet> {
                 for (final sim in sims)
                   DropdownMenuItem<int?>(
                     value: sim.subscriptionId,
-                    child: Text(
-                      'Slot ${sim.slotIndex} · '
-                      '${sim.carrierName.isNotEmpty ? sim.carrierName : 'SIM'}',
-                    ),
+                    child: Text('${simLabel(sim)} · Slot ${sim.slotIndex}'),
                   ),
               ],
             ),

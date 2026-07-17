@@ -1,8 +1,29 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 
+import '../../bridge/generated/luno_api.g.dart';
 import '../../bridge/luno_bridge.dart';
 
 typedef StatusUi = ({String label, Color color, IconData icon});
+
+/// A human label for a SIM: carrier first, falling back to the OS display name,
+/// then the slot. Used anywhere we'd otherwise leak a raw subscription id.
+String simLabel(SimInfo sim) {
+  if (sim.carrierName.isNotEmpty) return sim.carrierName;
+  if (sim.displayName.isNotEmpty) return sim.displayName;
+  return 'Slot ${sim.slotIndex}';
+}
+
+/// Resolves a (possibly null) subscription id to a SIM label using the current
+/// device SIMs. Returns null when it can't be mapped so callers can hide it.
+String? simLabelForSub(int? subscriptionId, List<SimInfo> sims) {
+  if (subscriptionId == null) return null;
+  for (final sim in sims) {
+    if (sim.subscriptionId == subscriptionId) {
+      return '${simLabel(sim)} · Slot ${sim.slotIndex}';
+    }
+  }
+  return null;
+}
 
 StatusUi connectionUi(ConnectionState state) => switch (state) {
       ConnectionState.ready => (label: 'Ready', color: Colors.green, icon: Icons.cloud_done),

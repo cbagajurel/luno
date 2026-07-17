@@ -5,6 +5,7 @@ import '../../bridge/luno_bridge.dart';
 import '../../state/connection_providers.dart';
 import '../../state/device_providers.dart';
 import '../../state/pairing_providers.dart';
+import '../pairing/pairing_form.dart';
 import '../shared/status_ui.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -46,21 +47,12 @@ class SettingsScreen extends ConsumerWidget {
             error: (e, _) => ListTile(title: Text('$e')),
             data: (p) => Column(
               children: [
-                _PermissionTile(
-                  label: 'Phone / SIM',
-                  granted: p.phone,
-                  onGrant: () => ref.read(permissionsProvider.notifier).requestPhone(),
-                ),
-                _PermissionTile(
-                  label: 'Send SMS',
-                  granted: p.sms,
-                  onGrant: () => ref.read(permissionsProvider.notifier).requestSms(),
-                ),
-                _PermissionTile(
-                  label: 'Receive SMS',
-                  granted: p.receiveSms,
-                  onGrant: () => ref.read(permissionsProvider.notifier).requestReceiveSms(),
-                ),
+                for (final perm in AppPermission.values)
+                  _PermissionTile(
+                    label: perm.label,
+                    granted: p.has(perm),
+                    onGrant: () => ref.read(permissionsProvider.notifier).request(perm),
+                  ),
                 ListTile(
                   trailing: TextButton.icon(
                     onPressed: () => ref.read(permissionsProvider.notifier).refresh(),
@@ -77,6 +69,12 @@ class SettingsScreen extends ConsumerWidget {
             leading: Icon(connUi.icon, color: connUi.color),
             title: const Text('Connection'),
             subtitle: Text(connUi.label),
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync),
+            title: const Text('Reconnect / re-pair'),
+            subtitle: const Text('Re-enrol with a backend URL and pairing code'),
+            onTap: () => showReconnectSheet(context),
           ),
           ListTile(
             leading: const Icon(Icons.link_off),

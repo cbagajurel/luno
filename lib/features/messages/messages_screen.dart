@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/generated/luno_api.g.dart';
+import '../../state/device_providers.dart';
 import '../../state/messages_providers.dart';
 import '../shared/status_ui.dart';
 import 'compose_sheet.dart';
@@ -54,6 +55,7 @@ class _ReceivedTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inbox = ref.watch(inboxProvider);
+    final sims = ref.watch(deviceStateProvider).value?.sims ?? const <SimInfo>[];
     return inbox.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrorView(message: '$e'),
@@ -61,7 +63,7 @@ class _ReceivedTab extends ConsumerWidget {
           ? const _EmptyView(icon: Icons.inbox, text: 'No messages received yet')
           : ListView.builder(
               itemCount: rows.length,
-              itemBuilder: (_, i) => _InboxTile(entry: rows[i]),
+              itemBuilder: (_, i) => _InboxTile(entry: rows[i], sims: sims),
             ),
     );
   }
@@ -89,19 +91,23 @@ class _OutboxTile extends StatelessWidget {
 }
 
 class _InboxTile extends StatelessWidget {
-  const _InboxTile({required this.entry});
+  const _InboxTile({required this.entry, required this.sims});
 
   final InboundEntry entry;
+  final List<SimInfo> sims;
 
   @override
   Widget build(BuildContext context) {
-    final parts = entry.parts > 1 ? ' · ${entry.parts} parts' : '';
+    final sim = simLabelForSub(entry.subscriptionId, sims);
+    final parts = entry.parts > 1 ? '${entry.parts} parts' : null;
+    final meta = [?sim, ?parts].join(' · ');
     return ListTile(
       leading: const Icon(Icons.sms_outlined),
       title: Text(entry.sender),
       subtitle: Text(entry.body),
-      trailing: Text('subId ${entry.subscriptionId ?? '—'}$parts',
-          style: Theme.of(context).textTheme.labelSmall),
+      trailing: meta.isEmpty
+          ? null
+          : Text(meta, style: Theme.of(context).textTheme.labelSmall),
       isThreeLine: entry.body.length > 40,
     );
   }

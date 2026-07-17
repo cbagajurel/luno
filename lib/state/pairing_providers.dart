@@ -10,7 +10,10 @@ class PairingController extends AsyncNotifier<bool> {
   Future<bool> build() => ref.read(bridgeProvider).isPaired();
 
   Future<PairingResult> pair(String backendUrl, String pairingCode) async {
-    final result = await ref.read(bridgeProvider).startPairing(backendUrl, pairingCode);
+    ref.read(lastBackendUrlProvider.notifier).set(backendUrl);
+    final result = await ref
+        .read(bridgeProvider)
+        .startPairing(backendUrl, pairingCode);
     if (result.ok) state = const AsyncData(true);
     return result;
   }
@@ -21,5 +24,20 @@ class PairingController extends AsyncNotifier<bool> {
   }
 }
 
-final pairingProvider =
-    AsyncNotifierProvider<PairingController, bool>(PairingController.new);
+final pairingProvider = AsyncNotifierProvider<PairingController, bool>(
+  PairingController.new,
+);
+
+/// The last backend URL the user paired with, kept in memory to pre-fill the
+/// reconnect / re-pair form. Native owns the durable credential; this is only a
+/// UI convenience, seeded on [PairingController.pair].
+class LastBackendUrl extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void set(String url) => state = url;
+}
+
+final lastBackendUrlProvider = NotifierProvider<LastBackendUrl, String>(
+  LastBackendUrl.new,
+);

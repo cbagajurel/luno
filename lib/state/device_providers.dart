@@ -3,27 +3,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../bridge/generated/luno_api.g.dart';
 import 'bridge_providers.dart';
 
-/// Snapshot-then-stream: the device-state channel replays the current telemetry
-/// on subscribe and re-fires on every change; each tick re-queries the full state.
+/// Snapshot-then-stream device telemetry. Also re-subscribes whenever permissions
+/// change, so newly-granted access (phone → SIMs, etc.) shows up without a manual
+/// refresh — the native channel replays the current state on every re-subscribe.
 final deviceStateProvider = StreamProvider<DeviceState>((ref) {
+  ref.watch(permissionsProvider);
   final bridge = ref.watch(bridgeProvider);
   return bridge.deviceStateEvents.asyncMap((_) => bridge.getDeviceState());
 });
 
-class Permissions {
-  const Permissions({
-    required this.phone,
-    required this.sms,
-    required this.receiveSms,
-  });
+/// A runtime permission the node needs, with copy for the UI to render.
+enum AppPermission {
+  phone('Phone / SIM', 'Read SIM cards, signal, and carrier info'),
+  sms('Send SMS', 'Send outgoing text messages'),
+  receiveSms('Receive SMS', 'Capture incoming text messages');
 
-  final bool phone;
-  final bool sms;
-  final bool receiveSms;
+  const AppPermission(this.label, this.rationale);
+
+  final String label;
+  final String rationale;
 }
 
-/// Runtime-permission snapshot. Native is the source of truth; after a request the
-/// system dialog resolves asynchronously, so callers [refresh] once it settles.
+class Permissions {
+  const Permissions(this.granted);
+
+  final Set<AppPermission> granted;
+
+  bool has(AppPermission p) => granted.contains(p);
+
+  bool get phone => has(AppPermission.phone);
+  bool get sms => has(AppPermission.sms);
+  bool get receiveSms => has(AppPermission.receiveSms);
+
+  bool get allGranted => granted.length == AppPermission.values.length;
+
+  List<AppPermission> get missing =>
+      [for (final p in AppPermission.values) if (!has(p)) p];
+}
+
+/// Runtime-permission snapshot. Native is the source of truth; a request fires the
+/// system dialog then re-reads, and [refresh] re-reads on demand (e.g. app resume,
+/// after the user toggles a permission in system Settings).
 class PermissionsController extends AsyncNotifier<Permissions> {
   @override
   Future<Permissions> build() => _read();
@@ -35,25 +55,27 @@ class PermissionsController extends AsyncNotifier<Permissions> {
       bridge.hasSmsPermission(),
       bridge.hasReceiveSmsPermission(),
     ]);
-    return Permissions(phone: results[0], sms: results[1], receiveSms: results[2]);
+    return Permissions({
+      if (results[0]) AppPermission.phone,
+      if (results[1]) AppPermission.sms,
+      if (results[2]) AppPermission.receiveSms,
+    });
   }
 
   Future<void> refresh() async {
     state = await AsyncValue.guard(_read);
   }
 
-  Future<void> requestPhone() async {
-    await ref.read(bridgeProvider).requestPhonePermission();
-    await refresh();
-  }
-
-  Future<void> requestSms() async {
-    await ref.read(bridgeProvider).requestSmsPermission();
-    await refresh();
-  }
-
-  Future<void> requestReceiveSms() async {
-    await ref.read(bridgeProvider).requestReceiveSmsPermission();
+  Future<void> request(AppPermission permission) async {
+    final bridge = ref.read(bridgeProvider);
+    switch (permission) {
+      case AppPermission.phone:
+        await bridge.requestPhonePermission();
+      case AppPermission.sms:
+        await bridge.requestSmsPermission();
+      case AppPermission.receiveSms:
+        await bridge.requestReceiveSmsPermission();
+    }
     await refresh();
   }
 }
