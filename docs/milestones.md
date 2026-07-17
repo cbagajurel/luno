@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-17): M1–M16 complete. Next up: M17.**
+**Status (2026-07-17): M1–M17 complete. Next up: M18.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -27,7 +27,7 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M14 | Protocol wired to SMS + heartbeat | 6 | ✅ done | Backend command → SMS → events back |
 | M15 | Boot + WorkManager + resync | 7 | ✅ done | Reboot/offline/kill → lossless recovery |
 | M16 | Security hardening | 8 | ✅ done | Threat-model checklist passes |
-| M17 | Flutter dashboard | 9 | ⬜ todo | Operator runs a node from the UI |
+| M17 | Flutter dashboard | 9 | ✅ done | Operator runs a node from the UI |
 | M18 | Observability, tests, release | 10 | ⬜ todo | Signed v1.0 APK, docs, E2E on real devices |
 
 ---
@@ -519,6 +519,27 @@ pinning vs cert rotation (backup pins); root/tamper (document residual risk).
 - [ ] Widget tests for each feature against faked bridge streams.
 **Edge cases:** UI subscribing after streams started (snapshot-then-stream);
 large log lists (virtualize); permission prompts mid-flow; theme/locale.
+
+**Implemented (2026-07-17).** Replaced the M2-era demo (`ui/home`) with the real
+UI-only dashboard on the declared stack: `main.dart` (`ProviderScope` +
+`ScreenUtilInit`), `app/{luno_app,theme,router}` (Material 3 + `google_fonts`;
+`go_router` with an `isPaired` redirect gate + `StatefulShellRoute.indexedStack`
+bottom nav). `state/*` holds thin Riverpod mirrors of native — `bridgeProvider`
+plus stream providers using **snapshot-then-stream** (`events.asyncMap(query)`) so a
+late-subscribing widget still gets the current value; native stays the sole source
+of truth. Five feature slices: `pairing` (manual URL+code → `startPairing`),
+`dashboard` (connection banner, agent Start/Stop, network/battery/SIM+signal),
+`messages` (Sent/Received tabs + compose sheet over `sendSms`), `logs`
+(virtualized, level filter), `settings` (permissions + unpair + about). One new
+native seam for the in-app log viewer: `logging/RingBufferLogSink` (bounded,
+already-redacted) + Pigeon `getRecentLogs`/`LogEntry` + `bridge/LogChannel`
+(`events/logs`), wired through `AgentGraph`/`LunoHostApiImpl`/`MainActivity`.
+Manual Riverpod providers (no `riverpod_generator`) keep the codegen surface
+minimal. 13 Dart tests green (widget tests per feature + provider tests via a
+`FakeLunoBridge implements LunoBridge` override); `flutter analyze` clean;
+`flutter build apk` compiles the native seam. **Deferred to M18:** QR pairing,
+persistent default-SIM, battery-optimization-exemption helper, and the on-device
+pass (pair→run→kill/reopen-without-disturbing-the-gateway).
 
 ---
 
