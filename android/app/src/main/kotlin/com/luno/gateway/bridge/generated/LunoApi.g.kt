@@ -587,6 +587,52 @@ data class PairingResult (
     return result
   }
 }
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class LogEntry (
+  val timestampMs: Long,
+  val level: String,
+  val tag: String,
+  val message: String
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): LogEntry {
+      val timestampMs = pigeonVar_list[0] as Long
+      val level = pigeonVar_list[1] as String
+      val tag = pigeonVar_list[2] as String
+      val message = pigeonVar_list[3] as String
+      return LogEntry(timestampMs, level, tag, message)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      timestampMs,
+      level,
+      tag,
+      message,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as LogEntry
+    return LunoApiPigeonUtils.deepEquals(this.timestampMs, other.timestampMs) && LunoApiPigeonUtils.deepEquals(this.level, other.level) && LunoApiPigeonUtils.deepEquals(this.tag, other.tag) && LunoApiPigeonUtils.deepEquals(this.message, other.message)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.timestampMs)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.level)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.tag)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.message)
+    return result
+  }
+}
 private open class LunoApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -630,6 +676,11 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
           PairingResult.fromList(it)
         }
       }
+      137.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          LogEntry.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -667,6 +718,10 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         stream.write(136)
         writeValue(stream, value.toList())
       }
+      is LogEntry -> {
+        stream.write(137)
+        writeValue(stream, value.toList())
+      }
       else -> super.writeValue(stream, value)
     }
   }
@@ -693,6 +748,7 @@ interface LunoHostApi {
   fun startPairing(backendUrl: String, pairingCode: String, callback: (Result<PairingResult>) -> Unit)
   fun isPaired(): Boolean
   fun unpair()
+  fun getRecentLogs(): List<LogEntry>
 
   companion object {
     /** The codec used by LunoHostApi. */
@@ -983,6 +1039,21 @@ interface LunoHostApi {
             val wrapped: List<Any?> = try {
               api.unpair()
               listOf(null)
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.getRecentLogs$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.getRecentLogs())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }

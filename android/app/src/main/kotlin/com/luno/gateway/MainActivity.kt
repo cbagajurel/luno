@@ -12,6 +12,7 @@ import com.luno.gateway.bridge.ConnectionStateChannel
 import com.luno.gateway.bridge.DeviceStateChannel
 import com.luno.gateway.bridge.FlutterEventBridge
 import com.luno.gateway.bridge.InboxChannel
+import com.luno.gateway.bridge.LogChannel
 import com.luno.gateway.bridge.LunoHostApiImpl
 import com.luno.gateway.bridge.OutboxChannel
 import com.luno.gateway.bridge.generated.LunoHostApi
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity(), AgentHost {
     private var outboxChannel: OutboxChannel? = null
     private var inboxChannel: InboxChannel? = null
     private var connectionStateChannel: ConnectionStateChannel? = null
+    private var logChannel: LogChannel? = null
 
     private val graph: AgentGraph
         get() = (application as LunoApplication).graph
@@ -44,6 +46,7 @@ class MainActivity : FlutterActivity(), AgentHost {
                 graph.inboxRepository,
                 graph.pairingManager,
                 graph.connectionManager,
+                graph.logBuffer,
                 graph.appScope,
             ),
         )
@@ -53,6 +56,7 @@ class MainActivity : FlutterActivity(), AgentHost {
         agentStateChannel = AgentStateChannel(messenger, graph.agentController).also { it.attach() }
         connectionStateChannel =
             ConnectionStateChannel(messenger, graph.connectionManager).also { it.attach() }
+        logChannel = LogChannel(messenger, graph.logBuffer).also { it.attach() }
         deviceStateChannel = DeviceStateChannel(
             messenger,
             graph.deviceStateStore,
@@ -72,6 +76,8 @@ class MainActivity : FlutterActivity(), AgentHost {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        logChannel?.detach()
+        logChannel = null
         connectionStateChannel?.detach()
         connectionStateChannel = null
         inboxChannel?.detach()

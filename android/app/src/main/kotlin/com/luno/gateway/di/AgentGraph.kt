@@ -26,6 +26,7 @@ import com.luno.gateway.agent.EventKeys
 import com.luno.gateway.logging.LogcatSink
 import com.luno.gateway.logging.LunoLogger
 import com.luno.gateway.logging.Redaction
+import com.luno.gateway.logging.RingBufferLogSink
 import com.luno.gateway.security.CryptoBox
 import com.luno.gateway.security.Pinning
 import com.luno.gateway.security.PolicyStore
@@ -54,7 +55,8 @@ import kotlinx.coroutines.flow.stateIn
 class AgentGraph(context: Context) {
     private val appContext: Context = context.applicationContext
 
-    val logger: LunoLogger = LunoLogger(listOf(LogcatSink()), Redaction::redact)
+    val logBuffer: RingBufferLogSink = RingBufferLogSink()
+    val logger: LunoLogger = LunoLogger(listOf(LogcatSink(), logBuffer), Redaction::redact)
 
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

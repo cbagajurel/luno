@@ -572,6 +572,61 @@ class PairingResult {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class LogEntry {
+  LogEntry({
+    required this.timestampMs,
+    required this.level,
+    required this.tag,
+    required this.message,
+  });
+
+  int timestampMs;
+
+  String level;
+
+  String tag;
+
+  String message;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      timestampMs,
+      level,
+      tag,
+      message,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static LogEntry decode(Object result) {
+    result as List<Object?>;
+    return LogEntry(
+      timestampMs: result[0]! as int,
+      level: result[1]! as String,
+      tag: result[2]! as String,
+      message: result[3]! as String,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! LogEntry || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(timestampMs, other.timestampMs) && _deepEquals(level, other.level) && _deepEquals(tag, other.tag) && _deepEquals(message, other.message);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -604,6 +659,9 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is PairingResult) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
+    }    else if (value is LogEntry) {
+      buffer.putUint8(137);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -628,6 +686,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return DeviceState.decode(readValue(buffer)!);
       case 136:
         return PairingResult.decode(readValue(buffer)!);
+      case 137:
+        return LogEntry.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -980,5 +1040,24 @@ class LunoHostApi {
         isNullValid: true,
     )
     ;
+  }
+
+  Future<List<LogEntry>> getRecentLogs() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.getRecentLogs$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return (pigeonVar_replyValue! as List<Object?>).cast<LogEntry>();
   }
 }

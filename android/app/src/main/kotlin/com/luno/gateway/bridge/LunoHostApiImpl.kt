@@ -10,6 +10,7 @@ import com.luno.gateway.data.db.entity.OutboxEntity
 import com.luno.gateway.data.repository.InboxRepository
 import com.luno.gateway.data.repository.OutboxDispatcher
 import com.luno.gateway.data.repository.OutboxRepository
+import com.luno.gateway.logging.RingBufferLogSink
 import com.luno.gateway.model.OutboundMessage
 import com.luno.gateway.telephony.DeviceStateStore
 import com.luno.gateway.util.Ids
@@ -20,8 +21,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.luno.gateway.bridge.generated.DeviceState as DeviceStateDto
 import com.luno.gateway.bridge.generated.InboundEntry as InboundEntryDto
+import com.luno.gateway.bridge.generated.LogEntry as LogEntryDto
 import com.luno.gateway.bridge.generated.OutboxEntry as OutboxEntryDto
 import com.luno.gateway.bridge.generated.PairingResult as PairingResultDto
+import com.luno.gateway.logging.LogRecord
 
 class LunoHostApiImpl(
     private val host: AgentHost,
@@ -32,6 +35,7 @@ class LunoHostApiImpl(
     private val inboxRepository: InboxRepository,
     private val pairingManager: PairingManager,
     private val connectionManager: ConnectionManager,
+    private val logBuffer: RingBufferLogSink,
     private val scope: CoroutineScope,
 ) : LunoHostApi {
     override fun ping(message: String): String = "$ECHO_PREFIX$message"
@@ -106,10 +110,19 @@ class LunoHostApiImpl(
         connectionManager.disconnect()
     }
 
+    override fun getRecentLogs(): List<LogEntryDto> = logBuffer.snapshot().map { it.toDto() }
+
     companion object {
         const val ECHO_PREFIX = "Luno-Kotlin echo: "
     }
 }
+
+private fun LogRecord.toDto() = LogEntryDto(
+    timestampMs = timestampMs,
+    level = level.name,
+    tag = tag,
+    message = message,
+)
 
 private fun InboxEntity.toDto() = InboundEntryDto(
     id = id,

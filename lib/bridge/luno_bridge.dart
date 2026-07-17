@@ -62,6 +62,7 @@ class LunoBridge {
     EventChannel? outboxChannel,
     EventChannel? inboxChannel,
     EventChannel? connectionStateChannel,
+    EventChannel? logChannel,
   })  : _hostApi = hostApi ?? LunoHostApi(),
         _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
         _agentStateChannel =
@@ -72,7 +73,8 @@ class LunoBridge {
             outboxChannel ?? const EventChannel(outboxChannelName),
         _inboxChannel = inboxChannel ?? const EventChannel(inboxChannelName),
         _connectionStateChannel = connectionStateChannel ??
-            const EventChannel(connectionStateChannelName);
+            const EventChannel(connectionStateChannelName),
+        _logChannel = logChannel ?? const EventChannel(logChannelName);
 
   // Channel names must match the native side.
   static const String tickChannelName = 'com.luno.gateway/events/tick';
@@ -84,6 +86,7 @@ class LunoBridge {
   static const String inboxChannelName = 'com.luno.gateway/events/inbox';
   static const String connectionStateChannelName =
       'com.luno.gateway/events/connection_state';
+  static const String logChannelName = 'com.luno.gateway/events/logs';
 
   final LunoHostApi _hostApi;
   final EventChannel _tickChannel;
@@ -92,6 +95,7 @@ class LunoBridge {
   final EventChannel _outboxChannel;
   final EventChannel _inboxChannel;
   final EventChannel _connectionStateChannel;
+  final EventChannel _logChannel;
 
   Future<String> ping(String message) => _hostApi.ping(message);
 
@@ -161,4 +165,10 @@ class LunoBridge {
   Stream<ConnectionState> get connectionStateEvents => _connectionStateChannel
       .receiveBroadcastStream()
       .map((event) => _connectionStateFromName(event as String));
+
+  Future<List<LogEntry>> getRecentLogs() => _hostApi.getRecentLogs();
+
+  /// Ticks a revision counter whenever a log line is written; re-query [getRecentLogs].
+  Stream<int> get logEvents =>
+      _logChannel.receiveBroadcastStream().map((event) => event as int);
 }

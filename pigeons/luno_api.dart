@@ -119,6 +119,20 @@ class PairingResult {
   final String? message;
 }
 
+class LogEntry {
+  LogEntry({
+    required this.timestampMs,
+    required this.level,
+    required this.tag,
+    required this.message,
+  });
+
+  final int timestampMs;
+  final String level;
+  final String tag;
+  final String message;
+}
+
 @ConfigurePigeon(
   PigeonOptions(
     dartOut: 'lib/bridge/generated/luno_api.g.dart',
@@ -166,4 +180,6 @@ abstract class LunoHostApi {
   bool isPaired();
 
   void unpair();
+
+  List<LogEntry> getRecentLogs();
 }
