@@ -1,6 +1,7 @@
 package com.luno.gateway.backend.ws
 
 import com.luno.gateway.logging.LunoLogger
+import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -33,9 +34,15 @@ interface Socket {
  * the clear (§8, threat model). Owns no reconnect logic; that's [ConnectionManager].
  */
 class WebSocketClient(
-    private val client: OkHttpClient = OkHttpClient(),
+    baseClient: OkHttpClient = OkHttpClient(),
     private val logger: LunoLogger,
+    pinner: CertificatePinner? = null,
 ) : Socket {
+    // Off by default (no pins configured yet); when the backend supplies pins the
+    // socket enforces them on top of the usual CA validation.
+    private val client: OkHttpClient =
+        if (pinner != null) baseClient.newBuilder().certificatePinner(pinner).build() else baseClient
+
     private var webSocket: WebSocket? = null
 
     override fun connect(wsUrl: String, credential: String, onEvent: (SocketEvent) -> Unit) {

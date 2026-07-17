@@ -8,6 +8,7 @@ import com.luno.gateway.model.InboxStatus
 import com.luno.gateway.util.Clock
 import com.luno.gateway.util.SystemClock
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 sealed interface CaptureResult {
     val id: String
@@ -25,13 +26,17 @@ class InboxRepository(
     private val dao: InboxDao,
     private val logger: LunoLogger,
     private val clock: Clock = SystemClock,
+    // PII-at-rest boundary: body + sender are sealed on capture and opened on read.
+    // Identity by default (tests); AgentGraph injects the Keystore-backed CryptoBox.
+    private val seal: (String) -> String = { it },
+    private val open: (String) -> String = { it },
 ) {
     suspend fun capture(message: InboundMessage): CaptureResult {
         val rowId = dao.insertIfAbsent(
             InboxEntity(
                 id = message.id,
-                sender = message.sender,
-                body = message.body,
+                sender = seal(message.sender),
+                body = seal(message.body),
                 subscriptionId = message.subscriptionId,
                 receivedAt = message.receivedAt,
                 parts = message.parts,
@@ -48,7 +53,8 @@ class InboxRepository(
     }
 
     /** Inbound captured but not yet reported to the backend — the sms_received work list. */
-    fun observePending(): Flow<List<InboxEntity>> = dao.observeByStatus(InboxStatus.RECEIVED)
+    fun observePending(): Flow<List<InboxEntity>> =
+        dao.observeByStatus(InboxStatus.RECEIVED).map { rows -> rows.map(::decrypt) }
 
     suspend fun markReported(id: String) = dao.updateStatus(id, InboxStatus.REPORTED)
 
@@ -56,9 +62,15 @@ class InboxRepository(
 
     suspend fun count(): Int = dao.count()
 
-    suspend fun recent(limit: Int = DEFAULT_RECENT_LIMIT): List<InboxEntity> = dao.recent(limit)
+    suspend fun recent(limit: Int = DEFAULT_RECENT_LIMIT): List<InboxEntity> = dao.recent(limit).map(::decrypt)
 
-    fun observeRecent(limit: Int = DEFAULT_RECENT_LIMIT): Flow<List<InboxEntity>> = dao.observeRecent(limit)
+    fun observeRecent(limit: Int = DEFAULT_RECENT_LIMIT): Flow<List<InboxEntity>> =
+        dao.observeRecent(limit).map { rows -> rows.map(::decrypt) }
+
+    suspend fun clearAll() = dao.deleteAll()
+
+    private fun decrypt(row: InboxEntity): InboxEntity =
+        row.copy(sender = open(row.sender), body = open(row.body))
 
     companion object {
         private const val TAG = "InboxRepository"

@@ -7,7 +7,7 @@
 
 Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (runtime).
 
-**Status (2026-07-17): M1–M15 complete. Next up: M16.**
+**Status (2026-07-17): M1–M16 complete. Next up: M17.**
 
 | # | Milestone | Phase | Status | Independently testable by |
 |---|---|---|---|---|
@@ -26,7 +26,7 @@ Legend for permissions: 🟢 normal · 🟡 special/appops · 🔴 dangerous (ru
 | M13 | Pairing/auth + WebSocket connect | 6 | ✅ done | Node enrolls and reaches READY |
 | M14 | Protocol wired to SMS + heartbeat | 6 | ✅ done | Backend command → SMS → events back |
 | M15 | Boot + WorkManager + resync | 7 | ✅ done | Reboot/offline/kill → lossless recovery |
-| M16 | Security hardening | 8 | ⬜ todo | Threat-model checklist passes |
+| M16 | Security hardening | 8 | ✅ done | Threat-model checklist passes |
 | M17 | Flutter dashboard | 9 | ⬜ todo | Operator runs a node from the UI |
 | M18 | Observability, tests, release | 10 | ⬜ todo | Signed v1.0 APK, docs, E2E on real devices |
 
@@ -459,7 +459,28 @@ lost state too.
 
 ---
 
-## M16 — Security hardening
+## M16 — Security hardening — ✅ done
+
+**Implemented:** `logging/Redaction.kt` (central phone-number masker, wired as
+`LunoLogger`'s redactor — one point scrubs every call site). `security/CryptoBox.kt`
+seals PII at rest with a Keystore-bound key (`luno_data_key`, distinct from the
+credential key): `OutboxRepository`/`InboxRepository`/`EventPublisher` seal body +
+phone number + `sms_received` payload on write and open on read (identity by default
+so tests see plaintext; DB always holds ciphertext; dedup keys stay plaintext, no
+schema change). `security/RateLimiter.kt` (sliding-window per-minute cap) +
+`security/PolicyStore.kt` (durable `SendPolicy{rateLimitPerMinute, allowlist}` from
+`config_update`) enforce **client-side, backend-authoritative** send safety in
+`CommandRouter.onSendSms` (allowlist miss → `policy_reject`, over-limit →
+`rate_limited`; both ack + emit `error`, never enqueue). `revoke`/`wipe` now run a
+full node reset (clear credential + all queues + policy, disconnect, cancel watchdog →
+unpaired). `SmsTransport` maps a revoked `SEND_SMS` `SecurityException` to
+`AUTH`/`sms_permission_revoked` (no crash; telephony read managers already guarded).
+`security/Pinning.kt` + an optional `CertificatePinner` on `WebSocketClient` provide a
+cert-pinning seam (off by default — pins arrive via config/M18). Tests: `RedactionTest`,
+`CryptoBoxTest`, `RateLimiterTest`, `PolicyStoreTest`, `PinningTest`, extended
+`CommandRouterTest` (allowlist/rate-limit/wipe) and `Outbox`/`InboxRepositoryTest`
+(ciphertext-at-rest + `clearAll`). Static PII-scan and on-device wipe/permission-loss
+still warrant a physical pass.
 
 **Files:** `security/CryptoBox.kt`, `RateLimiter.kt`; `logging/Redaction.kt`;
 encrypted fields in entities; pinning in `WebSocketClient`; permission-revocation

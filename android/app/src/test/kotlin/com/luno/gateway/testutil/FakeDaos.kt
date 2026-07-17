@@ -69,6 +69,10 @@ class FakeOutboxDao : OutboxDao {
     override suspend fun deleteByIds(ids: List<String>) {
         ids.forEach { rows.remove(it) }
     }
+
+    override suspend fun deleteAll() {
+        rows.clear()
+    }
 }
 
 class FakeOutboxPartDao : OutboxPartDao {
@@ -139,6 +143,10 @@ class FakeInboxDao : InboxDao {
 
     override fun observeRecent(limit: Int): Flow<List<InboxEntity>> =
         flowOf(rows.values.sortedByDescending { it.receivedAt }.take(limit))
+
+    override suspend fun deleteAll() {
+        rows.clear()
+    }
 }
 
 /** In-memory EventOutboxDao mirroring Room's REPLACE-on-conflict upsert. */
@@ -159,4 +167,8 @@ class FakeEventOutboxDao : EventOutboxDao {
     }
 
     override suspend fun count(): Int = rows.size
+
+    override suspend fun deleteAll() {
+        rows.clear()
+    }
 }
