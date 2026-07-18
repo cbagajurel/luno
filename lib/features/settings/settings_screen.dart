@@ -5,6 +5,7 @@ import '../../bridge/luno_bridge.dart';
 import '../../state/connection_providers.dart';
 import '../../state/device_providers.dart';
 import '../../state/pairing_providers.dart';
+import '../../state/theme_providers.dart';
 import '../../ui/ui.dart';
 import '../pairing/pairing_form.dart';
 import '../shared/status_ui.dart';
@@ -42,6 +43,8 @@ class SettingsScreen extends ConsumerWidget {
           LunoSpacing.md + kBottomNavClearance + MediaQuery.paddingOf(context).bottom,
         ),
         children: [
+          const SectionHeader('Appearance'),
+          const _ThemeToggle(),
           SectionHeader(
             'Permissions',
             trailing: LunoButton(
@@ -106,6 +109,59 @@ class SettingsScreen extends ConsumerWidget {
             tone: StatusTone.brand,
             title: 'Luno',
             subtitle: 'Self-hosted SMS gateway node',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeToggle extends ConsumerWidget {
+  const _ThemeToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    return LunoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Theme', style: context.text.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(
+                      'System follows your device setting.',
+                      style: context.text.bodySmall
+                          ?.copyWith(color: context.scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: LunoSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                textStyle: context.text.labelLarge,
+                shape: const RoundedRectangleBorder(borderRadius: LunoRadius.field),
+              ),
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, label: Text('System')),
+                ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
+              ],
+              selected: {mode},
+              onSelectionChanged: (selection) =>
+                  ref.read(themeModeProvider.notifier).set(selection.first),
+            ),
           ),
         ],
       ),

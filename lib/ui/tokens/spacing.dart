@@ -34,7 +34,8 @@ abstract final class LunoRadius {
 
   static const BorderRadius card = BorderRadius.all(Radius.circular(md));
   static const BorderRadius field = BorderRadius.all(Radius.circular(sm));
-  static const BorderRadius sheet =
-      BorderRadius.vertical(top: Radius.circular(xl));
+  static const BorderRadius sheet = BorderRadius.vertical(
+    top: Radius.circular(xl),
+  );
   static const BorderRadius stadium = BorderRadius.all(Radius.circular(pill));
 }

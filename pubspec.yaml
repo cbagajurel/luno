@@ -45,6 +45,9 @@ dependencies:
   # --- Routing ---
   go_router: ^17.1.0
 
+  # --- Local UI preferences (theme mode) ---
+  shared_preferences: ^2.3.0
+
   # --- Models / serialization (code-gen) ---
   freezed_annotation: ^3.1.0
   json_annotation: ^4.11.0

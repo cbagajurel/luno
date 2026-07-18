@@ -63,18 +63,18 @@ class LunoBridge {
     EventChannel? inboxChannel,
     EventChannel? connectionStateChannel,
     EventChannel? logChannel,
-  })  : _hostApi = hostApi ?? LunoHostApi(),
-        _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
-        _agentStateChannel =
-            agentStateChannel ?? const EventChannel(agentStateChannelName),
-        _deviceStateChannel =
-            deviceStateChannel ?? const EventChannel(deviceStateChannelName),
-        _outboxChannel =
-            outboxChannel ?? const EventChannel(outboxChannelName),
-        _inboxChannel = inboxChannel ?? const EventChannel(inboxChannelName),
-        _connectionStateChannel = connectionStateChannel ??
-            const EventChannel(connectionStateChannelName),
-        _logChannel = logChannel ?? const EventChannel(logChannelName);
+  }) : _hostApi = hostApi ?? LunoHostApi(),
+       _tickChannel = tickChannel ?? const EventChannel(tickChannelName),
+       _agentStateChannel =
+           agentStateChannel ?? const EventChannel(agentStateChannelName),
+       _deviceStateChannel =
+           deviceStateChannel ?? const EventChannel(deviceStateChannelName),
+       _outboxChannel = outboxChannel ?? const EventChannel(outboxChannelName),
+       _inboxChannel = inboxChannel ?? const EventChannel(inboxChannelName),
+       _connectionStateChannel =
+           connectionStateChannel ??
+           const EventChannel(connectionStateChannelName),
+       _logChannel = logChannel ?? const EventChannel(logChannelName);
 
   // Channel names must match the native side.
   static const String tickChannelName = 'com.luno.gateway/events/tick';
@@ -133,8 +133,11 @@ class LunoBridge {
 
   /// Enqueues a send and returns the durable message id; observe [outboxEvents]
   /// and [getRecentOutbox] for the QUEUED→SENDING→SENT/FAILED progression.
-  Future<String> sendSms(String recipient, String body, {int? subscriptionId}) =>
-      _hostApi.sendSms(recipient, body, subscriptionId);
+  Future<String> sendSms(
+    String recipient,
+    String body, {
+    int? subscriptionId,
+  }) => _hostApi.sendSms(recipient, body, subscriptionId);
 
   Future<List<OutboxEntry>> getRecentOutbox() => _hostApi.getRecentOutbox();
 

@@ -16,7 +16,39 @@ class LogsScreen extends ConsumerStatefulWidget {
 }
 
 class _LogsScreenState extends ConsumerState<LogsScreen> {
+  static const _pageSize = 30;
+
   String _filter = 'ALL';
+  int _visible = _pageSize;
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Reveal another page once the user nears the end, so the built row count
+  /// stays bounded regardless of how many lines the ring buffer holds.
+  void _onScroll() {
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
+      setState(() => _visible += _pageSize);
+    }
+  }
+
+  void _selectFilter(String level) {
+    setState(() {
+      _filter = level;
+      _visible = _pageSize;
+    });
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +59,12 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
         preferredSize: const Size.fromHeight(48),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(LunoSpacing.md, 0, LunoSpacing.md, LunoSpacing.xs),
+          padding: const EdgeInsets.fromLTRB(
+            LunoSpacing.md,
+            0,
+            LunoSpacing.md,
+            LunoSpacing.xs,
+          ),
           child: Row(
             children: [
               for (final level in _levels)
@@ -37,7 +74,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                     label: Text(level),
                     selected: _filter == level,
                     showCheckmark: false,
-                    onSelected: (_) => setState(() => _filter = level),
+                    onSelected: (_) => _selectFilter(level),
                   ),
                 ),
             ],
@@ -47,8 +84,9 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
       body: AsyncView<List<LogEntry>>(
         value: logs,
         data: (all) {
-          final rows =
-              _filter == 'ALL' ? all : all.where((l) => l.level == _filter).toList();
+          final rows = _filter == 'ALL'
+              ? all
+              : all.where((l) => l.level == _filter).toList();
           if (rows.isEmpty) {
             return const EmptyState(
               icon: Icons.receipt_long_rounded,
@@ -56,14 +94,18 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
               message: 'Agent activity is recorded here as it happens.',
             );
           }
+          final windowed = rows.length > _visible ? _visible : rows.length;
           return ListView.separated(
+            controller: _scroll,
             padding: EdgeInsets.fromLTRB(
               LunoSpacing.md,
               LunoSpacing.xs,
               LunoSpacing.md,
-              LunoSpacing.md + kBottomNavClearance + MediaQuery.paddingOf(context).bottom,
+              LunoSpacing.md +
+                  kBottomNavClearance +
+                  MediaQuery.paddingOf(context).bottom,
             ),
-            itemCount: rows.length,
+            itemCount: windowed,
             separatorBuilder: (_, _) => Divider(
               height: 1,
               color: context.scheme.outlineVariant.withValues(alpha: 0.5),
@@ -99,7 +141,9 @@ class _LogRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${entry.tag} · ${formatClock(entry.timestampMs)}',
-                  style: lunoMonoStyle.copyWith(color: context.semantic.textFaint),
+                  style: lunoMonoStyle.copyWith(
+                    color: context.semantic.textFaint,
+                  ),
                 ),
               ],
             ),
