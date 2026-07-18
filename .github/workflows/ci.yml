@@ -4,68 +4,352 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
-# Cancel superseded runs on the same ref.
+# Superseded PR runs are cancelled; master runs are not. master is the release
+# gate — a cancelled run there is indistinguishable from an unverified commit.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FLUTTER_VERSION: 3.41.4
+  JAVA_VERSION: '17'
+  # Ratchet upward; never downward. Current: 51.18%.
+  MIN_LINE_COVERAGE: 50
 
 jobs:
-  flutter:
-    name: Flutter analyze & test
+  static:
+    name: Format, analyze & hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: 3.41.4
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
+      # --enforce-lockfile: resolve exactly what pubspec.lock pins, or fail.
+      # Without it CI silently tests a different dependency set than developers.
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test pigeons
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      - name: Repo hygiene
+        run: |
+          set -euo pipefail
+          fail=0
+
+          # CONTRIBUTING.md requires the template package name to be gone from
+          # code. Markdown is excluded: the docs legitimately discuss the rule.
+          if git grep -In 'com\.example' -- . ':!*.md' ':!.github/workflows/ci.yml'; then
+            echo "::error::Found the template package name 'com.example' in code."
+            fail=1
+          fi
+
+          # Signing material must never be committed (android/.gitignore covers
+          # these, but a -f add or a moved file would slip past it).
+          if git ls-files | grep -Ei '\.(jks|keystore)$|(^|/)key\.properties$|(^|/)\.env$'; then
+            echo "::error::Signing material or an .env file is tracked in git."
+            fail=1
+          fi
+
+          exit $fail
+
+  codegen:
+    name: Generated code is up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      # Pigeon emits unformatted Dart, so the canonical committed state is
+      # "generate, then format". Regenerating without the format pass would
+      # report drift on every run.
+      - name: Regenerate
+        run: |
+          set -euo pipefail
+          dart run pigeon --input pigeons/luno_api.dart
+          dart run build_runner build
+          dart format lib test pigeons
+
+      - name: Assert no drift
+        run: |
+          set -euo pipefail
+          # --porcelain, not `git diff`: it also catches generated files that
+          # were never added to the index at all.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Committed generated code is stale. Regenerate and commit:"
+            echo "::error::  dart run pigeon --input pigeons/luno_api.dart"
+            echo "::error::  dart run build_runner build"
+            echo "::error::  dart format lib test pigeons"
+            git status --short
+            git diff > /tmp/codegen.patch
+            exit 1
+          fi
+          echo "Generated code matches the committed tree."
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: codegen-drift-patch
+          path: /tmp/codegen.patch
+          if-no-files-found: ignore
+
+  dart_test:
+    name: Dart tests & coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Test
+        run: flutter test --coverage --reporter=expanded
+
+      - name: Enforce coverage floor
+        run: |
+          set -euo pipefail
+          [ -f coverage/lcov.info ] || { echo "::error::No coverage produced."; exit 1; }
+          pct=$(awk -F: '/^LF:/{f+=$2} /^LH:/{h+=$2} END{if(f==0){print 0}else{printf "%.2f", 100*h/f}}' coverage/lcov.info)
+          echo "Line coverage: ${pct}% (floor ${MIN_LINE_COVERAGE}%)"
+          awk -v p="$pct" -v m="$MIN_LINE_COVERAGE" 'BEGIN{exit !(p+0 < m+0)}' \
+            && { echo "::error::Coverage ${pct}% is below the ${MIN_LINE_COVERAGE}% floor."; exit 1; } \
+            || echo "Coverage floor met."
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: dart-coverage
+          path: coverage/lcov.info
+          if-no-files-found: warn
 
   android:
-    name: Android lint & build
+    name: Kotlin tests, lint & build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: 3.41.4
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - run: flutter pub get
+      # Also validates gradle-wrapper.jar against Gradle's published checksums,
+      # which is why the wrapper is tracked rather than injected by Flutter.
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          build-root-directory: android
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
 
-      # Ensure Flutter's Gradle glue (local.properties, .flutter-plugins) exists.
-      - run: flutter build apk --debug --config-only --flavor full
+      - run: flutter pub get --enforce-lockfile
 
-      - name: Gradle lint
+      # Writes local.properties (flutter.sdk) so Gradle can resolve the plugin.
+      - name: Configure Gradle for Flutter
+        run: flutter build apk --debug --config-only --flavor full
+
+      - name: Kotlin unit tests
+        working-directory: android
+        run: ./gradlew testFullDebugUnitTest testSendOnlyDebugUnitTest
+
+      # Room exports a schema per version. If an @Entity changes without a
+      # matching migration + committed schema, the app crashes on upgrade for
+      # every already-paired device. The build regenerates the schema, so a
+      # dirty tree here means the migration was forgotten.
+      - name: Assert Room schemas match entities
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain android/app/schemas)" ]; then
+            echo "::error::Room schema drift: entities changed without a committed schema."
+            echo "::error::Add a migration in LunoDatabase and commit android/app/schemas/."
+            git status --short android/app/schemas
+            git diff -- android/app/schemas
+            exit 1
+          fi
+          echo "Room schemas are in sync."
+
+      - name: Lint
         working-directory: android
         run: ./gradlew lint
 
-      # Both flavors, so a manifest change that breaks either is caught here.
-      - name: Assemble debug
+      # Release variants exercise R8, manifest merge and shrinking — none of
+      # which a debug build touches, and all of which fastlane would otherwise
+      # discover at upload time.
+      - name: Build all variants
         working-directory: android
-        run: ./gradlew assembleFullDebug assembleSendOnlyDebug
-
-      # sendOnly exists purely to keep RECEIVE_SMS out of the shipped manifest —
-      # assert that rather than trusting the merge.
-      - name: Verify sendOnly omits RECEIVE_SMS
         run: |
-          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
-          APK=build/app/outputs/apk/sendOnly/debug/app-sendOnly-debug.apk
-          if "$AAPT" dump permissions "$APK" | grep -q 'android.permission.RECEIVE_SMS'; then
-            echo "::error::sendOnly APK declares RECEIVE_SMS; it will trip Play Protect."
+          ./gradlew \
+            assembleFullDebug assembleSendOnlyDebug \
+            assembleFullRelease assembleSendOnlyRelease \
+            bundleFullRelease bundleSendOnlyRelease
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: apks
+          path: |
+            build/app/outputs/apk/**/*.apk
+            build/app/outputs/bundle/**/*.aab
+          # verify_artifacts asserts these exist; a missing-artifact error here
+          # would only add noise on top of an already-failed build.
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-reports
+          path: |
+            build/app/reports/**
+            build/app/**/test-results/**
+          if-no-files-found: warn
+
+  verify_artifacts:
+    name: Verify shipped manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: android
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: apks
+          path: artifacts
+
+      # Every assertion runs against the *release* artifacts: the release
+      # manifest is what ships, and it is not the debug manifest.
+      - name: Assert flavor invariants
+        run: |
+          set -euo pipefail
+
+          AAPT=$(ls "${ANDROID_HOME:-}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$AAPT" ] || [ ! -x "$AAPT" ]; then
+            echo "::error::aapt2 not found; cannot verify manifests. Failing rather than assuming."
             exit 1
           fi
-          echo "OK: sendOnly declares no RECEIVE_SMS."
+          echo "Using $AAPT"
+
+          fail=0
+
+          FULL=$(find artifacts -name 'app-full-release.apk' -type f | head -1)
+          SEND=$(find artifacts -name 'app-sendOnly-release.apk' -type f | head -1)
+          for pair in "full:$FULL" "sendOnly:$SEND"; do
+            if [ -z "${pair#*:}" ]; then
+              echo "::error::The ${pair%%:*} release APK was not produced."
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] || exit 1
+
+          # Every dump is captured to a variable and matched with a herestring.
+          # Piping aapt2 into `grep -q` would SIGPIPE aapt2 when grep exits on
+          # the first match, and pipefail turns that into a spurious failure.
+          dump() { "$AAPT" dump badging "$1"; }
+          tree() { "$AAPT" dump xmltree --file AndroidManifest.xml "$1"; }
+          FULL_DUMP=$(dump "$FULL")
+          SEND_DUMP=$(dump "$SEND")
+          FULL_TREE=$(tree "$FULL")
+          SEND_TREE=$(tree "$SEND")
+
+          check() { # description, condition-result
+            if [ "$2" = "0" ]; then echo "  ok: $1"; else echo "::error::$1"; fail=1; fi
+          }
+
+          # The entire reason the sendOnly flavor exists (docs/play-protect.md).
+          grep -q "name='android.permission.RECEIVE_SMS'" <<<"$SEND_DUMP" && r=1 || r=0
+          check "sendOnly must NOT declare RECEIVE_SMS (Play Protect would block it)" "$r"
+
+          # The inverse regression: a broken full flavor must not pass silently.
+          grep -q "name='android.permission.RECEIVE_SMS'" <<<"$FULL_DUMP" && r=0 || r=1
+          check "full MUST declare RECEIVE_SMS (it is the complete gateway)" "$r"
+
+          # Permission and receiver have to move together.
+          grep -q 'SmsReceiver' <<<"$FULL_TREE" && r=0 || r=1
+          check "full MUST register SmsReceiver" "$r"
+
+          grep -q 'SmsReceiver' <<<"$SEND_TREE" && r=1 || r=0
+          check "sendOnly must NOT register SmsReceiver" "$r"
+
+          for entry in "$FULL:$FULL_DUMP" "$SEND:$SEND_DUMP"; do
+            apk="${entry%%:*}"
+            apk_dump="${entry#*:}"
+            name=$(basename "$apk")
+
+            grep -q "package: name='com.luno.gateway'" <<<"$apk_dump" && r=0 || r=1
+            check "$name applicationId must be com.luno.gateway" "$r"
+
+            ver=$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$apk_dump")
+            [ -n "$ver" ] && r=0 || r=1
+            check "$name must carry a versionName" "$r"
+
+            # A truncated or stub APK is a failure, not a pass.
+            size=$(wc -c < "$apk" | tr -d ' ')
+            [ "$size" -gt 5000000 ] && r=0 || r=1
+            check "$name must exceed 5MB (got $size bytes)" "$r"
+          done
+
+          # Both AABs must exist — this is what fastlane will upload.
+          for aab in app-full-release.aab app-sendOnly-release.aab; do
+            [ -n "$(find artifacts -name "$aab" -type f)" ] && r=0 || r=1
+            check "$aab must be produced" "$r"
+          done
+
+          exit $fail
+
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [static, codegen, dart_test, android, verify_artifacts]
+    if: always()
+    steps:
+      # `needs` alone treats a skipped job as success, so a job that never ran
+      # would turn this gate green. Require an explicit success from each.
+      - name: Require every job to have succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$RESULTS"
+          if jq -e 'to_entries | any(.value.result != "success")' <<<"$RESULTS" >/dev/null; then
+            echo "::error::One or more CI jobs did not succeed:"
+            jq -r 'to_entries[] | select(.value.result != "success") | "  \(.key): \(.value.result)"' <<<"$RESULTS"
+            exit 1
+          fi
+          echo "All CI jobs succeeded."
