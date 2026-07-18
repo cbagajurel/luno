@@ -47,12 +47,25 @@ jobs:
       - run: flutter pub get
 
       # Ensure Flutter's Gradle glue (local.properties, .flutter-plugins) exists.
-      - run: flutter build apk --debug --config-only
+      - run: flutter build apk --debug --config-only --flavor full
 
       - name: Gradle lint
         working-directory: android
         run: ./gradlew lint
 
+      # Both flavors, so a manifest change that breaks either is caught here.
       - name: Assemble debug
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleFullDebug assembleSendOnlyDebug
+
+      # sendOnly exists purely to keep RECEIVE_SMS out of the shipped manifest —
+      # assert that rather than trusting the merge.
+      - name: Verify sendOnly omits RECEIVE_SMS
+        run: |
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          APK=build/app/outputs/apk/sendOnly/debug/app-sendOnly-debug.apk
+          if "$AAPT" dump permissions "$APK" | grep -q 'android.permission.RECEIVE_SMS'; then
+            echo "::error::sendOnly APK declares RECEIVE_SMS; it will trip Play Protect."
+            exit 1
+          fi
+          echo "OK: sendOnly declares no RECEIVE_SMS."

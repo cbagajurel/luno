@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Inbound capture. Declaring this trips Play Protect's enhanced fraud protection on
+         internet-sideloaded installs, so it lives in the `full` flavor only — `sendOnly`
+         builds omit it and install clean. See docs/play-protect.md. -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
+    <application>
+        <!-- Wakes the app to capture inbound SMS even when killed. BROADCAST_SMS-guarded
+             so only the system can deliver it. -->
+        <receiver
+            android:name=".transport.sms.SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

@@ -9,6 +9,7 @@ interface AgentHost {
     fun requestPhonePermission()
     fun hasSmsPermission(): Boolean
     fun requestSmsPermission()
+    fun isReceiveSmsSupported(): Boolean
     fun hasReceiveSmsPermission(): Boolean
     fun requestReceiveSmsPermission()
 }

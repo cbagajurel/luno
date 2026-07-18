@@ -77,6 +77,8 @@ class LunoHostApiImpl(
         }
     }
 
+    override fun isReceiveSmsSupported(): Boolean = host.isReceiveSmsSupported()
+
     override fun hasReceiveSmsPermission(): Boolean = host.hasReceiveSmsPermission()
 
     override fun requestReceiveSmsPermission() = host.requestReceiveSmsPermission()

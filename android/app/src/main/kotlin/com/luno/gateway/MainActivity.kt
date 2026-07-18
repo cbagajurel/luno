@@ -135,9 +135,14 @@ class MainActivity : FlutterActivity(), AgentHost {
         }
     }
 
-    override fun hasReceiveSmsPermission(): Boolean = isGranted(Manifest.permission.RECEIVE_SMS)
+    override fun isReceiveSmsSupported(): Boolean = BuildConfig.RECEIVE_SMS_ENABLED
+
+    override fun hasReceiveSmsPermission(): Boolean =
+        BuildConfig.RECEIVE_SMS_ENABLED && isGranted(Manifest.permission.RECEIVE_SMS)
 
     override fun requestReceiveSmsPermission() {
+        // Undeclared in sendOnly builds, so the system would deny it outright.
+        if (!BuildConfig.RECEIVE_SMS_ENABLED) return
         if (!hasReceiveSmsPermission()) {
             ActivityCompat.requestPermissions(
                 this,

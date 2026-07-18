@@ -36,6 +36,24 @@ android {
         versionName = flutter.versionName
     }
 
+    // Play Protect's enhanced fraud protection blocks any internet-sideloaded install
+    // (browser, messaging app, file manager) that declares RECEIVE_SMS. The permission is
+    // only needed for inbound capture, so `sendOnly` drops it — and the SmsReceiver
+    // registration in src/full/AndroidManifest.xml — to install clean from any source.
+    // `full` is the complete gateway and must be installed via adb, managed Google Play,
+    // or the Play Store. See docs/play-protect.md.
+    flavorDimensions += "sms"
+    productFlavors {
+        create("full") {
+            dimension = "sms"
+            buildConfigField("boolean", "RECEIVE_SMS_ENABLED", "true")
+        }
+        create("sendOnly") {
+            dimension = "sms"
+            buildConfigField("boolean", "RECEIVE_SMS_ENABLED", "false")
+        }
+    }
+
     // Versioned schema exported from day one so future migrations have a baseline.
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")

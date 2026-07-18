@@ -51,9 +51,20 @@ platform channels.
 
 ```
 flutter pub get
-flutter run
+flutter run --flavor full
 ```
 
 Requires a physical Android device or emulator with telephony/SIM support
 for SMS features (the emulator can send SMS to another emulator instance for
 local testing, but cannot use a real SIM).
+
+### Build flavors
+
+A `--flavor` is required. `full` is the complete node (send + receive).
+`sendOnly` drops the `RECEIVE_SMS` permission so the APK installs without
+Google Play Protect's "this app can request access to sensitive data" warning,
+at the cost of inbound capture.
+
+Installing the `full` flavor via `adb install`, managed Google Play, or the Play
+Store avoids that warning too — it only applies to installs from a browser,
+messaging app, or file manager. See [`docs/play-protect.md`](docs/play-protect.md).

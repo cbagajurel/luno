@@ -86,6 +86,11 @@ class FakeLunoBridge implements LunoBridge {
   @override
   Stream<int> get outboxEvents => Stream.value(0);
 
+  bool receiveSmsSupported = true;
+
+  @override
+  Future<bool> isReceiveSmsSupported() async => receiveSmsSupported;
+
   @override
   Future<bool> hasReceiveSmsPermission() async => receiveSmsPermission;
 

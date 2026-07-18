@@ -742,6 +742,11 @@ interface LunoHostApi {
   fun requestSmsPermission()
   fun sendSms(recipient: String, body: String, subscriptionId: Long?): String
   fun getRecentOutbox(): List<OutboxEntry>
+  /**
+   * False in `sendOnly` builds, which omit RECEIVE_SMS to install clean past
+   * Play Protect. Inbound capture is unavailable and its permission unrequestable.
+   */
+  fun isReceiveSmsSupported(): Boolean
   fun hasReceiveSmsPermission(): Boolean
   fun requestReceiveSmsPermission()
   fun getRecentInbox(): List<InboundEntry>
@@ -941,6 +946,21 @@ interface LunoHostApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.getRecentOutbox())
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.isReceiveSmsSupported$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.isReceiveSmsSupported())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }

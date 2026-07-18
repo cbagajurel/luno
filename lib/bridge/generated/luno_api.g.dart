@@ -930,6 +930,27 @@ class LunoHostApi {
     return (pigeonVar_replyValue! as List<Object?>).cast<OutboxEntry>();
   }
 
+  /// False in `sendOnly` builds, which omit RECEIVE_SMS to install clean past
+  /// Play Protect. Inbound capture is unavailable and its permission unrequestable.
+  Future<bool> isReceiveSmsSupported() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.isReceiveSmsSupported$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
   Future<bool> hasReceiveSmsPermission() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasReceiveSmsPermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

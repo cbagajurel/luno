@@ -14,6 +14,16 @@ void main() {
     expect(find.text('Grant'), findsWidgets);
   });
 
+  testWidgets('sendOnly builds hide the un-grantable receive permission', (tester) async {
+    final bridge = FakeLunoBridge(receiveSmsPermission: false)
+      ..receiveSmsSupported = false;
+    await tester.pumpWidget(wrapScreen(bridge, const SettingsScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send SMS'), findsOneWidget);
+    expect(find.text('Receive SMS'), findsNothing);
+  });
+
   testWidgets('unpair asks for confirmation then calls the bridge', (tester) async {
     final bridge = FakeLunoBridge();
     await tester.pumpWidget(wrapScreen(bridge, const SettingsScreen()));

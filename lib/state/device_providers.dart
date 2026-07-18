@@ -25,20 +25,26 @@ enum AppPermission {
 }
 
 class Permissions {
-  const Permissions(this.granted);
+  const Permissions(this.granted, {this.supported = const {...AppPermission.values}});
 
   final Set<AppPermission> granted;
 
+  /// What this build can actually ask for. `sendOnly` builds omit RECEIVE_SMS from
+  /// the manifest, so [AppPermission.receiveSms] is absent and must not be surfaced
+  /// as missing — it is never grantable.
+  final Set<AppPermission> supported;
+
   bool has(AppPermission p) => granted.contains(p);
+  bool supports(AppPermission p) => supported.contains(p);
 
   bool get phone => has(AppPermission.phone);
   bool get sms => has(AppPermission.sms);
   bool get receiveSms => has(AppPermission.receiveSms);
 
-  bool get allGranted => granted.length == AppPermission.values.length;
+  bool get allGranted => supported.every(has);
 
   List<AppPermission> get missing =>
-      [for (final p in AppPermission.values) if (!has(p)) p];
+      [for (final p in AppPermission.values) if (supports(p) && !has(p)) p];
 }
 
 /// Runtime-permission snapshot. Native is the source of truth; a request fires the
@@ -54,12 +60,20 @@ class PermissionsController extends AsyncNotifier<Permissions> {
       bridge.hasPhonePermission(),
       bridge.hasSmsPermission(),
       bridge.hasReceiveSmsPermission(),
+      bridge.isReceiveSmsSupported(),
     ]);
-    return Permissions({
-      if (results[0]) AppPermission.phone,
-      if (results[1]) AppPermission.sms,
-      if (results[2]) AppPermission.receiveSms,
-    });
+    return Permissions(
+      {
+        if (results[0]) AppPermission.phone,
+        if (results[1]) AppPermission.sms,
+        if (results[2]) AppPermission.receiveSms,
+      },
+      supported: {
+        AppPermission.phone,
+        AppPermission.sms,
+        if (results[3]) AppPermission.receiveSms,
+      },
+    );
   }
 
   Future<void> refresh() async {

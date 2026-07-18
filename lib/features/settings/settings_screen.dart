@@ -67,6 +67,7 @@ class SettingsScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   for (final perm in AppPermission.values)
+                    if (p.supports(perm))
                     PermissionTile(
                       label: perm.label,
                       rationale: perm.rationale,

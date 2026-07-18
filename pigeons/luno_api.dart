@@ -168,6 +168,10 @@ abstract class LunoHostApi {
 
   List<OutboxEntry> getRecentOutbox();
 
+  /// False in `sendOnly` builds, which omit RECEIVE_SMS to install clean past
+  /// Play Protect. Inbound capture is unavailable and its permission unrequestable.
+  bool isReceiveSmsSupported();
+
   bool hasReceiveSmsPermission();
 
   void requestReceiveSmsPermission();

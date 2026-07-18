@@ -101,12 +101,17 @@ Done so far:
 
 ```
 flutter pub get              # install dependencies
-flutter run                  # run on a connected device/emulator
-flutter build apk            # build a release APK
+flutter run --flavor full    # run on a connected device/emulator
+flutter build apk --flavor full      # complete gateway (send + receive)
+flutter build apk --flavor sendOnly  # outbound only; installs past Play Protect
 flutter analyze              # static analysis (uses analysis_options.yaml / flutter_lints)
 flutter test                 # run tests
 flutter test test/some_test.dart   # run a single test file
 ```
+
+**A `--flavor` is required** for any run/build. `full` declares `RECEIVE_SMS` and is
+the complete node; `sendOnly` omits it so the APK installs without Play Protect's
+enhanced-fraud-protection warning. See [`docs/play-protect.md`](docs/play-protect.md).
 
 SMS send/receive requires a real device or two emulator instances (emulator
 SMS can target another emulator's port but not a real SIM/carrier).

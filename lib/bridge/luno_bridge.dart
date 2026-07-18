@@ -145,6 +145,8 @@ class LunoBridge {
   Stream<int> get outboxEvents =>
       _outboxChannel.receiveBroadcastStream().map((event) => event as int);
 
+  Future<bool> isReceiveSmsSupported() => _hostApi.isReceiveSmsSupported();
+
   Future<bool> hasReceiveSmsPermission() => _hostApi.hasReceiveSmsPermission();
 
   Future<void> requestReceiveSmsPermission() =>
