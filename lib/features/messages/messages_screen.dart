@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../bridge/generated/luno_api.g.dart';
 import '../../state/device_providers.dart';
 import '../../state/messages_providers.dart';
+import '../../ui/ui.dart';
 import '../shared/status_ui.dart';
 import 'compose_sheet.dart';
 
@@ -14,21 +15,28 @@ class MessagesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
       length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Messages'),
-          bottom: const TabBar(tabs: [Tab(text: 'Sent'), Tab(text: 'Received')]),
-        ),
+      child: LunoScaffold(
+        title: 'Messages',
+        actions: [
+          IconButton(
+            tooltip: 'Compose',
+            icon: const Icon(Icons.edit_rounded),
+            onPressed: () => showComposeSheet(context),
+          ),
+        ],
+        bottom: const TabBar(tabs: [Tab(text: 'Sent'), Tab(text: 'Received')]),
         body: const TabBarView(children: [_SentTab(), _ReceivedTab()]),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => showComposeSheet(context),
-          icon: const Icon(Icons.edit),
-          label: const Text('Compose'),
-        ),
       ),
     );
   }
 }
+
+EdgeInsets _listPadding(BuildContext context) => EdgeInsets.fromLTRB(
+      LunoSpacing.md,
+      LunoSpacing.md,
+      LunoSpacing.md,
+      LunoSpacing.md + kBottomNavClearance + MediaQuery.paddingOf(context).bottom,
+    );
 
 class _SentTab extends ConsumerWidget {
   const _SentTab();
@@ -36,14 +44,19 @@ class _SentTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final outbox = ref.watch(outboxProvider);
-    return outbox.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorView(message: '$e'),
+    return AsyncView<List<OutboxEntry>>(
+      value: outbox,
       data: (rows) => rows.isEmpty
-          ? const _EmptyView(icon: Icons.outbox, text: 'No sent messages yet')
-          : ListView.builder(
+          ? const EmptyState(
+              icon: Icons.outbox_rounded,
+              title: 'No sent messages yet',
+              message: 'Messages you send from the backend appear here.',
+            )
+          : ListView.separated(
+              padding: _listPadding(context),
               itemCount: rows.length,
-              itemBuilder: (_, i) => _OutboxTile(entry: rows[i]),
+              separatorBuilder: (_, _) => const _RowDivider(),
+              itemBuilder: (_, i) => _OutboxRow(key: ValueKey(rows[i].id), entry: rows[i]),
             ),
     );
   }
@@ -55,22 +68,98 @@ class _ReceivedTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inbox = ref.watch(inboxProvider);
-    final sims = ref.watch(deviceStateProvider).value?.sims ?? const <SimInfo>[];
-    return inbox.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorView(message: '$e'),
+    final sims = ref.watch(deviceStateProvider.select((d) => d.value?.sims)) ?? const <SimInfo>[];
+    return AsyncView<List<InboundEntry>>(
+      value: inbox,
       data: (rows) => rows.isEmpty
-          ? const _EmptyView(icon: Icons.inbox, text: 'No messages received yet')
-          : ListView.builder(
+          ? const EmptyState(
+              icon: Icons.inbox_rounded,
+              title: 'No messages received yet',
+              message: 'Incoming SMS captured by this node appear here.',
+            )
+          : ListView.separated(
+              padding: _listPadding(context),
               itemCount: rows.length,
-              itemBuilder: (_, i) => _InboxTile(entry: rows[i], sims: sims),
+              separatorBuilder: (_, _) => const _RowDivider(),
+              itemBuilder: (_, i) => _InboxRow(key: ValueKey(rows[i].id), entry: rows[i], sims: sims),
             ),
     );
   }
 }
 
-class _OutboxTile extends StatelessWidget {
-  const _OutboxTile({required this.entry});
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+
+  @override
+  Widget build(BuildContext context) => Divider(
+        height: 1,
+        indent: 52,
+        color: context.scheme.outlineVariant.withValues(alpha: 0.6),
+      );
+}
+
+class _MessageRow extends StatelessWidget {
+  const _MessageRow({
+    required this.icon,
+    required this.tone,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final StatusTone tone;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.semantic.tone(tone);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: LunoSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: colors.container,
+              borderRadius: BorderRadius.circular(LunoRadius.sm),
+            ),
+            child: Icon(icon, size: 18, color: colors.color),
+          ),
+          const SizedBox(width: LunoSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall?.copyWith(color: context.scheme.onSurfaceVariant),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: LunoSpacing.sm),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OutboxRow extends StatelessWidget {
+  const _OutboxRow({super.key, required this.entry});
 
   final OutboxEntry entry;
 
@@ -80,18 +169,18 @@ class _OutboxTile extends StatelessWidget {
     final parts = entry.partCount > 1
         ? '${entry.partCount} parts · ${entry.deliveredCount}/${entry.partCount} delivered'
         : null;
-    final subtitle = entry.lastError ?? parts;
-    return ListTile(
-      leading: Icon(ui.icon, color: ui.color),
-      title: Text(entry.recipient),
-      subtitle: subtitle != null ? Text(subtitle) : null,
-      trailing: Text(entry.status, style: Theme.of(context).textTheme.labelSmall),
+    return _MessageRow(
+      icon: ui.icon,
+      tone: ui.tone,
+      title: entry.recipient,
+      subtitle: entry.lastError ?? parts,
+      trailing: StatusPill(label: entry.status, tone: ui.tone, dense: true),
     );
   }
 }
 
-class _InboxTile extends StatelessWidget {
-  const _InboxTile({required this.entry, required this.sims});
+class _InboxRow extends StatelessWidget {
+  const _InboxRow({super.key, required this.entry, required this.sims});
 
   final InboundEntry entry;
   final List<SimInfo> sims;
@@ -101,49 +190,14 @@ class _InboxTile extends StatelessWidget {
     final sim = simLabelForSub(entry.subscriptionId, sims);
     final parts = entry.parts > 1 ? '${entry.parts} parts' : null;
     final meta = [?sim, ?parts].join(' · ');
-    return ListTile(
-      leading: const Icon(Icons.sms_outlined),
-      title: Text(entry.sender),
-      subtitle: Text(entry.body),
+    return _MessageRow(
+      icon: Icons.sms_rounded,
+      tone: StatusTone.brand,
+      title: entry.sender,
+      subtitle: entry.body,
       trailing: meta.isEmpty
           ? null
-          : Text(meta, style: Theme.of(context).textTheme.labelSmall),
-      isThreeLine: entry.body.length > 40,
-    );
-  }
-}
-
-class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        const SizedBox(height: 96),
-        Icon(icon, size: 48, color: Theme.of(context).disabledColor),
-        const SizedBox(height: 12),
-        Center(child: Text(text, style: Theme.of(context).textTheme.bodyLarge)),
-      ],
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(message, textAlign: TextAlign.center),
-      ),
+          : Text(meta, style: context.text.labelSmall?.copyWith(color: context.semantic.textFaint)),
     );
   }
 }

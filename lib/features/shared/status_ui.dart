@@ -2,8 +2,12 @@ import 'package:flutter/material.dart' hide ConnectionState;
 
 import '../../bridge/generated/luno_api.g.dart';
 import '../../bridge/luno_bridge.dart';
+import '../../ui/tokens/colors.dart';
 
-typedef StatusUi = ({String label, Color color, IconData icon});
+/// A status mapped to a display label, a semantic [StatusTone], and an icon.
+/// The tone resolves to real colours through the theme at render time, so no
+/// screen ever reaches for a raw [Colors] constant.
+typedef StatusUi = ({String label, StatusTone tone, IconData icon});
 
 /// A human label for a SIM: carrier first, falling back to the OS display name,
 /// then the slot. Used anywhere we'd otherwise leak a raw subscription id.
@@ -26,37 +30,52 @@ String? simLabelForSub(int? subscriptionId, List<SimInfo> sims) {
 }
 
 StatusUi connectionUi(ConnectionState state) => switch (state) {
-      ConnectionState.ready => (label: 'Ready', color: Colors.green, icon: Icons.cloud_done),
+      ConnectionState.ready =>
+        (label: 'Ready', tone: StatusTone.positive, icon: Icons.cloud_done_rounded),
       ConnectionState.authenticated =>
-        (label: 'Authenticated', color: Colors.lightGreen, icon: Icons.verified_user),
-      ConnectionState.connected => (label: 'Connected', color: Colors.blue, icon: Icons.link),
+        (label: 'Authenticated', tone: StatusTone.positive, icon: Icons.verified_user_rounded),
+      ConnectionState.connected =>
+        (label: 'Connected', tone: StatusTone.info, icon: Icons.link_rounded),
       ConnectionState.connecting =>
-        (label: 'Connecting…', color: Colors.orange, icon: Icons.sync),
+        (label: 'Connecting…', tone: StatusTone.caution, icon: Icons.sync_rounded),
       ConnectionState.reconnecting =>
-        (label: 'Reconnecting…', color: Colors.orange, icon: Icons.sync_problem),
+        (label: 'Reconnecting…', tone: StatusTone.caution, icon: Icons.sync_problem_rounded),
       ConnectionState.backingOff =>
-        (label: 'Backing off…', color: Colors.orange, icon: Icons.timelapse),
+        (label: 'Backing off…', tone: StatusTone.caution, icon: Icons.timelapse_rounded),
       ConnectionState.disconnected =>
-        (label: 'Disconnected', color: Colors.grey, icon: Icons.link_off),
+        (label: 'Disconnected', tone: StatusTone.neutral, icon: Icons.link_off_rounded),
       ConnectionState.offlineNoNetwork =>
-        (label: 'Offline · no network', color: Colors.red, icon: Icons.cloud_off),
-      ConnectionState.unknown => (label: 'Unknown', color: Colors.grey, icon: Icons.help),
+        (label: 'Offline · no network', tone: StatusTone.danger, icon: Icons.cloud_off_rounded),
+      ConnectionState.unknown =>
+        (label: 'Unknown', tone: StatusTone.neutral, icon: Icons.help_rounded),
     };
 
 StatusUi agentUi(AgentRunState state) => switch (state) {
-      AgentRunState.running => (label: 'Agent running', color: Colors.green, icon: Icons.check_circle),
-      AgentRunState.stopped => (label: 'Agent stopped', color: Colors.grey, icon: Icons.stop_circle),
-      AgentRunState.unknown => (label: 'Agent state unknown', color: Colors.orange, icon: Icons.help),
+      AgentRunState.running =>
+        (label: 'Agent running', tone: StatusTone.positive, icon: Icons.check_circle_rounded),
+      AgentRunState.stopped =>
+        (label: 'Agent stopped', tone: StatusTone.neutral, icon: Icons.stop_circle_rounded),
+      AgentRunState.unknown =>
+        (label: 'Agent state unknown', tone: StatusTone.caution, icon: Icons.help_rounded),
     };
 
 StatusUi outboxStatusUi(String status) => switch (status) {
-      'SENT' || 'DELIVERED' => (label: status, color: Colors.green, icon: Icons.check_circle),
-      'SENDING' || 'QUEUED' => (label: status, color: Colors.orange, icon: Icons.schedule),
-      'FAILED_TERMINAL' ||
-      'FAILED_RETRYABLE' ||
-      'UNDELIVERED' =>
-        (label: status, color: Colors.red, icon: Icons.error),
-      _ => (label: status, color: Colors.grey, icon: Icons.help),
+      'SENT' || 'DELIVERED' =>
+        (label: status, tone: StatusTone.positive, icon: Icons.check_circle_rounded),
+      'SENDING' || 'QUEUED' =>
+        (label: status, tone: StatusTone.caution, icon: Icons.schedule_rounded),
+      'FAILED_TERMINAL' || 'FAILED_RETRYABLE' || 'UNDELIVERED' =>
+        (label: status, tone: StatusTone.danger, icon: Icons.error_rounded),
+      _ => (label: status, tone: StatusTone.neutral, icon: Icons.help_rounded),
+    };
+
+/// The semantic tone for a log level — the single source that folds the logs
+/// screen's old inline colour switch into the shared tone system.
+StatusTone logLevelTone(String level) => switch (level) {
+      'ERROR' => StatusTone.danger,
+      'WARN' => StatusTone.caution,
+      'INFO' => StatusTone.info,
+      _ => StatusTone.neutral,
     };
 
 String formatClock(int epochMs) {
