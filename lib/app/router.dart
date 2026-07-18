@@ -10,6 +10,7 @@ import '../features/pairing/pairing_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../state/pairing_providers.dart';
+import '../ui/motion/page_transitions.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   // Bridges the async pairing state into a Listenable the router can refresh on.
@@ -34,9 +35,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/loading', builder: (_, _) => const SplashScreen()),
-      GoRoute(path: '/pairing', builder: (_, _) => const PairingScreen()),
+      GoRoute(
+        path: '/loading',
+        pageBuilder: (_, state) =>
+            fadeThroughPage(key: state.pageKey, child: const SplashScreen()),
+      ),
+      GoRoute(
+        path: '/pairing',
+        pageBuilder: (_, state) =>
+            fadeThroughPage(key: state.pageKey, child: const PairingScreen()),
+      ),
       StatefulShellRoute.indexedStack(
+        pageBuilder: (context, state, shell) =>
+            fadeThroughPage(key: state.pageKey, child: HomeShell(shell: shell)),
         builder: (context, state, shell) => HomeShell(shell: shell),
         branches: [
           StatefulShellBranch(

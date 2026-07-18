@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/device_providers.dart';
+import '../state/theme_providers.dart';
+import '../ui/theme/luno_theme.dart';
 import 'router.dart';
-import 'theme.dart';
 
 class LunoApp extends ConsumerStatefulWidget {
   const LunoApp({super.key});
@@ -38,6 +39,7 @@ class _LunoAppState extends ConsumerState<LunoApp> {
       debugShowCheckedModeBanner: false,
       theme: lunoTheme(Brightness.light),
       darkTheme: lunoTheme(Brightness.dark),
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: ref.watch(routerProvider),
     );
   }

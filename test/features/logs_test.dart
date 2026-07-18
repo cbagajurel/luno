@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sms_gateway/bridge/generated/luno_api.g.dart';
 import 'package:sms_gateway/features/logs/logs_screen.dart';
@@ -20,7 +21,7 @@ void main() {
     expect(find.text('connected'), findsOneWidget);
     expect(find.text('send failed'), findsOneWidget);
 
-    await tester.tap(find.text('ERROR').first);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'ERROR'));
     await tester.pumpAndSettle();
 
     expect(find.text('send failed'), findsOneWidget);

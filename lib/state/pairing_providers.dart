@@ -19,8 +19,14 @@ class PairingController extends AsyncNotifier<bool> {
   }
 
   Future<void> unpair() async {
-    await ref.read(bridgeProvider).unpair();
-    state = const AsyncData(false);
+    try {
+      await ref.read(bridgeProvider).unpair();
+      state = const AsyncData(false);
+    } catch (_) {
+      // Native still owns the credential; re-read the truth rather than leaving
+      // the router gate on a stale value or letting the future go unhandled.
+      state = await AsyncValue.guard(ref.read(bridgeProvider).isPaired);
+    }
   }
 }
 

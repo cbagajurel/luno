@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/generated/luno_api.g.dart';
 import '../../state/logs_providers.dart';
+import '../../ui/ui.dart';
 import '../shared/status_ui.dart';
 
 const _levels = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
@@ -15,48 +16,99 @@ class LogsScreen extends ConsumerStatefulWidget {
 }
 
 class _LogsScreenState extends ConsumerState<LogsScreen> {
+  static const _pageSize = 30;
+
   String _filter = 'ALL';
+  int _visible = _pageSize;
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Reveal another page once the user nears the end, so the built row count
+  /// stays bounded regardless of how many lines the ring buffer holds.
+  void _onScroll() {
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
+      setState(() => _visible += _pageSize);
+    }
+  }
+
+  void _selectFilter(String level) {
+    setState(() {
+      _filter = level;
+      _visible = _pageSize;
+    });
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
 
   @override
   Widget build(BuildContext context) {
     final logs = ref.watch(logsProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Logs'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                for (final level in _levels)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(level),
-                      selected: _filter == level,
-                      onSelected: (_) => setState(() => _filter = level),
-                    ),
+    return LunoScaffold(
+      title: 'Logs',
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(
+            LunoSpacing.md,
+            0,
+            LunoSpacing.md,
+            LunoSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              for (final level in _levels)
+                Padding(
+                  padding: const EdgeInsets.only(right: LunoSpacing.xs),
+                  child: ChoiceChip(
+                    label: Text(level),
+                    selected: _filter == level,
+                    showCheckmark: false,
+                    onSelected: (_) => _selectFilter(level),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
-      body: logs.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+      body: AsyncView<List<LogEntry>>(
+        value: logs,
         data: (all) {
           final rows = _filter == 'ALL'
               ? all
               : all.where((l) => l.level == _filter).toList();
           if (rows.isEmpty) {
-            return const Center(child: Text('No log lines'));
+            return const EmptyState(
+              icon: Icons.receipt_long_rounded,
+              title: 'No log lines',
+              message: 'Agent activity is recorded here as it happens.',
+            );
           }
-          return ListView.builder(
-            itemCount: rows.length,
-            itemBuilder: (_, i) => _LogTile(entry: rows[i]),
+          final windowed = rows.length > _visible ? _visible : rows.length;
+          return ListView.separated(
+            controller: _scroll,
+            padding: const EdgeInsets.fromLTRB(
+              LunoSpacing.md,
+              LunoSpacing.xs,
+              LunoSpacing.md,
+              LunoSpacing.md,
+            ),
+            itemCount: windowed,
+            separatorBuilder: (_, _) => Divider(
+              height: 1,
+              color: context.scheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+            itemBuilder: (_, i) => _LogRow(entry: rows[i]),
           );
         },
       ),
@@ -64,45 +116,37 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   }
 }
 
-class _LogTile extends StatelessWidget {
-  const _LogTile({required this.entry});
+class _LogRow extends StatelessWidget {
+  const _LogRow({required this.entry});
 
   final LogEntry entry;
 
   @override
   Widget build(BuildContext context) {
-    final color = _levelColor(entry.level);
-    return ListTile(
-      dense: true,
-      leading: _LevelBadge(level: entry.level, color: color),
-      title: Text(entry.message, style: Theme.of(context).textTheme.bodyMedium),
-      subtitle: Text('${entry.tag} · ${formatClock(entry.timestampMs)}',
-          style: Theme.of(context).textTheme.labelSmall),
-    );
-  }
-
-  static Color _levelColor(String level) => switch (level) {
-        'ERROR' => Colors.red,
-        'WARN' => Colors.orange,
-        'INFO' => Colors.blue,
-        _ => Colors.grey,
-      };
-}
-
-class _LevelBadge extends StatelessWidget {
-  const _LevelBadge({required this.level, required this.color});
-
-  final String level;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      alignment: Alignment.center,
-      child: Text(
-        level.substring(0, 1),
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
+    final tone = logLevelTone(entry.level);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: LunoSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          StatusPill(label: entry.level, tone: tone, dense: true),
+          const SizedBox(width: LunoSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(entry.message, style: context.text.bodyMedium),
+                const SizedBox(height: 2),
+                Text(
+                  '${entry.tag} · ${formatClock(entry.timestampMs)}',
+                  style: lunoMonoStyle.copyWith(
+                    color: context.semantic.textFaint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

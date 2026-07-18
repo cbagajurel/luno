@@ -5,6 +5,8 @@ import '../../bridge/luno_bridge.dart';
 import '../../state/connection_providers.dart';
 import '../../state/device_providers.dart';
 import '../../state/pairing_providers.dart';
+import '../../state/theme_providers.dart';
+import '../../ui/ui.dart';
 import '../pairing/pairing_form.dart';
 import '../shared/status_ui.dart';
 
@@ -12,21 +14,15 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   Future<void> _confirmUnpair(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
+    final ok = await showLunoConfirm(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unpair node?'),
-        content: const Text(
-          'This clears the backend credential and disconnects. '
+      title: 'Unpair node?',
+      message: 'This clears the backend credential and disconnects. '
           'Queued messages and history are unaffected.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Unpair')),
-        ],
-      ),
+      confirmLabel: 'Unpair',
+      destructive: true,
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(pairingProvider.notifier).unpair();
     }
   }
@@ -37,57 +33,82 @@ class SettingsScreen extends ConsumerWidget {
     final connection = ref.watch(connectionStateProvider).value ?? ConnectionState.unknown;
     final connUi = connectionUi(connection);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+    return LunoScaffold(
+      title: 'Settings',
       body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          LunoSpacing.md,
+          0,
+          LunoSpacing.md,
+          LunoSpacing.md,
+        ),
         children: [
-          const _SectionHeader('Permissions'),
-          permissions.when(
-            loading: () => const ListTile(title: Text('Checking permissions…')),
-            error: (e, _) => ListTile(title: Text('$e')),
-            data: (p) => Column(
-              children: [
-                for (final perm in AppPermission.values)
-                  _PermissionTile(
-                    label: perm.label,
-                    granted: p.has(perm),
-                    onGrant: () => ref.read(permissionsProvider.notifier).request(perm),
-                  ),
-                ListTile(
-                  trailing: TextButton.icon(
-                    onPressed: () => ref.read(permissionsProvider.notifier).refresh(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
-                  ),
-                ),
-              ],
+          const SectionHeader('Appearance'),
+          const _ThemeToggle(),
+          SectionHeader(
+            'Permissions',
+            trailing: LunoButton(
+              label: 'Refresh',
+              variant: LunoButtonVariant.text,
+              icon: Icons.refresh_rounded,
+              onPressed: () => ref.read(permissionsProvider.notifier).refresh(),
             ),
           ),
-          const Divider(),
-          const _SectionHeader('Backend'),
-          ListTile(
-            leading: Icon(connUi.icon, color: connUi.color),
-            title: const Text('Connection'),
-            subtitle: Text(connUi.label),
+          permissions.when(
+            skipLoadingOnReload: true,
+            loading: () => const LunoCard(child: LoadingState()),
+            error: (e, _) => StatusTile(
+              icon: Icons.error_outline_rounded,
+              tone: StatusTone.danger,
+              title: 'Could not read permissions',
+              subtitle: '$e',
+            ),
+            data: (p) => LunoCard(
+              child: Column(
+                children: [
+                  for (final perm in AppPermission.values)
+                    PermissionTile(
+                      label: perm.label,
+                      rationale: perm.rationale,
+                      granted: p.has(perm),
+                      showGrantedState: true,
+                      onGrant: () => ref.read(permissionsProvider.notifier).request(perm),
+                    ),
+                ],
+              ),
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: const Text('Reconnect / re-pair'),
-            subtitle: const Text('Re-enrol with a backend URL and pairing code'),
+          const SectionHeader('Backend'),
+          StatusTile(
+            icon: connUi.icon,
+            tone: connUi.tone,
+            title: 'Connection',
+            subtitle: connUi.label,
+          ),
+          const SizedBox(height: LunoSpacing.xs),
+          StatusTile(
+            icon: Icons.sync_rounded,
+            tone: StatusTone.brand,
+            title: 'Reconnect / re-pair',
+            subtitle: 'Re-enrol with a backend URL and pairing code',
+            trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => showReconnectSheet(context),
           ),
-          ListTile(
-            leading: const Icon(Icons.link_off),
-            title: const Text('Unpair node'),
-            subtitle: const Text('Clear credential and disconnect'),
+          const SizedBox(height: LunoSpacing.xs),
+          StatusTile(
+            icon: Icons.link_off_rounded,
+            tone: StatusTone.danger,
+            title: 'Unpair node',
+            subtitle: 'Clear credential and disconnect',
+            trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _confirmUnpair(context, ref),
           ),
-          const Divider(),
-          const _SectionHeader('About'),
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('Luno'),
-            subtitle: Text('Self-hosted SMS gateway node'),
+          const SectionHeader('About'),
+          const StatusTile(
+            icon: Icons.hub_rounded,
+            tone: StatusTone.brand,
+            title: 'Luno',
+            subtitle: 'Self-hosted SMS gateway node',
           ),
         ],
       ),
@@ -95,49 +116,55 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.text);
-
-  final String text;
+class _ThemeToggle extends ConsumerWidget {
+  const _ThemeToggle();
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        text.toUpperCase(),
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    return LunoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Theme', style: context.text.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(
+                      'System follows your device setting.',
+                      style: context.text.bodySmall
+                          ?.copyWith(color: context.scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: LunoSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                textStyle: context.text.labelLarge,
+                shape: const RoundedRectangleBorder(borderRadius: LunoRadius.field),
+              ),
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, label: Text('System')),
+                ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
+              ],
+              selected: {mode},
+              onSelectionChanged: (selection) =>
+                  ref.read(themeModeProvider.notifier).set(selection.first),
             ),
+          ),
+        ],
       ),
-    );
-  }
-}
-
-class _PermissionTile extends StatelessWidget {
-  const _PermissionTile({
-    required this.label,
-    required this.granted,
-    required this.onGrant,
-  });
-
-  final String label;
-  final bool granted;
-  final Future<void> Function() onGrant;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(
-        granted ? Icons.check_circle : Icons.cancel,
-        color: granted ? Colors.green : Colors.grey,
-      ),
-      title: Text(label),
-      subtitle: Text(granted ? 'Granted' : 'Not granted'),
-      trailing: granted
-          ? null
-          : TextButton(onPressed: onGrant, child: const Text('Grant')),
     );
   }
 }

@@ -1,28 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/generated/luno_api.g.dart';
 import '../../state/bridge_providers.dart';
 import '../../state/device_providers.dart';
+import '../../ui/ui.dart';
 import '../shared/status_ui.dart';
 
 Future<void> showComposeSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
+  return showLunoSheet<void>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (_) => const _ComposeSheet(),
+    title: 'Compose SMS',
+    subtitle: 'Send a message through this node.',
+    builder: (_) => const _ComposeForm(),
   );
 }
 
-class _ComposeSheet extends ConsumerStatefulWidget {
-  const _ComposeSheet();
+class _ComposeForm extends ConsumerStatefulWidget {
+  const _ComposeForm();
 
   @override
-  ConsumerState<_ComposeSheet> createState() => _ComposeSheetState();
+  ConsumerState<_ComposeForm> createState() => _ComposeFormState();
 }
 
-class _ComposeSheetState extends ConsumerState<_ComposeSheet> {
+class _ComposeFormState extends ConsumerState<_ComposeForm> {
   final _recipient = TextEditingController();
   final _body = TextEditingController();
   int? _subId;
@@ -63,69 +65,53 @@ class _ComposeSheetState extends ConsumerState<_ComposeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final sims = ref.watch(deviceStateProvider).value?.sims ?? const <SimInfo>[];
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final sims = ref.watch(deviceStateProvider.select((d) => d.value?.sims)) ?? const <SimInfo>[];
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Compose SMS', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _recipient,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Recipient number',
-              hintText: '+15551112222',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _body,
-            minLines: 2,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Message',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          if (sims.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int?>(
-              initialValue: _subId,
-              decoration: const InputDecoration(
-                labelText: 'SIM',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (v) => setState(() => _subId = v),
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('Default SIM')),
-                for (final sim in sims)
-                  DropdownMenuItem<int?>(
-                    value: sim.subscriptionId,
-                    child: Text('${simLabel(sim)} · Slot ${sim.slotIndex}'),
-                  ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _sending ? null : _send,
-            icon: _sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send),
-            label: Text(_sending ? 'Sending…' : 'Send'),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LunoTextField(
+          label: 'Recipient number',
+          hint: '+15551112222',
+          controller: _recipient,
+          prefixIcon: Icons.person_outline_rounded,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ]'))],
+        ),
+        const SizedBox(height: LunoSpacing.sm),
+        LunoTextField(
+          label: 'Message',
+          controller: _body,
+          minLines: 2,
+          maxLines: 5,
+        ),
+        if (sims.isNotEmpty) ...[
+          const SizedBox(height: LunoSpacing.sm),
+          DropdownButtonFormField<int?>(
+            initialValue: _subId,
+            decoration: const InputDecoration(labelText: 'SIM'),
+            onChanged: (v) => setState(() => _subId = v),
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('Default SIM')),
+              for (final sim in sims)
+                DropdownMenuItem<int?>(
+                  value: sim.subscriptionId,
+                  child: Text('${simLabel(sim)} · Slot ${sim.slotIndex}'),
+                ),
+            ],
           ),
         ],
-      ),
+        const SizedBox(height: LunoSpacing.lg),
+        LunoButton(
+          label: 'Send',
+          busyLabel: 'Sending…',
+          icon: Icons.send_rounded,
+          busy: _sending,
+          expand: true,
+          onPressed: _send,
+        ),
+      ],
     );
   }
 }

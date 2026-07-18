@@ -19,6 +19,7 @@ void main() {
     await tester.pumpWidget(wrapScreen(bridge, const SettingsScreen()));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(find.text('Unpair node'), 300);
     await tester.tap(find.text('Unpair node'));
     await tester.pumpAndSettle();
     expect(find.text('Unpair node?'), findsOneWidget);
