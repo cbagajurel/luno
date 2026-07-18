@@ -21,7 +21,7 @@ defaults:
 
 env:
   FLUTTER_VERSION: 3.41.4
-  JAVA_VERSION: '17'
+  JAVA_VERSION: "17"
   # Ratchet upward; never downward. Current: 51.18%.
   MIN_LINE_COVERAGE: 50
 
@@ -245,8 +245,8 @@ jobs:
     timeout-minutes: 15
     needs: android
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
+      # No checkout: every assertion reads the built artifacts and the runner's
+      # own aapt2, never the repo.
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: apks
@@ -267,8 +267,9 @@ jobs:
 
           fail=0
 
-          FULL=$(find artifacts -name 'app-full-release.apk' -type f | head -1)
-          SEND=$(find artifacts -name 'app-sendOnly-release.apk' -type f | head -1)
+          # -print -quit rather than `| head -1`: no pipe, so no SIGPIPE risk.
+          FULL=$(find artifacts -name 'app-full-release.apk' -type f -print -quit)
+          SEND=$(find artifacts -name 'app-sendOnly-release.apk' -type f -print -quit)
           for pair in "full:$FULL" "sendOnly:$SEND"; do
             if [ -z "${pair#*:}" ]; then
               echo "::error::The ${pair%%:*} release APK was not produced."
