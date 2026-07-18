@@ -1,43 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../ui/ui.dart';
+
 /// Bottom-nav shell over the four paired-mode branches; [StatefulNavigationShell]
-/// preserves each tab's state across switches.
+/// preserves each tab's state across switches. The floating glass nav sits over
+/// the content (body extends behind it), so screens pad their scroll views to
+/// clear the bar.
 class HomeShell extends StatelessWidget {
   const HomeShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
+  static const _items = [
+    GlassNavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard_rounded, label: 'Dashboard'),
+    GlassNavItem(icon: Icons.sms_outlined, selectedIcon: Icons.sms_rounded, label: 'Messages'),
+    GlassNavItem(icon: Icons.article_outlined, selectedIcon: Icons.article_rounded, label: 'Logs'),
+    GlassNavItem(icon: Icons.settings_outlined, selectedIcon: Icons.settings_rounded, label: 'Settings'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: shell,
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: GlassNavigationBar(
+        items: _items,
         selectedIndex: shell.currentIndex,
-        onDestinationSelected: (index) =>
+        onSelect: (index) =>
             shell.goBranch(index, initialLocation: index == shell.currentIndex),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.sms_outlined),
-            selectedIcon: Icon(Icons.sms),
-            label: 'Messages',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.article_outlined),
-            selectedIcon: Icon(Icons.article),
-            label: 'Logs',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
       ),
     );
   }

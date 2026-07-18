@@ -70,11 +70,11 @@ class ToneColors {
   final Color onContainer;
 
   static ToneColors lerp(ToneColors a, ToneColors b, double t) => ToneColors(
-        color: Color.lerp(a.color, b.color, t)!,
-        onColor: Color.lerp(a.onColor, b.onColor, t)!,
-        container: Color.lerp(a.container, b.container, t)!,
-        onContainer: Color.lerp(a.onContainer, b.onContainer, t)!,
-      );
+    color: Color.lerp(a.color, b.color, t)!,
+    onColor: Color.lerp(a.onColor, b.onColor, t)!,
+    container: Color.lerp(a.container, b.container, t)!,
+    onContainer: Color.lerp(a.onContainer, b.onContainer, t)!,
+  );
 }
 
 /// Semantic tones a status can map to. Kept small and meaning-first so screens
@@ -112,13 +112,13 @@ class LunoSemantic extends ThemeExtension<LunoSemantic> {
   final Color glassBorder;
 
   ToneColors tone(StatusTone tone) => switch (tone) {
-        StatusTone.positive => positive,
-        StatusTone.caution => caution,
-        StatusTone.danger => danger,
-        StatusTone.info => info,
-        StatusTone.neutral => neutral,
-        StatusTone.brand => brand,
-      };
+    StatusTone.positive => positive,
+    StatusTone.caution => caution,
+    StatusTone.danger => danger,
+    StatusTone.info => info,
+    StatusTone.neutral => neutral,
+    StatusTone.brand => brand,
+  };
 
   static const dark = LunoSemantic(
     positive: ToneColors(

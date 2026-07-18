@@ -5,6 +5,7 @@ library;
 
 export 'components/async_view.dart';
 export 'components/glass_container.dart';
+export 'components/glass_navigation_bar.dart';
 export 'components/luno_bottom_sheet.dart';
 export 'components/luno_button.dart';
 export 'components/luno_card.dart';
