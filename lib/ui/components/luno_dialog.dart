@@ -46,7 +46,9 @@ class _LunoDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final confirmColor = destructive ? context.semantic.danger.color : context.scheme.primary;
+    final confirmColor = destructive
+        ? context.semantic.danger.color
+        : context.scheme.primary;
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: LunoSpacing.xl),
@@ -62,7 +64,9 @@ class _LunoDialog extends StatelessWidget {
             const SizedBox(height: LunoSpacing.xs),
             Text(
               message,
-              style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.text.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: LunoSpacing.xl),
             Row(

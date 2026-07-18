@@ -15,8 +15,14 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: padding ??
-          const EdgeInsets.fromLTRB(LunoSpacing.xxs, LunoSpacing.lg, LunoSpacing.xxs, LunoSpacing.xs),
+      padding:
+          padding ??
+          const EdgeInsets.fromLTRB(
+            LunoSpacing.xxs,
+            LunoSpacing.lg,
+            LunoSpacing.xxs,
+            LunoSpacing.xs,
+          ),
       child: Row(
         children: [
           Expanded(

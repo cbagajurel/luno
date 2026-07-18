@@ -25,7 +25,10 @@ enum AppPermission {
 }
 
 class Permissions {
-  const Permissions(this.granted, {this.supported = const {...AppPermission.values}});
+  const Permissions(
+    this.granted, {
+    this.supported = const {...AppPermission.values},
+  });
 
   final Set<AppPermission> granted;
 
@@ -43,8 +46,10 @@ class Permissions {
 
   bool get allGranted => supported.every(has);
 
-  List<AppPermission> get missing =>
-      [for (final p in AppPermission.values) if (supports(p) && !has(p)) p];
+  List<AppPermission> get missing => [
+    for (final p in AppPermission.values)
+      if (supports(p) && !has(p)) p,
+  ];
 }
 
 /// Runtime-permission snapshot. Native is the source of truth; a request fires the
@@ -95,4 +100,6 @@ class PermissionsController extends AsyncNotifier<Permissions> {
 }
 
 final permissionsProvider =
-    AsyncNotifierProvider<PermissionsController, Permissions>(PermissionsController.new);
+    AsyncNotifierProvider<PermissionsController, Permissions>(
+      PermissionsController.new,
+    );

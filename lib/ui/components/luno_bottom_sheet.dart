@@ -19,7 +19,8 @@ Future<T?> showLunoSheet<T>({
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (context) => _LunoSheet(title: title, subtitle: subtitle, builder: builder),
+    builder: (context) =>
+        _LunoSheet(title: title, subtitle: subtitle, builder: builder),
   );
 }
 
@@ -62,7 +63,9 @@ class _LunoSheet extends StatelessWidget {
             const SizedBox(height: LunoSpacing.xxs),
             Text(
               subtitle!,
-              style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.text.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
           ],
           const SizedBox(height: LunoSpacing.lg),

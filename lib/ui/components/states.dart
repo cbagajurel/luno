@@ -27,7 +27,9 @@ class LoadingState extends StatelessWidget {
             Text(
               message!,
               textAlign: TextAlign.center,
-              style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.text.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
           ],
         ],
@@ -61,13 +63,19 @@ class EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 44, color: context.semantic.textFaint),
             const SizedBox(height: LunoSpacing.md),
-            Text(title, textAlign: TextAlign.center, style: context.text.titleMedium),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: context.text.titleMedium,
+            ),
             if (message != null) ...[
               const SizedBox(height: LunoSpacing.xs),
               Text(
                 message!,
                 textAlign: TextAlign.center,
-                style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+                style: context.text.bodyMedium?.copyWith(
+                  color: context.scheme.onSurfaceVariant,
+                ),
               ),
             ],
             if (action != null) ...[
@@ -96,12 +104,18 @@ class ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, size: 44, color: context.semantic.danger.color),
+            Icon(
+              Icons.error_outline_rounded,
+              size: 44,
+              color: context.semantic.danger.color,
+            ),
             const SizedBox(height: LunoSpacing.md),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.text.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: LunoSpacing.lg),

@@ -18,13 +18,18 @@ class SplashScreen extends StatelessWidget {
             const SizedBox(height: LunoSpacing.xs),
             Text(
               'Self-hosted SMS gateway',
-              style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.text.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: LunoSpacing.xxl),
             SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.5, color: context.scheme.primary),
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: context.scheme.primary,
+              ),
             ),
           ],
         ),

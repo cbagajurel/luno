@@ -46,21 +46,40 @@ final routerProvider = Provider<GoRouter>((ref) {
             fadeThroughPage(key: state.pageKey, child: const PairingScreen()),
       ),
       StatefulShellRoute.indexedStack(
-        pageBuilder: (context, state, shell) =>
-            fadeThroughPage(key: state.pageKey, child: HomeShell(shell: shell)),
+        pageBuilder: (context, state, shell) => fadeThroughPage(
+          key: state.pageKey,
+          child: HomeShell(shell: shell),
+        ),
         builder: (context, state, shell) => HomeShell(shell: shell),
         branches: [
           StatefulShellBranch(
-            routes: [GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen())],
+            routes: [
+              GoRoute(
+                path: '/dashboard',
+                builder: (_, _) => const DashboardScreen(),
+              ),
+            ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen())],
+            routes: [
+              GoRoute(
+                path: '/messages',
+                builder: (_, _) => const MessagesScreen(),
+              ),
+            ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/logs', builder: (_, _) => const LogsScreen())],
+            routes: [
+              GoRoute(path: '/logs', builder: (_, _) => const LogsScreen()),
+            ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen())],
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (_, _) => const SettingsScreen(),
+              ),
+            ],
           ),
         ],
       ),

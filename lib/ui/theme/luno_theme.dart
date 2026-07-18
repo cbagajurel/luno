@@ -77,13 +77,18 @@ ThemeData lunoTheme(Brightness brightness) {
       side: BorderSide.none,
       labelStyle: textTheme.labelMedium,
       shape: const RoundedRectangleBorder(borderRadius: LunoRadius.stadium),
-      padding: const EdgeInsets.symmetric(horizontal: LunoSpacing.sm, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: LunoSpacing.sm,
+        vertical: 2,
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: scheme.surfaceContainerHigh,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: LunoSpacing.md, vertical: LunoSpacing.sm),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: LunoSpacing.md,
+        vertical: LunoSpacing.sm,
+      ),
       border: const OutlineInputBorder(
         borderRadius: LunoRadius.field,
         borderSide: BorderSide.none,
@@ -118,7 +123,9 @@ ThemeData lunoTheme(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: scheme.inverseSurface,
-      contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(
+        color: scheme.onInverseSurface,
+      ),
       shape: const RoundedRectangleBorder(borderRadius: LunoRadius.card),
     ),
   );

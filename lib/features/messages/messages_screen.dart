@@ -24,7 +24,12 @@ class MessagesScreen extends ConsumerWidget {
             onPressed: () => showComposeSheet(context),
           ),
         ],
-        bottom: const TabBar(tabs: [Tab(text: 'Sent'), Tab(text: 'Received')]),
+        bottom: const TabBar(
+          tabs: [
+            Tab(text: 'Sent'),
+            Tab(text: 'Received'),
+          ],
+        ),
         body: const TabBarView(children: [_SentTab(), _ReceivedTab()]),
       ),
     );
@@ -51,7 +56,8 @@ class _SentTab extends ConsumerWidget {
               padding: _listPadding,
               itemCount: rows.length,
               separatorBuilder: (_, _) => const _RowDivider(),
-              itemBuilder: (_, i) => _OutboxRow(key: ValueKey(rows[i].id), entry: rows[i]),
+              itemBuilder: (_, i) =>
+                  _OutboxRow(key: ValueKey(rows[i].id), entry: rows[i]),
             ),
     );
   }
@@ -63,7 +69,9 @@ class _ReceivedTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inbox = ref.watch(inboxProvider);
-    final sims = ref.watch(deviceStateProvider.select((d) => d.value?.sims)) ?? const <SimInfo>[];
+    final sims =
+        ref.watch(deviceStateProvider.select((d) => d.value?.sims)) ??
+        const <SimInfo>[];
     return AsyncView<List<InboundEntry>>(
       value: inbox,
       data: (rows) => rows.isEmpty
@@ -76,7 +84,11 @@ class _ReceivedTab extends ConsumerWidget {
               padding: _listPadding,
               itemCount: rows.length,
               separatorBuilder: (_, _) => const _RowDivider(),
-              itemBuilder: (_, i) => _InboxRow(key: ValueKey(rows[i].id), entry: rows[i], sims: sims),
+              itemBuilder: (_, i) => _InboxRow(
+                key: ValueKey(rows[i].id),
+                entry: rows[i],
+                sims: sims,
+              ),
             ),
     );
   }
@@ -87,10 +99,10 @@ class _RowDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Divider(
-        height: 1,
-        indent: 52,
-        color: context.scheme.outlineVariant.withValues(alpha: 0.6),
-      );
+    height: 1,
+    indent: 52,
+    color: context.scheme.outlineVariant.withValues(alpha: 0.6),
+  );
 }
 
 class _MessageRow extends StatelessWidget {
@@ -130,14 +142,21 @@ class _MessageRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  title,
+                  style: context.text.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     subtitle!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: context.text.bodySmall?.copyWith(color: context.scheme.onSurfaceVariant),
+                    style: context.text.bodySmall?.copyWith(
+                      color: context.scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ],
@@ -192,7 +211,12 @@ class _InboxRow extends StatelessWidget {
       subtitle: entry.body,
       trailing: meta.isEmpty
           ? null
-          : Text(meta, style: context.text.labelSmall?.copyWith(color: context.semantic.textFaint)),
+          : Text(
+              meta,
+              style: context.text.labelSmall?.copyWith(
+                color: context.semantic.textFaint,
+              ),
+            ),
     );
   }
 }

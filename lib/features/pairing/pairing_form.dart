@@ -38,7 +38,9 @@ class _PairingFormState extends ConsumerState<PairingForm> {
   @override
   void initState() {
     super.initState();
-    _urlController = TextEditingController(text: ref.read(lastBackendUrlProvider));
+    _urlController = TextEditingController(
+      text: ref.read(lastBackendUrlProvider),
+    );
   }
 
   @override
@@ -55,15 +57,16 @@ class _PairingFormState extends ConsumerState<PairingForm> {
       _error = null;
     });
     try {
-      final result = await ref.read(pairingProvider.notifier).pair(
-            _urlController.text.trim(),
-            _codeController.text.trim(),
-          );
+      final result = await ref
+          .read(pairingProvider.notifier)
+          .pair(_urlController.text.trim(), _codeController.text.trim());
       if (!mounted) return;
       if (result.ok) {
         widget.onPaired?.call();
       } else {
-        setState(() => _error = result.message ?? result.errorCode ?? 'Pairing failed');
+        setState(
+          () => _error = result.message ?? result.errorCode ?? 'Pairing failed',
+        );
       }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -87,7 +90,9 @@ class _PairingFormState extends ConsumerState<PairingForm> {
             prefixIcon: Icons.dns_rounded,
             keyboardType: TextInputType.url,
             enabled: !_submitting,
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the backend URL' : null,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Enter the backend URL'
+                : null,
           ),
           const SizedBox(height: LunoSpacing.md),
           LunoTextField(
@@ -96,7 +101,9 @@ class _PairingFormState extends ConsumerState<PairingForm> {
             prefixIcon: Icons.key_rounded,
             autofocus: widget.autofocusCode,
             enabled: !_submitting,
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the pairing code' : null,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Enter the pairing code'
+                : null,
           ),
           if (_error != null) ...[
             const SizedBox(height: LunoSpacing.md),
@@ -133,12 +140,18 @@ class _PairingError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline_rounded, size: 18, color: danger.onContainer),
+          Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: danger.onContainer,
+          ),
           const SizedBox(width: LunoSpacing.xs),
           Expanded(
             child: Text(
               message,
-              style: context.text.bodySmall?.copyWith(color: danger.onContainer),
+              style: context.text.bodySmall?.copyWith(
+                color: danger.onContainer,
+              ),
             ),
           ),
         ],
@@ -154,7 +167,8 @@ Future<void> showReconnectSheet(BuildContext context) {
   return showLunoSheet<void>(
     context: context,
     title: 'Reconnect node',
-    subtitle: 'Enter the backend URL and a fresh pairing code to re-enrol this node.',
+    subtitle:
+        'Enter the backend URL and a fresh pairing code to re-enrol this node.',
     builder: (sheetCtx) => PairingForm(
       submitLabel: 'Reconnect',
       busyLabel: 'Reconnecting…',

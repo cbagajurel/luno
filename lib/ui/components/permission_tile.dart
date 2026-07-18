@@ -46,7 +46,9 @@ class PermissionTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   rationale,
-                  style: context.text.bodySmall?.copyWith(color: context.scheme.onSurfaceVariant),
+                  style: context.text.bodySmall?.copyWith(
+                    color: context.scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -54,7 +56,11 @@ class PermissionTile extends StatelessWidget {
           const SizedBox(width: LunoSpacing.sm),
           if (granted)
             (showGrantedState
-                ? const StatusPill(label: 'Granted', tone: StatusTone.positive, dense: true)
+                ? const StatusPill(
+                    label: 'Granted',
+                    tone: StatusTone.positive,
+                    dense: true,
+                  )
                 : const SizedBox.shrink())
           else
             LunoButton(

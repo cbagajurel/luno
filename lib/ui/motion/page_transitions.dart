@@ -16,11 +16,17 @@ CustomTransitionPage<T> fadeThroughPage<T>({
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       if (LunoMotion.reduced(context)) return child;
-      final curved = CurvedAnimation(parent: animation, curve: LunoMotion.emphasized);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: LunoMotion.emphasized,
+      );
       return FadeTransition(
         opacity: curved,
         child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.02), end: Offset.zero).animate(curved),
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.02),
+            end: Offset.zero,
+          ).animate(curved),
           child: child,
         ),
       );

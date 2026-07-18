@@ -25,7 +25,8 @@ class LunoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = color ?? theme.cardTheme.color ?? theme.colorScheme.surfaceContainer;
+    final bg =
+        color ?? theme.cardTheme.color ?? theme.colorScheme.surfaceContainer;
 
     final content = Padding(padding: padding, child: child);
 
@@ -40,7 +41,9 @@ class LunoCard extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: LunoRadius.card,
-            side: borderColor == null ? BorderSide.none : BorderSide(color: borderColor!),
+            side: borderColor == null
+                ? BorderSide.none
+                : BorderSide(color: borderColor!),
           ),
           child: onTap == null
               ? content

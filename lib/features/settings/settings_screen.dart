@@ -17,7 +17,8 @@ class SettingsScreen extends ConsumerWidget {
     final ok = await showLunoConfirm(
       context: context,
       title: 'Unpair node?',
-      message: 'This clears the backend credential and disconnects. '
+      message:
+          'This clears the backend credential and disconnects. '
           'Queued messages and history are unaffected.',
       confirmLabel: 'Unpair',
       destructive: true,
@@ -30,7 +31,8 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final permissions = ref.watch(permissionsProvider);
-    final connection = ref.watch(connectionStateProvider).value ?? ConnectionState.unknown;
+    final connection =
+        ref.watch(connectionStateProvider).value ?? ConnectionState.unknown;
     final connUi = connectionUi(connection);
 
     return LunoScaffold(
@@ -68,13 +70,15 @@ class SettingsScreen extends ConsumerWidget {
                 children: [
                   for (final perm in AppPermission.values)
                     if (p.supports(perm))
-                    PermissionTile(
-                      label: perm.label,
-                      rationale: perm.rationale,
-                      granted: p.has(perm),
-                      showGrantedState: true,
-                      onGrant: () => ref.read(permissionsProvider.notifier).request(perm),
-                    ),
+                      PermissionTile(
+                        label: perm.label,
+                        rationale: perm.rationale,
+                        granted: p.has(perm),
+                        showGrantedState: true,
+                        onGrant: () => ref
+                            .read(permissionsProvider.notifier)
+                            .request(perm),
+                      ),
                 ],
               ),
             ),
@@ -137,8 +141,9 @@ class _ThemeToggle extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       'System follows your device setting.',
-                      style: context.text.bodySmall
-                          ?.copyWith(color: context.scheme.onSurfaceVariant),
+                      style: context.text.bodySmall?.copyWith(
+                        color: context.scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -152,7 +157,9 @@ class _ThemeToggle extends ConsumerWidget {
               showSelectedIcon: false,
               style: SegmentedButton.styleFrom(
                 textStyle: context.text.labelLarge,
-                shape: const RoundedRectangleBorder(borderRadius: LunoRadius.field),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: LunoRadius.field,
+                ),
               ),
               segments: const [
                 ButtonSegment(value: ThemeMode.system, label: Text('System')),

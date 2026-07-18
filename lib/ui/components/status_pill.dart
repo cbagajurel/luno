@@ -22,8 +22,11 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.semantic.tone(tone);
-    final textStyle = (dense ? context.text.labelSmall : context.text.labelMedium)
-        ?.copyWith(color: colors.onContainer, letterSpacing: 0.2);
+    final textStyle =
+        (dense ? context.text.labelSmall : context.text.labelMedium)?.copyWith(
+          color: colors.onContainer,
+          letterSpacing: 0.2,
+        );
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: dense ? LunoSpacing.xs : LunoSpacing.sm,

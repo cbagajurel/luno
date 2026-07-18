@@ -54,7 +54,10 @@ class GlassContainer extends StatelessWidget {
 
     if (shadows != null) {
       glass = DecoratedBox(
-        decoration: BoxDecoration(borderRadius: borderRadius, boxShadow: shadows),
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          boxShadow: shadows,
+        ),
         child: glass,
       );
     }

@@ -9,6 +9,6 @@ import 'fake_luno_bridge.dart';
 /// under the real Luno theme so the design-system components resolve their
 /// tokens (fonts are bundled, so nothing is fetched at runtime).
 Widget wrapScreen(FakeLunoBridge bridge, Widget child) => ProviderScope(
-      overrides: [bridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(theme: lunoTheme(Brightness.light), home: child),
-    );
+  overrides: [bridgeProvider.overrideWithValue(bridge)],
+  child: MaterialApp(theme: lunoTheme(Brightness.light), home: child),
+);

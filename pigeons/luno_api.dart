@@ -111,7 +111,12 @@ class DeviceState {
 }
 
 class PairingResult {
-  PairingResult({required this.ok, this.deviceId, this.errorCode, this.message});
+  PairingResult({
+    required this.ok,
+    this.deviceId,
+    this.errorCode,
+    this.message,
+  });
 
   final bool ok;
   final String? deviceId;

@@ -30,53 +30,98 @@ String? simLabelForSub(int? subscriptionId, List<SimInfo> sims) {
 }
 
 StatusUi connectionUi(ConnectionState state) => switch (state) {
-      ConnectionState.ready =>
-        (label: 'Ready', tone: StatusTone.positive, icon: Icons.cloud_done_rounded),
-      ConnectionState.authenticated =>
-        (label: 'Authenticated', tone: StatusTone.positive, icon: Icons.verified_user_rounded),
-      ConnectionState.connected =>
-        (label: 'Connected', tone: StatusTone.info, icon: Icons.link_rounded),
-      ConnectionState.connecting =>
-        (label: 'Connecting…', tone: StatusTone.caution, icon: Icons.sync_rounded),
-      ConnectionState.reconnecting =>
-        (label: 'Reconnecting…', tone: StatusTone.caution, icon: Icons.sync_problem_rounded),
-      ConnectionState.backingOff =>
-        (label: 'Backing off…', tone: StatusTone.caution, icon: Icons.timelapse_rounded),
-      ConnectionState.disconnected =>
-        (label: 'Disconnected', tone: StatusTone.neutral, icon: Icons.link_off_rounded),
-      ConnectionState.offlineNoNetwork =>
-        (label: 'Offline · no network', tone: StatusTone.danger, icon: Icons.cloud_off_rounded),
-      ConnectionState.unknown =>
-        (label: 'Unknown', tone: StatusTone.neutral, icon: Icons.help_rounded),
-    };
+  ConnectionState.ready => (
+    label: 'Ready',
+    tone: StatusTone.positive,
+    icon: Icons.cloud_done_rounded,
+  ),
+  ConnectionState.authenticated => (
+    label: 'Authenticated',
+    tone: StatusTone.positive,
+    icon: Icons.verified_user_rounded,
+  ),
+  ConnectionState.connected => (
+    label: 'Connected',
+    tone: StatusTone.info,
+    icon: Icons.link_rounded,
+  ),
+  ConnectionState.connecting => (
+    label: 'Connecting…',
+    tone: StatusTone.caution,
+    icon: Icons.sync_rounded,
+  ),
+  ConnectionState.reconnecting => (
+    label: 'Reconnecting…',
+    tone: StatusTone.caution,
+    icon: Icons.sync_problem_rounded,
+  ),
+  ConnectionState.backingOff => (
+    label: 'Backing off…',
+    tone: StatusTone.caution,
+    icon: Icons.timelapse_rounded,
+  ),
+  ConnectionState.disconnected => (
+    label: 'Disconnected',
+    tone: StatusTone.neutral,
+    icon: Icons.link_off_rounded,
+  ),
+  ConnectionState.offlineNoNetwork => (
+    label: 'Offline · no network',
+    tone: StatusTone.danger,
+    icon: Icons.cloud_off_rounded,
+  ),
+  ConnectionState.unknown => (
+    label: 'Unknown',
+    tone: StatusTone.neutral,
+    icon: Icons.help_rounded,
+  ),
+};
 
 StatusUi agentUi(AgentRunState state) => switch (state) {
-      AgentRunState.running =>
-        (label: 'Agent running', tone: StatusTone.positive, icon: Icons.check_circle_rounded),
-      AgentRunState.stopped =>
-        (label: 'Agent stopped', tone: StatusTone.neutral, icon: Icons.stop_circle_rounded),
-      AgentRunState.unknown =>
-        (label: 'Agent state unknown', tone: StatusTone.caution, icon: Icons.help_rounded),
-    };
+  AgentRunState.running => (
+    label: 'Agent running',
+    tone: StatusTone.positive,
+    icon: Icons.check_circle_rounded,
+  ),
+  AgentRunState.stopped => (
+    label: 'Agent stopped',
+    tone: StatusTone.neutral,
+    icon: Icons.stop_circle_rounded,
+  ),
+  AgentRunState.unknown => (
+    label: 'Agent state unknown',
+    tone: StatusTone.caution,
+    icon: Icons.help_rounded,
+  ),
+};
 
 StatusUi outboxStatusUi(String status) => switch (status) {
-      'SENT' || 'DELIVERED' =>
-        (label: status, tone: StatusTone.positive, icon: Icons.check_circle_rounded),
-      'SENDING' || 'QUEUED' =>
-        (label: status, tone: StatusTone.caution, icon: Icons.schedule_rounded),
-      'FAILED_TERMINAL' || 'FAILED_RETRYABLE' || 'UNDELIVERED' =>
-        (label: status, tone: StatusTone.danger, icon: Icons.error_rounded),
-      _ => (label: status, tone: StatusTone.neutral, icon: Icons.help_rounded),
-    };
+  'SENT' || 'DELIVERED' => (
+    label: status,
+    tone: StatusTone.positive,
+    icon: Icons.check_circle_rounded,
+  ),
+  'SENDING' || 'QUEUED' => (
+    label: status,
+    tone: StatusTone.caution,
+    icon: Icons.schedule_rounded,
+  ),
+  'FAILED_TERMINAL' || 'FAILED_RETRYABLE' || 'UNDELIVERED' => (
+    label: status,
+    tone: StatusTone.danger,
+    icon: Icons.error_rounded,
+  ),
+  _ => (label: status, tone: StatusTone.neutral, icon: Icons.help_rounded),
+};
 
 /// The semantic tone for a log level — the single source that folds the logs
 /// screen's old inline colour switch into the shared tone system.
 StatusTone logLevelTone(String level) => switch (level) {
-      'ERROR' => StatusTone.danger,
-      'WARN' => StatusTone.caution,
-      'INFO' => StatusTone.info,
-      _ => StatusTone.neutral,
-    };
+  'ERROR' => StatusTone.danger,
+  'WARN' => StatusTone.caution,
+  'INFO' => StatusTone.info,
+  _ => StatusTone.neutral,
+};
 
 String formatClock(int epochMs) {
   final t = DateTime.fromMillisecondsSinceEpoch(epochMs);

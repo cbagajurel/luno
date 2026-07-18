@@ -6,8 +6,9 @@ import '../support/fake_luno_bridge.dart';
 import '../support/pump.dart';
 
 void main() {
-  testWidgets('sent tab renders outbox rows (snapshot after late subscribe)',
-      (tester) async {
+  testWidgets('sent tab renders outbox rows (snapshot after late subscribe)', (
+    tester,
+  ) async {
     final bridge = FakeLunoBridge(
       outbox: [
         OutboxEntry(

@@ -16,8 +16,9 @@ class FakeLunoBridge implements LunoBridge {
     this.smsPermission = true,
     this.receiveSmsPermission = true,
     this.pairingResult,
-  }) : deviceState = deviceState ??
-            DeviceState(sims: const <SimInfo>[], signals: const <SignalInfo>[]);
+  }) : deviceState =
+           deviceState ??
+           DeviceState(sims: const <SimInfo>[], signals: const <SignalInfo>[]);
 
   bool paired;
   AgentRunState agentState;
@@ -75,7 +76,11 @@ class FakeLunoBridge implements LunoBridge {
   Future<void> requestSmsPermission() async => smsPermission = true;
 
   @override
-  Future<String> sendSms(String recipient, String body, {int? subscriptionId}) async {
+  Future<String> sendSms(
+    String recipient,
+    String body, {
+    int? subscriptionId,
+  }) async {
     sent.add((recipient: recipient, body: body, subId: subscriptionId));
     return 'msg-${sent.length}';
   }
@@ -95,7 +100,8 @@ class FakeLunoBridge implements LunoBridge {
   Future<bool> hasReceiveSmsPermission() async => receiveSmsPermission;
 
   @override
-  Future<void> requestReceiveSmsPermission() async => receiveSmsPermission = true;
+  Future<void> requestReceiveSmsPermission() async =>
+      receiveSmsPermission = true;
 
   @override
   Future<List<InboundEntry>> getRecentInbox() async => inbox;
@@ -104,8 +110,10 @@ class FakeLunoBridge implements LunoBridge {
   Stream<int> get inboxEvents => Stream.value(0);
 
   @override
-  Future<PairingResult> startPairing(String backendUrl, String pairingCode) async =>
-      pairingResult ?? PairingResult(ok: true, deviceId: 'dev-1');
+  Future<PairingResult> startPairing(
+    String backendUrl,
+    String pairingCode,
+  ) async => pairingResult ?? PairingResult(ok: true, deviceId: 'dev-1');
 
   @override
   Future<bool> isPaired() async => paired;
@@ -117,7 +125,8 @@ class FakeLunoBridge implements LunoBridge {
   }
 
   @override
-  Stream<ConnectionState> get connectionStateEvents => Stream.value(connectionState);
+  Stream<ConnectionState> get connectionStateEvents =>
+      Stream.value(connectionState);
 
   @override
   Future<List<LogEntry>> getRecentLogs() async => logs;

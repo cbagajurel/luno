@@ -59,13 +59,17 @@ class _ComposeFormState extends ConsumerState<_ComposeForm> {
       }
     }
 
-    await ref.read(bridgeProvider).sendSms(recipient, body, subscriptionId: _subId);
+    await ref
+        .read(bridgeProvider)
+        .sendSms(recipient, body, subscriptionId: _subId);
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final sims = ref.watch(deviceStateProvider.select((d) => d.value?.sims)) ?? const <SimInfo>[];
+    final sims =
+        ref.watch(deviceStateProvider.select((d) => d.value?.sims)) ??
+        const <SimInfo>[];
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -77,7 +81,9 @@ class _ComposeFormState extends ConsumerState<_ComposeForm> {
           controller: _recipient,
           prefixIcon: Icons.person_outline_rounded,
           keyboardType: TextInputType.phone,
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ]'))],
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ]')),
+          ],
         ),
         const SizedBox(height: LunoSpacing.sm),
         LunoTextField(
@@ -93,7 +99,10 @@ class _ComposeFormState extends ConsumerState<_ComposeForm> {
             decoration: const InputDecoration(labelText: 'SIM'),
             onChanged: (v) => setState(() => _subId = v),
             items: [
-              const DropdownMenuItem<int?>(value: null, child: Text('Default SIM')),
+              const DropdownMenuItem<int?>(
+                value: null,
+                child: Text('Default SIM'),
+              ),
               for (final sim in sims)
                 DropdownMenuItem<int?>(
                   value: sim.subscriptionId,

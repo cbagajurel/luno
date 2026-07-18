@@ -23,7 +23,9 @@ void main() {
   });
 
   test('ping returns the native-transformed echo', () async {
-    messenger.setMockDecodedMessageHandler<Object?>(pingChannel, (message) async {
+    messenger.setMockDecodedMessageHandler<Object?>(pingChannel, (
+      message,
+    ) async {
       final args = message! as List<Object?>;
       final arg = args[0]! as String;
       return <Object?>['$echoPrefix$arg']; // success reply is a 1-element list
@@ -34,7 +36,9 @@ void main() {
   });
 
   test('ping propagates a native PlatformException', () async {
-    messenger.setMockDecodedMessageHandler<Object?>(pingChannel, (message) async {
+    messenger.setMockDecodedMessageHandler<Object?>(pingChannel, (
+      message,
+    ) async {
       return <Object?>['E_FAIL', 'boom', null]; // pigeon error reply shape
     });
 

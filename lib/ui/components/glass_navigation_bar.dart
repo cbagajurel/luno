@@ -6,7 +6,11 @@ import '../tokens/motion.dart';
 import '../tokens/spacing.dart';
 
 class GlassNavItem {
-  const GlassNavItem({required this.icon, required this.selectedIcon, required this.label});
+  const GlassNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
 
   final IconData icon;
   final IconData selectedIcon;
@@ -73,7 +77,11 @@ class GlassNavigationBar extends StatelessWidget {
 }
 
 class _NavDestination extends StatelessWidget {
-  const _NavDestination({required this.item, required this.selected, required this.onTap});
+  const _NavDestination({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
 
   final GlassNavItem item;
   final bool selected;
@@ -83,7 +91,9 @@ class _NavDestination extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = context.semantic.brand;
     final reduced = LunoMotion.reduced(context);
-    final iconColor = selected ? brand.onContainer : context.scheme.onSurfaceVariant;
+    final iconColor = selected
+        ? brand.onContainer
+        : context.scheme.onSurfaceVariant;
 
     return Semantics(
       button: true,
@@ -109,7 +119,11 @@ class _NavDestination extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(selected ? item.selectedIcon : item.icon, size: 22, color: iconColor),
+                Icon(
+                  selected ? item.selectedIcon : item.icon,
+                  size: 22,
+                  color: iconColor,
+                ),
                 AnimatedSize(
                   duration: reduced ? Duration.zero : LunoMotion.base,
                   curve: LunoMotion.emphasized,
@@ -118,7 +132,9 @@ class _NavDestination extends StatelessWidget {
                           padding: const EdgeInsets.only(left: LunoSpacing.xs),
                           child: Text(
                             item.label,
-                            style: context.text.labelLarge?.copyWith(color: brand.onContainer),
+                            style: context.text.labelLarge?.copyWith(
+                              color: brand.onContainer,
+                            ),
                           ),
                         )
                       : const SizedBox.shrink(),

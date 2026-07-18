@@ -13,10 +13,26 @@ class HomeShell extends StatelessWidget {
   final StatefulNavigationShell shell;
 
   static const _items = [
-    GlassNavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard_rounded, label: 'Dashboard'),
-    GlassNavItem(icon: Icons.sms_outlined, selectedIcon: Icons.sms_rounded, label: 'Messages'),
-    GlassNavItem(icon: Icons.article_outlined, selectedIcon: Icons.article_rounded, label: 'Logs'),
-    GlassNavItem(icon: Icons.settings_outlined, selectedIcon: Icons.settings_rounded, label: 'Settings'),
+    GlassNavItem(
+      icon: Icons.dashboard_outlined,
+      selectedIcon: Icons.dashboard_rounded,
+      label: 'Dashboard',
+    ),
+    GlassNavItem(
+      icon: Icons.sms_outlined,
+      selectedIcon: Icons.sms_rounded,
+      label: 'Messages',
+    ),
+    GlassNavItem(
+      icon: Icons.article_outlined,
+      selectedIcon: Icons.article_rounded,
+      label: 'Logs',
+    ),
+    GlassNavItem(
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings_rounded,
+      label: 'Settings',
+    ),
   ];
 
   @override

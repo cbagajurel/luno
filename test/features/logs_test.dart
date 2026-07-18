@@ -10,8 +10,18 @@ void main() {
   testWidgets('renders log lines and filters by level', (tester) async {
     final bridge = FakeLunoBridge(
       logs: [
-        LogEntry(timestampMs: 0, level: 'INFO', tag: 'Agent', message: 'connected'),
-        LogEntry(timestampMs: 0, level: 'ERROR', tag: 'Sms', message: 'send failed'),
+        LogEntry(
+          timestampMs: 0,
+          level: 'INFO',
+          tag: 'Agent',
+          message: 'connected',
+        ),
+        LogEntry(
+          timestampMs: 0,
+          level: 'ERROR',
+          tag: 'Sms',
+          message: 'send failed',
+        ),
       ],
     );
 

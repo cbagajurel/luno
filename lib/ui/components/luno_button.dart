@@ -57,10 +57,22 @@ class LunoButton extends StatelessWidget {
     );
 
     final button = switch (variant) {
-      LunoButtonVariant.primary => FilledButton(onPressed: effectiveOnPressed, child: child),
-      LunoButtonVariant.secondary => OutlinedButton(onPressed: effectiveOnPressed, child: child),
-      LunoButtonVariant.tonal => FilledButton.tonal(onPressed: effectiveOnPressed, child: child),
-      LunoButtonVariant.text => TextButton(onPressed: effectiveOnPressed, child: child),
+      LunoButtonVariant.primary => FilledButton(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
+      LunoButtonVariant.secondary => OutlinedButton(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
+      LunoButtonVariant.tonal => FilledButton.tonal(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
+      LunoButtonVariant.text => TextButton(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
     };
 
     return expand ? SizedBox(width: double.infinity, child: button) : button;

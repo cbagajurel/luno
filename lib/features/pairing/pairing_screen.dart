@@ -27,7 +27,11 @@ class PairingScreen extends ConsumerWidget {
                         color: context.semantic.brand.container,
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Icon(Icons.hub_rounded, size: 32, color: context.semantic.brand.color),
+                      child: Icon(
+                        Icons.hub_rounded,
+                        size: 32,
+                        color: context.semantic.brand.color,
+                      ),
                     ),
                   ),
                   const SizedBox(height: LunoSpacing.lg),
@@ -40,7 +44,9 @@ class PairingScreen extends ConsumerWidget {
                   Text(
                     'Point this node at your Luno server and enter the pairing code it issued.',
                     textAlign: TextAlign.center,
-                    style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
+                    style: context.text.bodyMedium?.copyWith(
+                      color: context.scheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: LunoSpacing.xl),
                   const LunoCard(child: PairingForm()),

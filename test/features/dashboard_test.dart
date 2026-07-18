@@ -7,7 +7,9 @@ import '../support/fake_luno_bridge.dart';
 import '../support/pump.dart';
 
 void main() {
-  testWidgets('renders connection and agent state from the bridge', (tester) async {
+  testWidgets('renders connection and agent state from the bridge', (
+    tester,
+  ) async {
     final bridge = FakeLunoBridge(
       connectionState: ConnectionState.ready,
       agentState: AgentRunState.running,
@@ -33,7 +35,9 @@ void main() {
   });
 
   testWidgets('offline connection shows the offline banner', (tester) async {
-    final bridge = FakeLunoBridge(connectionState: ConnectionState.offlineNoNetwork);
+    final bridge = FakeLunoBridge(
+      connectionState: ConnectionState.offlineNoNetwork,
+    );
     await tester.pumpWidget(wrapScreen(bridge, const DashboardScreen()));
     await tester.pumpAndSettle();
 
