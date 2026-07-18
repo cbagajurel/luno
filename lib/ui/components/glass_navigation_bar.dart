@@ -4,7 +4,6 @@ import '../tokens/colors.dart';
 import '../tokens/elevation.dart';
 import '../tokens/motion.dart';
 import '../tokens/spacing.dart';
-import 'glass_container.dart';
 
 class GlassNavItem {
   const GlassNavItem({required this.icon, required this.selectedIcon, required this.label});
@@ -14,10 +13,10 @@ class GlassNavItem {
   final String label;
 }
 
-/// A floating, frosted navigation bar. The selected destination expands into a
-/// tinted pill with its label; the others stay as icons. Bounded blur + shadow
-/// are handled by [GlassContainer], so it floats over scrolling content while
-/// staying cheap to paint.
+/// A floating navigation bar. The selected destination expands into a tinted
+/// pill with its label; the others stay as icons. The bar is a solid tinted
+/// surface (not a live blur) so it floats over scrolling content without
+/// re-sampling the backdrop every frame.
 class GlassNavigationBar extends StatelessWidget {
   const GlassNavigationBar({
     super.key,
@@ -33,6 +32,7 @@ class GlassNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final semantic = context.semantic;
     return Padding(
       padding: EdgeInsets.fromLTRB(
         LunoSpacing.xl,
@@ -42,21 +42,29 @@ class GlassNavigationBar extends StatelessWidget {
       ),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: GlassContainer(
-          sigma: 18,
-          borderRadius: LunoRadius.stadium,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          shadows: LunoElevation.floating(Theme.of(context).brightness),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < items.length; i++)
-                _NavDestination(
-                  item: items[i],
-                  selected: i == selectedIndex,
-                  onTap: () => onSelect(i),
-                ),
-            ],
+        heightFactor: 1,
+        child: RepaintBoundary(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: semantic.glass,
+              borderRadius: LunoRadius.stadium,
+              border: Border.all(color: semantic.glassBorder),
+              boxShadow: LunoElevation.floating(Theme.of(context).brightness),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    _NavDestination(
+                      item: items[i],
+                      selected: i == selectedIndex,
+                      onTap: () => onSelect(i),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

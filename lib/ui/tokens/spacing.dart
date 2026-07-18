@@ -1,9 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-/// Vertical room a scroll view must leave at the bottom so its last item clears
-/// the floating glass nav (add the device's bottom safe-area on top of this).
-const double kBottomNavClearance = 88;
-
 /// The 4-point spacing scale. Formalizes the ad-hoc 4/8/12/16/24 already used
 /// across screens so gaps and padding stay on a single rhythm.
 abstract final class LunoSpacing {

@@ -36,11 +36,11 @@ class SettingsScreen extends ConsumerWidget {
     return LunoScaffold(
       title: 'Settings',
       body: ListView(
-        padding: EdgeInsets.fromLTRB(
+        padding: const EdgeInsets.fromLTRB(
           LunoSpacing.md,
           0,
           LunoSpacing.md,
-          LunoSpacing.md + kBottomNavClearance + MediaQuery.paddingOf(context).bottom,
+          LunoSpacing.md,
         ),
         children: [
           const SectionHeader('Appearance'),

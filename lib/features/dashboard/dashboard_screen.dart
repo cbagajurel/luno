@@ -13,34 +13,18 @@ import '../shared/status_ui.dart';
 /// True when the connection isn't actively healthy or progressing, so a manual
 /// reconnect / re-pair is worth offering (a dead credential otherwise loops here).
 bool _needsReconnect(ConnectionState s) => switch (s) {
-      ConnectionState.disconnected ||
-      ConnectionState.reconnecting ||
-      ConnectionState.backingOff ||
-      ConnectionState.unknown =>
-        true,
-      _ => false,
-    };
+  ConnectionState.disconnected ||
+  ConnectionState.reconnecting ||
+  ConnectionState.backingOff ||
+  ConnectionState.unknown => true,
+  _ => false,
+};
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
-  Future<void> _startAgent(WidgetRef ref) async {
-    final bridge = ref.read(bridgeProvider);
-    await bridge.requestNotificationPermission();
-    await bridge.startAgent();
-  }
-
-  Future<void> _stopAgent(WidgetRef ref) => ref.read(bridgeProvider).stopAgent();
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(connectionStateProvider).value ?? ConnectionState.unknown;
-    final agentState = ref.watch(agentStateProvider).value ?? AgentRunState.unknown;
-    final device = ref.watch(deviceStateProvider);
-    final permissions = ref.watch(permissionsProvider);
-    final isRunning = agentState == AgentRunState.running;
-    final hasPhonePermission = permissions.value?.phone ?? true;
-
     return LunoScaffold(
       title: 'Dashboard',
       actions: [
@@ -56,29 +40,13 @@ class DashboardScreen extends ConsumerWidget {
           await ref.read(deviceStateProvider.future);
         },
         child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            LunoSpacing.md,
-            LunoSpacing.md,
-            LunoSpacing.md,
-            LunoSpacing.md + kBottomNavClearance + MediaQuery.paddingOf(context).bottom,
-          ),
-          children: [
-            _ConnectionBanner(
-              state: connection,
-              onReconnect: () => showReconnectSheet(context),
-            ),
-            const SizedBox(height: LunoSpacing.sm),
-            _AgentControls(
-              state: agentState,
-              onStart: isRunning ? null : () => _startAgent(ref),
-              onStop: isRunning ? () => _stopAgent(ref) : null,
-            ),
-            _PermissionsCard(
-              permissions: permissions,
-              onGrant: (p) => ref.read(permissionsProvider.notifier).request(p),
-              onRetry: () => ref.read(permissionsProvider.notifier).refresh(),
-            ),
-            _TelemetrySections(device: device, hasPhonePermission: hasPhonePermission),
+          padding: const EdgeInsets.all(LunoSpacing.md),
+          children: const [
+            _ConnectionBanner(),
+            SizedBox(height: LunoSpacing.sm),
+            _AgentControls(),
+            _PermissionsCard(),
+            _TelemetrySections(),
           ],
         ),
       ),
@@ -86,16 +54,17 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _ConnectionBanner extends StatelessWidget {
-  const _ConnectionBanner({required this.state, this.onReconnect});
-
-  final ConnectionState state;
-  final VoidCallback? onReconnect;
+/// Each section below watches only the provider it needs, so a telemetry tick
+/// rebuilds just the telemetry card — not the whole dashboard.
+class _ConnectionBanner extends ConsumerWidget {
+  const _ConnectionBanner();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state =
+        ref.watch(connectionStateProvider).value ?? ConnectionState.unknown;
     final ui = connectionUi(state);
-    final showReconnect = onReconnect != null && _needsReconnect(state);
+    final showReconnect = _needsReconnect(state);
     return StatusTile(
       icon: ui.icon,
       tone: ui.tone,
@@ -105,22 +74,31 @@ class _ConnectionBanner extends StatelessWidget {
           ? LunoButton(
               label: 'Reconnect',
               variant: LunoButtonVariant.text,
-              onPressed: onReconnect,
+              onPressed: () => showReconnectSheet(context),
             )
           : null,
     );
   }
 }
 
-class _AgentControls extends StatelessWidget {
-  const _AgentControls({required this.state, this.onStart, this.onStop});
+class _AgentControls extends ConsumerWidget {
+  const _AgentControls();
 
-  final AgentRunState state;
-  final VoidCallback? onStart;
-  final VoidCallback? onStop;
+  Future<void> _startAgent(WidgetRef ref) async {
+    final bridge = ref.read(bridgeProvider);
+    await bridge.requestNotificationPermission();
+    await bridge.startAgent();
+  }
+
+  Future<void> _stopAgent(WidgetRef ref) =>
+      ref.read(bridgeProvider).stopAgent();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(agentStateProvider).value ?? AgentRunState.unknown;
+    final isRunning = state == AgentRunState.running;
+    final onStart = isRunning ? null : () => _startAgent(ref);
+    final onStop = isRunning ? () => _stopAgent(ref) : null;
     final ui = agentUi(state);
     return LunoCard(
       child: Column(
@@ -128,8 +106,15 @@ class _AgentControls extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Gateway agent', style: context.text.titleSmall)),
-              StatusPill(label: ui.label, tone: ui.tone, icon: ui.icon, dense: true),
+              Expanded(
+                child: Text('Gateway agent', style: context.text.titleSmall),
+              ),
+              StatusPill(
+                label: ui.label,
+                tone: ui.tone,
+                icon: ui.icon,
+                dense: true,
+              ),
             ],
           ),
           const SizedBox(height: LunoSpacing.md),
@@ -161,21 +146,15 @@ class _AgentControls extends StatelessWidget {
   }
 }
 
-/// Shows only the permissions that still need granting; renders nothing once all
-/// are held. Surfaces its own loading/error so a failed read isn't silent.
-class _PermissionsCard extends StatelessWidget {
-  const _PermissionsCard({
-    required this.permissions,
-    required this.onGrant,
-    required this.onRetry,
-  });
-
-  final AsyncValue<Permissions> permissions;
-  final void Function(AppPermission) onGrant;
-  final VoidCallback onRetry;
+class _PermissionsCard extends ConsumerWidget {
+  const _PermissionsCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final permissions = ref.watch(permissionsProvider);
+    final controller = ref.read(permissionsProvider.notifier);
+    void onGrant(AppPermission p) => controller.request(p);
+    void onRetry() => controller.refresh();
     return permissions.when(
       skipLoadingOnReload: true,
       loading: () => const SizedBox.shrink(),
@@ -205,18 +184,26 @@ class _PermissionsCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.lock_outline_rounded, size: 20, color: caution.onContainer),
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      size: 20,
+                      color: caution.onContainer,
+                    ),
                     const SizedBox(width: LunoSpacing.xs),
                     Text(
                       'Permissions needed',
-                      style: context.text.titleSmall?.copyWith(color: caution.onContainer),
+                      style: context.text.titleSmall?.copyWith(
+                        color: caution.onContainer,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: LunoSpacing.xxs),
                 Text(
                   'Luno needs these to send, receive, and read SIM state.',
-                  style: context.text.bodySmall?.copyWith(color: caution.onContainer),
+                  style: context.text.bodySmall?.copyWith(
+                    color: caution.onContainer,
+                  ),
                 ),
                 const SizedBox(height: LunoSpacing.xs),
                 for (final perm in missing)
@@ -237,14 +224,15 @@ class _PermissionsCard extends StatelessWidget {
 
 /// Network / Battery / SIM sections, driven by the device-telemetry stream with
 /// its loading and error states rendered rather than collapsed to defaults.
-class _TelemetrySections extends StatelessWidget {
-  const _TelemetrySections({required this.device, required this.hasPhonePermission});
-
-  final AsyncValue<DeviceState> device;
-  final bool hasPhonePermission;
+class _TelemetrySections extends ConsumerWidget {
+  const _TelemetrySections();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final device = ref.watch(deviceStateProvider);
+    final hasPhonePermission = ref.watch(
+      permissionsProvider.select((p) => p.value?.phone ?? true),
+    );
     return AsyncView<DeviceState>(
       value: device,
       loading: (_) => const Padding(
@@ -293,7 +281,9 @@ class _TelemetrySections extends StatelessWidget {
     return StatusTile(
       icon: online ? Icons.cloud_done_rounded : Icons.cloud_queue_rounded,
       tone: online ? StatusTone.positive : StatusTone.caution,
-      title: online ? 'Online · ${n.transport}' : 'Connected, no internet · ${n.transport}',
+      title: online
+          ? 'Online · ${n.transport}'
+          : 'Connected, no internet · ${n.transport}',
       subtitle: n.metered ? 'metered' : 'unmetered',
     );
   }
@@ -307,9 +297,13 @@ class _TelemetrySections extends StatelessWidget {
       );
     }
     final level = b.levelPercent >= 0 ? '${b.levelPercent}%' : 'unknown';
-    final source = b.plugged == 'NONE' ? 'on battery' : 'charging via ${b.plugged}';
+    final source = b.plugged == 'NONE'
+        ? 'on battery'
+        : 'charging via ${b.plugged}';
     return StatusTile(
-      icon: b.isCharging ? Icons.battery_charging_full_rounded : Icons.battery_full_rounded,
+      icon: b.isCharging
+          ? Icons.battery_charging_full_rounded
+          : Icons.battery_full_rounded,
       tone: b.isCharging ? StatusTone.positive : StatusTone.neutral,
       title: '$level · ${b.isCharging ? 'charging' : 'discharging'}',
       subtitle: '$source · health ${b.health}',
@@ -357,12 +351,17 @@ class _SimTile extends StatelessWidget {
     final level = signal?.level ?? -1;
     final signalText = signal == null
         ? 'signal unknown'
-        : (signal!.dbm != null ? '${signal!.dbm} dBm' : 'signal ${signal!.level}/4');
+        : (signal!.dbm != null
+              ? '${signal!.dbm} dBm'
+              : 'signal ${signal!.level}/4');
     return StatusTile(
-      icon: sim.isEmbedded ? Icons.sim_card_download_rounded : Icons.sim_card_rounded,
+      icon: sim.isEmbedded
+          ? Icons.sim_card_download_rounded
+          : Icons.sim_card_rounded,
       tone: StatusTone.brand,
       title: simLabel(sim),
-      subtitle: 'Slot ${sim.slotIndex} · ${sim.isEmbedded ? 'eSIM' : 'physical'} · $signalText',
+      subtitle:
+          'Slot ${sim.slotIndex} · ${sim.isEmbedded ? 'eSIM' : 'physical'} · $signalText',
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

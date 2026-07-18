@@ -31,12 +31,7 @@ class MessagesScreen extends ConsumerWidget {
   }
 }
 
-EdgeInsets _listPadding(BuildContext context) => EdgeInsets.fromLTRB(
-      LunoSpacing.md,
-      LunoSpacing.md,
-      LunoSpacing.md,
-      LunoSpacing.md + kBottomNavClearance + MediaQuery.paddingOf(context).bottom,
-    );
+const _listPadding = EdgeInsets.all(LunoSpacing.md);
 
 class _SentTab extends ConsumerWidget {
   const _SentTab();
@@ -53,7 +48,7 @@ class _SentTab extends ConsumerWidget {
               message: 'Messages you send from the backend appear here.',
             )
           : ListView.separated(
-              padding: _listPadding(context),
+              padding: _listPadding,
               itemCount: rows.length,
               separatorBuilder: (_, _) => const _RowDivider(),
               itemBuilder: (_, i) => _OutboxRow(key: ValueKey(rows[i].id), entry: rows[i]),
@@ -78,7 +73,7 @@ class _ReceivedTab extends ConsumerWidget {
               message: 'Incoming SMS captured by this node appear here.',
             )
           : ListView.separated(
-              padding: _listPadding(context),
+              padding: _listPadding,
               itemCount: rows.length,
               separatorBuilder: (_, _) => const _RowDivider(),
               itemBuilder: (_, i) => _InboxRow(key: ValueKey(rows[i].id), entry: rows[i], sims: sims),

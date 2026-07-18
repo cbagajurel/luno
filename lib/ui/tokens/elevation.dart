@@ -5,18 +5,12 @@ import 'package:flutter/material.dart';
 /// downward offset so surfaces float rather than cut.
 abstract final class LunoElevation {
   static List<BoxShadow> card(Brightness brightness) {
-    final strong = brightness == Brightness.dark ? 0.44 : 0.10;
-    final soft = brightness == Brightness.dark ? 0.30 : 0.05;
+    final strong = brightness == Brightness.dark ? 0.42 : 0.09;
     return [
       BoxShadow(
-        color: Colors.black.withValues(alpha: soft),
-        blurRadius: 2,
-        offset: const Offset(0, 1),
-      ),
-      BoxShadow(
         color: Colors.black.withValues(alpha: strong),
-        blurRadius: 16,
-        offset: const Offset(0, 6),
+        blurRadius: 12,
+        offset: const Offset(0, 4),
       ),
     ];
   }

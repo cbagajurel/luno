@@ -29,21 +29,23 @@ class LunoCard extends StatelessWidget {
 
     final content = Padding(padding: padding, child: child);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: LunoRadius.card,
-        boxShadow: LunoElevation.card(theme.brightness),
-      ),
-      child: Material(
-        color: bg,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: LunoRadius.card,
-          side: borderColor == null ? BorderSide.none : BorderSide(color: borderColor!),
+          boxShadow: LunoElevation.card(theme.brightness),
         ),
-        child: onTap == null
-            ? content
-            : InkWell(onTap: onTap, child: content),
+        child: Material(
+          color: bg,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: LunoRadius.card,
+            side: borderColor == null ? BorderSide.none : BorderSide(color: borderColor!),
+          ),
+          child: onTap == null
+              ? content
+              : InkWell(onTap: onTap, child: content),
+        ),
       ),
     );
   }
