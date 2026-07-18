@@ -1,8 +1,7 @@
-gradle-wrapper.jar
+# The Gradle wrapper is tracked: CI runs ./gradlew directly and validates its
+# checksum, rather than relying on `flutter build --config-only` to inject it.
 /.gradle
 /captures/
-/gradlew
-/gradlew.bat
 /local.properties
 GeneratedPluginRegistrant.java
 .cxx/
