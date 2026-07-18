@@ -1,3 +1,8 @@
+// PhoneStateListener is deprecated in favour of TelephonyCallback (API 31+), but this
+// file deliberately keeps it as the pre-31 fallback, so the deprecation is suppressed
+// file-wide rather than at each of its use sites.
+@file:Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+
 package com.luno.gateway.telephony
 
 import android.Manifest
@@ -118,7 +123,6 @@ class SignalStrengthMonitor(
             publish(subId, signalStrength)
     }
 
-    @Suppress("DEPRECATION")
     private inner class LegacyListener(private val subId: Int) : PhoneStateListener() {
         override fun onSignalStrengthsChanged(signalStrength: SignalStrength) =
             publish(subId, signalStrength)
@@ -128,7 +132,6 @@ class SignalStrengthMonitor(
         @RequiresApi(Build.VERSION_CODES.S)
         class Modern(val tm: TelephonyManager, val callback: TelephonyCallback) : Registration
 
-        @Suppress("DEPRECATION")
         class Legacy(val tm: TelephonyManager, val listener: PhoneStateListener) : Registration
     }
 

@@ -17,8 +17,19 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+    kotlin {
+        compilerOptions {
+            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+            allWarningsAsErrors = true
+        }
+    }
+
+    // New warnings fail the build; today's are grandfathered in lint-baseline.xml.
+    lint {
+        abortOnError = true
+        warningsAsErrors = true
+        checkDependencies = true
+        baseline = file("lint-baseline.xml")
     }
 
     buildFeatures {
