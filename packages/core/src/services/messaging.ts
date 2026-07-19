@@ -10,6 +10,8 @@ export interface SendSmsInput {
   to: string;
   body: string;
   subscriptionId?: number;
+  /** Ask the node for delivery reports. Default true. */
+  deliveryReport?: boolean;
   /** Caller's correlation id, echoed back on every event about this message. */
   ref?: string;
 }
@@ -35,7 +37,7 @@ export function messagingService(context: CoreContext) {
         to: message.to,
         body: message.body,
         ...(message.subscriptionId !== null ? { subscriptionId: message.subscriptionId } : {}),
-        deliveryReport: true,
+        deliveryReport: message.deliveryReport,
         ...(message.ref !== null ? { ref: message.ref } : {}),
       },
     );
@@ -87,6 +89,7 @@ export function messagingService(context: CoreContext) {
         body: input.body,
         subscriptionId: input.subscriptionId ?? null,
         ref: input.ref ?? null,
+        deliveryReport: input.deliveryReport ?? true,
         status: 'pending',
         // Fixed for the message's whole life: it is the idempotency key the node
         // dedupes on, so a resync re-sends this exact id rather than a new one.

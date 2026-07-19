@@ -25,7 +25,7 @@ export const DEFAULT_PAIRING_POLICY: PairingPolicy = {
 };
 
 /** Excludes characters that are easy to misread when a code is typed by hand. */
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const CODE_GROUP = 4;
 
@@ -38,7 +38,7 @@ export function formatPairingCode(characters: string): string {
   for (let index = 0; index < characters.length; index += CODE_GROUP) {
     groups.push(characters.slice(index, index + CODE_GROUP));
   }
-  return groups.join('-');
+  return groups.join("-");
 }
 
 /**
@@ -47,5 +47,5 @@ export function formatPairingCode(characters: string): string {
  * same code. Only the normalised form is ever hashed.
  */
 export function normalizePairingCode(code: string): string {
-  return code.replace(/[\s-]/g, '').toUpperCase();
+  return code.replace(/[\s-]/g, "").toUpperCase();
 }

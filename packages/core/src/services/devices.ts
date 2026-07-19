@@ -27,6 +27,25 @@ export function devicesService(context: CoreContext) {
     return device;
   }
 
+  async function reset(deviceId: string, commandType: 'revoke' | 'wipe'): Promise<void> {
+    const device = await require(deviceId);
+    await context.store.devices.update(deviceId, {
+      status: 'revoked',
+      revokedAt: context.clock.now(),
+      phase: 'offline',
+    });
+    await context.sessions.deliver(deviceId, commandFrame(command(deviceId), { type: commandType }));
+    await context.sessions.unregister(deviceId, deviceId);
+    await auditEvent(context, {
+      deviceId,
+      direction: 'system',
+      kind: 'system',
+      type: 'device.revoked',
+      payload: { installId: device.installId, via: commandType },
+    });
+    await context.hooks.emit('device.revoked', { deviceId });
+  }
+
   return {
     async list(): Promise<DeviceView[]> {
       return (await context.store.devices.list()).map(view);
@@ -37,29 +56,18 @@ export function devicesService(context: CoreContext) {
     },
 
     /**
-     * Revokes locally first, then tells the node. The order matters: if the
-     * command cannot be delivered the credential is still dead, so a device that
-     * was offline during revocation cannot reconnect and keep working.
+     * Kills the credential locally first, then tells the node. The order matters:
+     * if the command cannot be delivered the credential is still dead, so a device
+     * that was offline during revocation cannot reconnect and keep working.
+     * `wipe` differs from `revoke` only in the command the node receives — both
+     * are a full node reset — so they share this path.
      */
     async revoke(deviceId: string): Promise<void> {
-      const device = await require(deviceId);
-      const now = context.clock.now();
-      await context.store.devices.update(deviceId, {
-        status: 'revoked',
-        revokedAt: now,
-        phase: 'offline',
-      });
+      await reset(deviceId, 'revoke');
+    },
 
-      await context.sessions.deliver(deviceId, commandFrame(command(deviceId), { type: 'revoke' }));
-      await context.sessions.unregister(deviceId, deviceId);
-      await auditEvent(context, {
-        deviceId,
-        direction: 'system',
-        kind: 'system',
-        type: 'device.revoked',
-        payload: { installId: device.installId },
-      });
-      await context.hooks.emit('device.revoked', { deviceId });
+    async wipe(deviceId: string): Promise<void> {
+      await reset(deviceId, 'wipe');
     },
 
     async requestStatus(deviceId: string): Promise<void> {

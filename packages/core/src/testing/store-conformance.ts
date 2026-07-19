@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LunoStore, PairingSessionRecord } from '../src';
+import type { LunoStore, PairingSessionRecord } from '../index';
 
 const NOW = 1_700_000_000_000;
 
@@ -150,6 +150,7 @@ export function describeStoreConformance(name: string, makeStore: () => LunoStor
       body: 'x',
       subscriptionId: null,
       ref: null,
+      deliveryReport: true,
       status,
       commandId: `cmd_${id}`,
       nodeMessageId: null,

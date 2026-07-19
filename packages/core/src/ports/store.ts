@@ -124,6 +124,7 @@ export interface MessageRecord {
   body: string;
   subscriptionId: number | null;
   ref: string | null;
+  deliveryReport: boolean;
   status: MessageStatus;
   /** Envelope id of the `send_sms` frame, which is what the node acks and resyncs on. */
   commandId: string | null;
