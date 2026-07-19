@@ -314,7 +314,7 @@ Every frame shares one envelope:
 | `send_sms` | `{to, body, subscriptionId?, deliveryReport:true, ref}` | `ref` = caller's correlation id echoed back on events |
 | `cancel_sms` | `{commandId}` | best-effort; only if not yet SENT |
 | `get_status` | `{}` | node replies with a full `device_status` event |
-| `config_update` | `{heartbeatSec?, rateLimit?, allowlist?, credential?}` | rotate creds / push policy |
+| `config_update` | `{heartbeatSec?, rateLimitPerMinute?, allowlist?, credential?}` | rotate creds / push policy |
 | `revoke` / `wipe` | `{}` | unpair; clear credential + queues |
 
 ### 8.3 Events (node → backend)
@@ -324,8 +324,8 @@ Every frame shares one envelope:
 | `sms_sent` | `{messageId, parts:[{index, status, errorCode?}]}` |
 | `delivery_report` | `{messageId, part, status, at}` |
 | `sms_received` | `{from, body, subscriptionId, receivedAt, parts}` |
-| `device_status` | full `DeviceState` snapshot |
-| `heartbeat` | `{signal, battery, queueDepth, transports}` |
+| `device_status` | `{battery?, network?, sims[]}` — full `DeviceState` snapshot |
+| `heartbeat` | `{queueDepth, battery?, signals[], transports[]}` |
 | `log` | `{level, tag, msg, at}` (redacted) |
 | `error` | `{ref?, code, message}` (normalized taxonomy §10) |
 
