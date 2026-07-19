@@ -117,18 +117,76 @@ class DeviceState {
   final NetworkStatus? network;
 }
 
+/// [pending] means the backend accepted the code but its policy requires an
+/// operator to approve this device before issuing a credential.
+enum PairingOutcome { success, pending, failure }
+
 class PairingResult {
   PairingResult({
-    required this.ok,
+    required this.outcome,
     this.deviceId,
     this.errorCode,
     this.message,
+    this.retryAfterMs,
   });
 
-  final bool ok;
+  final PairingOutcome outcome;
   final String? deviceId;
+
+  /// A stable machine code from the backend's pairing taxonomy (`session_expired`,
+  /// `session_exhausted`, …). Unknown codes arrive verbatim so a backend can add
+  /// reasons without an app release; render [message] when one isn't recognised.
   final String? errorCode;
   final String? message;
+
+  /// How long to wait before re-checking a [PairingOutcome.pending] enrolment.
+  final int? retryAfterMs;
+}
+
+enum PairingPayloadStatus { ok, unsupportedVersion, malformed }
+
+/// A scanned QR payload after native parsing. Carries only enrolment *inputs* —
+/// pairing policy stays on the backend and never rides in the code.
+class PairingPayloadInfo {
+  PairingPayloadInfo({
+    required this.backendUrl,
+    required this.pairingCode,
+    this.sessionId,
+    this.label,
+    this.pin,
+  });
+
+  final String backendUrl;
+  final String pairingCode;
+  final String? sessionId;
+  final String? label;
+  final String? pin;
+}
+
+class PairingPayloadParse {
+  PairingPayloadParse({required this.status, this.payload, this.reason});
+
+  final PairingPayloadStatus status;
+  final PairingPayloadInfo? payload;
+  final String? reason;
+}
+
+/// An enrolment awaiting operator approval, held durably by native so the wait
+/// survives the UI being closed.
+class PendingPairing {
+  PendingPairing({
+    required this.enrollmentId,
+    required this.backendUrl,
+    required this.retryAfterMs,
+    required this.startedAtMs,
+    this.label,
+  });
+
+  final String enrollmentId;
+  final String backendUrl;
+  final int retryAfterMs;
+  final int startedAtMs;
+  final String? label;
 }
 
 class LogEntry {
@@ -199,6 +257,21 @@ abstract class LunoHostApi {
 
   @async
   PairingResult startPairing(String backendUrl, String pairingCode);
+
+  /// Parses a scanned QR payload without contacting the backend, so the UI can
+  /// show what it is about to enrol with before committing.
+  PairingPayloadParse parsePairingPayload(String raw);
+
+  @async
+  PairingResult startPairingFromPayload(String raw);
+
+  /// Re-checks a pending enrolment. Null when nothing is pending.
+  @async
+  PairingResult? checkPairingApproval();
+
+  PendingPairing? pendingPairing();
+
+  void cancelPendingPairing();
 
   bool isPaired();
 

@@ -145,6 +145,28 @@
     </issue>
 
     <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.camera.lifecycle.ExperimentalCameraProviderConfiguration` or `@OptIn(markerClass = androidx.camera.lifecycle.ExperimentalCameraProviderConfiguration.class)`"
+        errorLine1="                ProcessCameraProvider.configureInstance(config.build())"
+        errorLine2="                                      ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/dev/steenbakker/mobile_scanner/MobileScanner.kt"
+            line="95"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.camera.camera2.interop.ExperimentalCamera2Interop` or `@OptIn(markerClass = androidx.camera.camera2.interop.ExperimentalCamera2Interop.class)`"
+        errorLine1="                        val cameraId = Camera2CameraInfo.from(cameraInfo).cameraId"
+        errorLine2="                                                         ~~~~">
+        <location
+            file="src/main/kotlin/dev/steenbakker/mobile_scanner/MobileScannerCameraLensSelector.kt"
+            line="287"
+            column="58"/>
+    </issue>
+
+    <issue
         id="PermissionImpliesUnsupportedChromeOsHardware"
         message="Permission exists without corresponding hardware `&lt;uses-feature android:name=&quot;android.hardware.telephony&quot; required=&quot;false&quot;>` tag"
         errorLine1="    &lt;uses-permission android:name=&quot;android.permission.RECEIVE_SMS&quot; />"

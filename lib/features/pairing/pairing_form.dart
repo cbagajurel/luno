@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../bridge/generated/luno_api.g.dart';
 import '../../state/pairing_providers.dart';
 import '../../ui/ui.dart';
+import 'pairing_banner.dart';
+import 'pairing_messages.dart';
+import 'pairing_scan_screen.dart';
 
 /// Reusable enrolment form: an editable backend URL (pre-filled with the last one
-/// used this session) plus a pairing code. Shared by the full pairing screen and
-/// the inline reconnect sheet so both stay in sync.
+/// used this session) plus a pairing code, with a shortcut into QR scanning.
+/// Shared by the full pairing screen and the inline reconnect sheet so both stay
+/// in sync.
 class PairingForm extends ConsumerStatefulWidget {
   const PairingForm({
     super.key,
@@ -14,6 +19,7 @@ class PairingForm extends ConsumerStatefulWidget {
     this.busyLabel = 'Pairing…',
     this.onPaired,
     this.autofocusCode = false,
+    this.showScanAction = true,
   });
 
   final String submitLabel;
@@ -23,6 +29,9 @@ class PairingForm extends ConsumerStatefulWidget {
   /// over (used by the full-screen flow); the reconnect sheet passes a pop.
   final VoidCallback? onPaired;
   final bool autofocusCode;
+
+  /// The reconnect sheet hides it — the scanner wants the whole screen.
+  final bool showScanAction;
 
   @override
   ConsumerState<PairingForm> createState() => _PairingFormState();
@@ -61,18 +70,27 @@ class _PairingFormState extends ConsumerState<PairingForm> {
           .read(pairingProvider.notifier)
           .pair(_urlController.text.trim(), _codeController.text.trim());
       if (!mounted) return;
-      if (result.ok) {
-        widget.onPaired?.call();
-      } else {
-        setState(
-          () => _error = result.message ?? result.errorCode ?? 'Pairing failed',
-        );
+      switch (result.outcome) {
+        // Pending hands off the same way as success: the pairing screen swaps
+        // itself for the approval wait, and the sheet just closes behind it.
+        case PairingOutcome.success:
+        case PairingOutcome.pending:
+          widget.onPaired?.call();
+        case PairingOutcome.failure:
+          setState(() => _error = pairingFailureText(result));
       }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _scan() async {
+    final paired = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const PairingScanScreen()));
+    if (paired == true && mounted) widget.onPaired?.call();
   }
 
   @override
@@ -83,6 +101,18 @@ class _PairingFormState extends ConsumerState<PairingForm> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.showScanAction) ...[
+            LunoButton(
+              label: 'Scan QR code',
+              icon: Icons.qr_code_scanner_rounded,
+              variant: LunoButtonVariant.tonal,
+              expand: true,
+              onPressed: _submitting ? null : _scan,
+            ),
+            const SizedBox(height: LunoSpacing.lg),
+            const _OrDivider(),
+            const SizedBox(height: LunoSpacing.lg),
+          ],
           LunoTextField(
             label: 'Backend URL',
             hint: 'https://gateway.example.com',
@@ -107,7 +137,7 @@ class _PairingFormState extends ConsumerState<PairingForm> {
           ),
           if (_error != null) ...[
             const SizedBox(height: LunoSpacing.md),
-            _PairingError(_error!),
+            PairingErrorBanner(_error!),
           ],
           const SizedBox(height: LunoSpacing.xl),
           LunoButton(
@@ -124,38 +154,25 @@ class _PairingFormState extends ConsumerState<PairingForm> {
   }
 }
 
-class _PairingError extends StatelessWidget {
-  const _PairingError(this.message);
-
-  final String message;
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
 
   @override
   Widget build(BuildContext context) {
-    final danger = context.semantic.danger;
-    return Container(
-      padding: const EdgeInsets.all(LunoSpacing.sm),
-      decoration: BoxDecoration(
-        color: danger.container,
-        borderRadius: LunoRadius.field,
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: 18,
-            color: danger.onContainer,
-          ),
-          const SizedBox(width: LunoSpacing.xs),
-          Expanded(
-            child: Text(
-              message,
-              style: context.text.bodySmall?.copyWith(
-                color: danger.onContainer,
-              ),
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: LunoSpacing.sm),
+          child: Text(
+            'or enter it manually',
+            style: context.text.labelSmall?.copyWith(
+              color: context.scheme.onSurfaceVariant,
             ),
           ),
-        ],
-      ),
+        ),
+        const Expanded(child: Divider()),
+      ],
     );
   }
 }
@@ -173,6 +190,7 @@ Future<void> showReconnectSheet(BuildContext context) {
       submitLabel: 'Reconnect',
       busyLabel: 'Reconnecting…',
       autofocusCode: true,
+      showScanAction: false,
       onPaired: () {
         Navigator.of(sheetCtx).pop();
         messenger.showSnackBar(

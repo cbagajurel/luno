@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/pairing_providers.dart';
 import '../../ui/ui.dart';
 import 'pairing_form.dart';
+import 'pairing_pending_view.dart';
 
 class PairingScreen extends ConsumerWidget {
   const PairingScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A pending enrolment outlives the UI, so the screen asks native what state
+    // it is in rather than assuming a fresh start.
+    final pending = ref.watch(pendingPairingProvider).value;
+    final awaitingApproval = pending != null;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -28,7 +35,9 @@ class PairingScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Icon(
-                        Icons.hub_rounded,
+                        awaitingApproval
+                            ? Icons.hourglass_top_rounded
+                            : Icons.hub_rounded,
                         size: 32,
                         color: context.semantic.brand.color,
                       ),
@@ -36,20 +45,27 @@ class PairingScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: LunoSpacing.lg),
                   Text(
-                    'Enrol with your backend',
+                    awaitingApproval
+                        ? 'Almost there'
+                        : 'Enrol with your backend',
                     textAlign: TextAlign.center,
                     style: context.text.headlineSmall,
                   ),
                   const SizedBox(height: LunoSpacing.xs),
                   Text(
-                    'Point this node at your Luno server and enter the pairing code it issued.',
+                    awaitingApproval
+                        ? 'This device has been submitted for approval.'
+                        : 'Scan the pairing QR code from your Luno server, or enter its URL and code by hand.',
                     textAlign: TextAlign.center,
                     style: context.text.bodyMedium?.copyWith(
                       color: context.scheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: LunoSpacing.xl),
-                  const LunoCard(child: PairingForm()),
+                  if (awaitingApproval)
+                    PairingPendingView(pending: pending)
+                  else
+                    const LunoCard(child: PairingForm()),
                 ],
               ),
             ),

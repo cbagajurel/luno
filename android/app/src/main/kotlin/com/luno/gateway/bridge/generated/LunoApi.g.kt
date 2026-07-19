@@ -211,6 +211,34 @@ enum class PermissionStatus(val raw: Int) {
   }
 }
 
+/**
+ * [pending] means the backend accepted the code but its policy requires an
+ * operator to approve this device before issuing a credential.
+ */
+enum class PairingOutcome(val raw: Int) {
+  SUCCESS(0),
+  PENDING(1),
+  FAILURE(2);
+
+  companion object {
+    fun ofRaw(raw: Int): PairingOutcome? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
+enum class PairingPayloadStatus(val raw: Int) {
+  OK(0),
+  UNSUPPORTED_VERSION(1),
+  MALFORMED(2);
+
+  companion object {
+    fun ofRaw(raw: Int): PairingPayloadStatus? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 /** Generated class from Pigeon that represents data sent in messages. */
 data class SimInfo (
   val subscriptionId: Long,
@@ -563,27 +591,36 @@ data class DeviceState (
 
 /** Generated class from Pigeon that represents data sent in messages. */
 data class PairingResult (
-  val ok: Boolean,
+  val outcome: PairingOutcome,
   val deviceId: String? = null,
+  /**
+   * A stable machine code from the backend's pairing taxonomy (`session_expired`,
+   * `session_exhausted`, …). Unknown codes arrive verbatim so a backend can add
+   * reasons without an app release; render [message] when one isn't recognised.
+   */
   val errorCode: String? = null,
-  val message: String? = null
+  val message: String? = null,
+  /** How long to wait before re-checking a [PairingOutcome.pending] enrolment. */
+  val retryAfterMs: Long? = null
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): PairingResult {
-      val ok = pigeonVar_list[0] as Boolean
+      val outcome = pigeonVar_list[0] as PairingOutcome
       val deviceId = pigeonVar_list[1] as String?
       val errorCode = pigeonVar_list[2] as String?
       val message = pigeonVar_list[3] as String?
-      return PairingResult(ok, deviceId, errorCode, message)
+      val retryAfterMs = pigeonVar_list[4] as Long?
+      return PairingResult(outcome, deviceId, errorCode, message, retryAfterMs)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
-      ok,
+      outcome,
       deviceId,
       errorCode,
       message,
+      retryAfterMs,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -594,15 +631,168 @@ data class PairingResult (
       return true
     }
     val other = other as PairingResult
-    return LunoApiPigeonUtils.deepEquals(this.ok, other.ok) && LunoApiPigeonUtils.deepEquals(this.deviceId, other.deviceId) && LunoApiPigeonUtils.deepEquals(this.errorCode, other.errorCode) && LunoApiPigeonUtils.deepEquals(this.message, other.message)
+    return LunoApiPigeonUtils.deepEquals(this.outcome, other.outcome) && LunoApiPigeonUtils.deepEquals(this.deviceId, other.deviceId) && LunoApiPigeonUtils.deepEquals(this.errorCode, other.errorCode) && LunoApiPigeonUtils.deepEquals(this.message, other.message) && LunoApiPigeonUtils.deepEquals(this.retryAfterMs, other.retryAfterMs)
   }
 
   override fun hashCode(): Int {
     var result = javaClass.hashCode()
-    result = 31 * result + LunoApiPigeonUtils.deepHash(this.ok)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.outcome)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.deviceId)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.errorCode)
     result = 31 * result + LunoApiPigeonUtils.deepHash(this.message)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.retryAfterMs)
+    return result
+  }
+}
+
+/**
+ * A scanned QR payload after native parsing. Carries only enrolment *inputs* —
+ * pairing policy stays on the backend and never rides in the code.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class PairingPayloadInfo (
+  val backendUrl: String,
+  val pairingCode: String,
+  val sessionId: String? = null,
+  val label: String? = null,
+  val pin: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): PairingPayloadInfo {
+      val backendUrl = pigeonVar_list[0] as String
+      val pairingCode = pigeonVar_list[1] as String
+      val sessionId = pigeonVar_list[2] as String?
+      val label = pigeonVar_list[3] as String?
+      val pin = pigeonVar_list[4] as String?
+      return PairingPayloadInfo(backendUrl, pairingCode, sessionId, label, pin)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      backendUrl,
+      pairingCode,
+      sessionId,
+      label,
+      pin,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as PairingPayloadInfo
+    return LunoApiPigeonUtils.deepEquals(this.backendUrl, other.backendUrl) && LunoApiPigeonUtils.deepEquals(this.pairingCode, other.pairingCode) && LunoApiPigeonUtils.deepEquals(this.sessionId, other.sessionId) && LunoApiPigeonUtils.deepEquals(this.label, other.label) && LunoApiPigeonUtils.deepEquals(this.pin, other.pin)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.backendUrl)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.pairingCode)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.sessionId)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.label)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.pin)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class PairingPayloadParse (
+  val status: PairingPayloadStatus,
+  val payload: PairingPayloadInfo? = null,
+  val reason: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): PairingPayloadParse {
+      val status = pigeonVar_list[0] as PairingPayloadStatus
+      val payload = pigeonVar_list[1] as PairingPayloadInfo?
+      val reason = pigeonVar_list[2] as String?
+      return PairingPayloadParse(status, payload, reason)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      status,
+      payload,
+      reason,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as PairingPayloadParse
+    return LunoApiPigeonUtils.deepEquals(this.status, other.status) && LunoApiPigeonUtils.deepEquals(this.payload, other.payload) && LunoApiPigeonUtils.deepEquals(this.reason, other.reason)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.status)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.payload)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.reason)
+    return result
+  }
+}
+
+/**
+ * An enrolment awaiting operator approval, held durably by native so the wait
+ * survives the UI being closed.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class PendingPairing (
+  val enrollmentId: String,
+  val backendUrl: String,
+  val retryAfterMs: Long,
+  val startedAtMs: Long,
+  val label: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): PendingPairing {
+      val enrollmentId = pigeonVar_list[0] as String
+      val backendUrl = pigeonVar_list[1] as String
+      val retryAfterMs = pigeonVar_list[2] as Long
+      val startedAtMs = pigeonVar_list[3] as Long
+      val label = pigeonVar_list[4] as String?
+      return PendingPairing(enrollmentId, backendUrl, retryAfterMs, startedAtMs, label)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      enrollmentId,
+      backendUrl,
+      retryAfterMs,
+      startedAtMs,
+      label,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as PendingPairing
+    return LunoApiPigeonUtils.deepEquals(this.enrollmentId, other.enrollmentId) && LunoApiPigeonUtils.deepEquals(this.backendUrl, other.backendUrl) && LunoApiPigeonUtils.deepEquals(this.retryAfterMs, other.retryAfterMs) && LunoApiPigeonUtils.deepEquals(this.startedAtMs, other.startedAtMs) && LunoApiPigeonUtils.deepEquals(this.label, other.label)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.enrollmentId)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.backendUrl)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.retryAfterMs)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.startedAtMs)
+    result = 31 * result + LunoApiPigeonUtils.deepHash(this.label)
     return result
   }
 }
@@ -661,46 +851,71 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         }
       }
       130.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          SimInfo.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          PairingOutcome.ofRaw(it.toInt())
         }
       }
       131.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          BatteryStatus.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          PairingPayloadStatus.ofRaw(it.toInt())
         }
       }
       132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          SignalInfo.fromList(it)
+          SimInfo.fromList(it)
         }
       }
       133.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          NetworkStatus.fromList(it)
+          BatteryStatus.fromList(it)
         }
       }
       134.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          OutboxEntry.fromList(it)
+          SignalInfo.fromList(it)
         }
       }
       135.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          InboundEntry.fromList(it)
+          NetworkStatus.fromList(it)
         }
       }
       136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          DeviceState.fromList(it)
+          OutboxEntry.fromList(it)
         }
       }
       137.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          PairingResult.fromList(it)
+          InboundEntry.fromList(it)
         }
       }
       138.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          DeviceState.fromList(it)
+        }
+      }
+      139.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PairingResult.fromList(it)
+        }
+      }
+      140.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PairingPayloadInfo.fromList(it)
+        }
+      }
+      141.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PairingPayloadParse.fromList(it)
+        }
+      }
+      142.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PendingPairing.fromList(it)
+        }
+      }
+      143.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           LogEntry.fromList(it)
         }
@@ -714,40 +929,60 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
         stream.write(129)
         writeValue(stream, value.raw.toLong())
       }
-      is SimInfo -> {
+      is PairingOutcome -> {
         stream.write(130)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is BatteryStatus -> {
+      is PairingPayloadStatus -> {
         stream.write(131)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is SignalInfo -> {
+      is SimInfo -> {
         stream.write(132)
         writeValue(stream, value.toList())
       }
-      is NetworkStatus -> {
+      is BatteryStatus -> {
         stream.write(133)
         writeValue(stream, value.toList())
       }
-      is OutboxEntry -> {
+      is SignalInfo -> {
         stream.write(134)
         writeValue(stream, value.toList())
       }
-      is InboundEntry -> {
+      is NetworkStatus -> {
         stream.write(135)
         writeValue(stream, value.toList())
       }
-      is DeviceState -> {
+      is OutboxEntry -> {
         stream.write(136)
         writeValue(stream, value.toList())
       }
-      is PairingResult -> {
+      is InboundEntry -> {
         stream.write(137)
         writeValue(stream, value.toList())
       }
-      is LogEntry -> {
+      is DeviceState -> {
         stream.write(138)
+        writeValue(stream, value.toList())
+      }
+      is PairingResult -> {
+        stream.write(139)
+        writeValue(stream, value.toList())
+      }
+      is PairingPayloadInfo -> {
+        stream.write(140)
+        writeValue(stream, value.toList())
+      }
+      is PairingPayloadParse -> {
+        stream.write(141)
+        writeValue(stream, value.toList())
+      }
+      is PendingPairing -> {
+        stream.write(142)
+        writeValue(stream, value.toList())
+      }
+      is LogEntry -> {
+        stream.write(143)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -784,6 +1019,16 @@ interface LunoHostApi {
   fun requestReceiveSmsPermission(callback: (Result<PermissionStatus>) -> Unit)
   fun getRecentInbox(): List<InboundEntry>
   fun startPairing(backendUrl: String, pairingCode: String, callback: (Result<PairingResult>) -> Unit)
+  /**
+   * Parses a scanned QR payload without contacting the backend, so the UI can
+   * show what it is about to enrol with before committing.
+   */
+  fun parsePairingPayload(raw: String): PairingPayloadParse
+  fun startPairingFromPayload(raw: String, callback: (Result<PairingResult>) -> Unit)
+  /** Re-checks a pending enrolment. Null when nothing is pending. */
+  fun checkPairingApproval(callback: (Result<PairingResult?>) -> Unit)
+  fun pendingPairing(): PendingPairing?
+  fun cancelPendingPairing()
   fun isPaired(): Boolean
   fun unpair()
   fun getRecentLogs(): List<LogEntry>
@@ -1087,6 +1332,92 @@ interface LunoHostApi {
                 reply.reply(LunoApiPigeonUtils.wrapResult(data))
               }
             }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.parsePairingPayload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val rawArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              listOf(api.parsePairingPayload(rawArg))
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.startPairingFromPayload$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val rawArg = args[0] as String
+            api.startPairingFromPayload(rawArg) { result: Result<PairingResult> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(LunoApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(LunoApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.checkPairingApproval$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.checkPairingApproval{ result: Result<PairingResult?> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(LunoApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(LunoApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.pendingPairing$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.pendingPairing())
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.cancelPendingPairing$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.cancelPendingPairing()
+              listOf(null)
+            } catch (exception: Throwable) {
+              LunoApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)

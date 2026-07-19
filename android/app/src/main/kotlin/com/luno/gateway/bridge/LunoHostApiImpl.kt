@@ -1,6 +1,7 @@
 package com.luno.gateway.bridge
 
 import com.luno.gateway.backend.auth.PairingManager
+import com.luno.gateway.backend.auth.PairingPayloadResult
 import com.luno.gateway.backend.auth.PairingResult
 import com.luno.gateway.backend.ws.ConnectionManager
 import com.luno.gateway.bridge.generated.LunoHostApi
@@ -24,7 +25,12 @@ import com.luno.gateway.bridge.generated.DeviceState as DeviceStateDto
 import com.luno.gateway.bridge.generated.InboundEntry as InboundEntryDto
 import com.luno.gateway.bridge.generated.LogEntry as LogEntryDto
 import com.luno.gateway.bridge.generated.OutboxEntry as OutboxEntryDto
+import com.luno.gateway.bridge.generated.PairingOutcome as PairingOutcomeDto
+import com.luno.gateway.bridge.generated.PairingPayloadInfo as PairingPayloadInfoDto
+import com.luno.gateway.bridge.generated.PairingPayloadParse as PairingPayloadParseDto
+import com.luno.gateway.bridge.generated.PairingPayloadStatus as PairingPayloadStatusDto
 import com.luno.gateway.bridge.generated.PairingResult as PairingResultDto
+import com.luno.gateway.bridge.generated.PendingPairing as PendingPairingDto
 import com.luno.gateway.logging.LogRecord
 
 class LunoHostApiImpl(
@@ -96,20 +102,55 @@ class LunoHostApiImpl(
         backendUrl: String,
         pairingCode: String,
         callback: (Result<PairingResultDto>) -> Unit,
-    ) {
+    ) = enroll(callback) { pairingManager.pair(backendUrl, pairingCode) }
+
+    override fun startPairingFromPayload(
+        raw: String,
+        callback: (Result<PairingResultDto>) -> Unit,
+    ) = enroll(callback) { pairingManager.pairFromPayload(raw) }
+
+    override fun checkPairingApproval(callback: (Result<PairingResultDto?>) -> Unit) {
         scope.launch {
-            val dto =
-                when (val result = pairingManager.pair(backendUrl, pairingCode)) {
-                    is PairingResult.Success -> {
-                        connectionManager.kick()
-                        PairingResultDto(ok = true, deviceId = result.deviceId)
-                    }
-                    is PairingResult.Failure ->
-                        PairingResultDto(ok = false, errorCode = result.error.name, message = result.message)
-                }
+            val dto = pairingManager.checkPendingApproval()?.toDto()
             withContext(Dispatchers.Main) { callback(Result.success(dto)) }
         }
     }
+
+    override fun parsePairingPayload(raw: String): PairingPayloadParseDto =
+        when (val parsed = pairingManager.parsePayload(raw)) {
+            is PairingPayloadResult.Ok ->
+                PairingPayloadParseDto(
+                    status = PairingPayloadStatusDto.OK,
+                    payload =
+                        PairingPayloadInfoDto(
+                            backendUrl = parsed.payload.backendUrl,
+                            pairingCode = parsed.payload.pairingCode,
+                            sessionId = parsed.payload.sessionId,
+                            label = parsed.payload.label,
+                            pin = parsed.payload.pin,
+                        ),
+                )
+            is PairingPayloadResult.UnsupportedVersion ->
+                PairingPayloadParseDto(
+                    status = PairingPayloadStatusDto.UNSUPPORTED_VERSION,
+                    reason = "This pairing code needs a newer version of Luno (format v${parsed.version}).",
+                )
+            is PairingPayloadResult.Malformed ->
+                PairingPayloadParseDto(status = PairingPayloadStatusDto.MALFORMED, reason = parsed.reason)
+        }
+
+    override fun pendingPairing(): PendingPairingDto? =
+        pairingManager.pendingEnrollment()?.let {
+            PendingPairingDto(
+                enrollmentId = it.enrollmentId,
+                backendUrl = it.backendUrl,
+                retryAfterMs = it.retryAfterMillis,
+                startedAtMs = it.startedAtMillis,
+                label = it.label,
+            )
+        }
+
+    override fun cancelPendingPairing() = pairingManager.cancelPendingApproval()
 
     override fun isPaired(): Boolean = pairingManager.isPaired()
 
@@ -117,6 +158,36 @@ class LunoHostApiImpl(
         pairingManager.unpair()
         connectionManager.disconnect()
     }
+
+    private fun enroll(
+        callback: (Result<PairingResultDto>) -> Unit,
+        attempt: suspend () -> PairingResult,
+    ) {
+        scope.launch {
+            val dto = attempt().toDto()
+            withContext(Dispatchers.Main) { callback(Result.success(dto)) }
+        }
+    }
+
+    /**
+     * Reports the backend's own wire code when it sent one, so a verdict this
+     * build doesn't recognise still reaches the UI intact.
+     */
+    private fun PairingResult.toDto(): PairingResultDto =
+        when (this) {
+            is PairingResult.Success -> {
+                connectionManager.kick()
+                PairingResultDto(outcome = PairingOutcomeDto.SUCCESS, deviceId = deviceId)
+            }
+            is PairingResult.Pending ->
+                PairingResultDto(outcome = PairingOutcomeDto.PENDING, retryAfterMs = retryAfterMillis)
+            is PairingResult.Failure ->
+                PairingResultDto(
+                    outcome = PairingOutcomeDto.FAILURE,
+                    errorCode = rawCode ?: error.wireCode,
+                    message = message,
+                )
+        }
 
     override fun getRecentLogs(): List<LogEntryDto> = logBuffer.snapshot().map { it.toDto() }
 

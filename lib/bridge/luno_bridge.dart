@@ -172,6 +172,25 @@ class LunoBridge {
   Future<PairingResult> startPairing(String backendUrl, String pairingCode) =>
       _hostApi.startPairing(backendUrl, pairingCode);
 
+  /// Enrols from a scanned QR payload. Native parses it, so the payload format
+  /// stays one implementation shared with any future non-Android node.
+  Future<PairingResult> startPairingFromPayload(String raw) =>
+      _hostApi.startPairingFromPayload(raw);
+
+  /// Parses a scanned payload without contacting the backend, so the UI can
+  /// confirm what it is about to enrol with.
+  Future<PairingPayloadParse> parsePairingPayload(String raw) =>
+      _hostApi.parsePairingPayload(raw);
+
+  /// Re-checks an enrolment the backend parked for operator approval. Null when
+  /// nothing is pending.
+  Future<PairingResult?> checkPairingApproval() =>
+      _hostApi.checkPairingApproval();
+
+  Future<PendingPairing?> pendingPairing() => _hostApi.pendingPairing();
+
+  Future<void> cancelPendingPairing() => _hostApi.cancelPendingPairing();
+
   Future<bool> isPaired() => _hostApi.isPaired();
 
   Future<void> unpair() => _hostApi.unpair();

@@ -26,9 +26,21 @@ only on the versioned wire protocol. How the backend is built is not our concern
 
 ## State of the repo
 
-**Progress: M1–M17 complete (as of 2026-07-17). Next up: M18** (observability,
-tests, release). See [`docs/milestones.md`](docs/milestones.md)
-for the authoritative status table — build one milestone at a time, don't skip ahead.
+**Progress: M1–M17 complete, plus the pairing-session system (2026-07-19).**
+[`docs/milestones.md`](docs/milestones.md) covered the initial build-out (M1–M18)
+and is kept for history; work is no longer gated on its running order.
+
+**Pairing sessions (2026-07-19).** The node is now a pure *pairing client*: it
+submits a code — typed or scanned — and renders the backend's verdict, enforcing
+no expiry, usage limit, revocation or approval rule of its own, so every
+enrolment policy is backend config rather than an app release. New/changed:
+`backend/auth/{PairingPayload,PendingEnrollment,SealedValueStore,InstallId}.kt`,
+a policy-driven `PairingError` taxonomy with forward-compatible unknown codes,
+`RestClient` enroll v2 (`nonce`, `installId`, `sessionId`, reserved `publicKey`,
+`status: approved|pending|denied`) plus `POST /enroll/status`, and QR pairing
+(versioned `luno://pair` / JSON payload parsed natively; `mobile_scanner` is a
+viewfinder only). See [`docs/pairing.md`](docs/pairing.md) — that file is the
+contract the `@luno/*` server SDKs implement.
 
 Done so far:
 
@@ -182,6 +194,5 @@ does not implement retry/queueing/telephony logic itself.
 ## Design docs
 
 Architecture and roadmap live in `plan.md` and `docs/` (`architecture.md`,
-`folder-structure.md`, `milestones.md`, `pitfalls.md`). Build one milestone at a
-time; don't skip ahead. The node is backend-agnostic and Flutter is UI-only (see
-above).
+`folder-structure.md`, `milestones.md`, `pairing.md`, `pitfalls.md`). The node is
+backend-agnostic and Flutter is UI-only (see above).

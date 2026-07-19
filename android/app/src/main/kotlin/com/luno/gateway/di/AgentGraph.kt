@@ -5,7 +5,9 @@ import android.os.Build
 import com.luno.gateway.agent.AgentController
 import com.luno.gateway.agent.CommandRouter
 import com.luno.gateway.backend.auth.DeviceCredentialStore
+import com.luno.gateway.backend.auth.InstallId
 import com.luno.gateway.backend.auth.PairingManager
+import com.luno.gateway.backend.auth.PendingEnrollmentStore
 import com.luno.gateway.backend.auth.SharedPrefsStore
 import com.luno.gateway.backend.protocol.Event
 import com.luno.gateway.backend.protocol.PartSent
@@ -99,12 +101,15 @@ class AgentGraph(context: Context) {
             .also { it.start(smsTransport) }
 
     // --- backend connection (M13/M14) ---
-    val credentialStore: DeviceCredentialStore =
-        DeviceCredentialStore(
-            SharedPrefsStore(appContext.getSharedPreferences("luno_secure_prefs", Context.MODE_PRIVATE)),
-            KeystoreManager(),
-            logger,
-        )
+    private val secureStore =
+        SharedPrefsStore(appContext.getSharedPreferences("luno_secure_prefs", Context.MODE_PRIVATE))
+
+    private val keystore = KeystoreManager()
+
+    val credentialStore: DeviceCredentialStore = DeviceCredentialStore(secureStore, keystore, logger)
+
+    private val pendingEnrollmentStore: PendingEnrollmentStore =
+        PendingEnrollmentStore(secureStore, keystore, logger)
 
     private val deviceInfo =
         DeviceInfo(
@@ -114,10 +119,17 @@ class AgentGraph(context: Context) {
             appVersion =
                 runCatching { appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName }
                     .getOrNull() ?: "unknown",
+            installId = InstallId.getOrCreate(secureStore),
         )
 
     val pairingManager: PairingManager =
-        PairingManager(RestClient(allowInsecure = ALLOW_CLEARTEXT), credentialStore, deviceInfo, logger)
+        PairingManager(
+            RestClient(allowInsecure = ALLOW_CLEARTEXT),
+            credentialStore,
+            pendingEnrollmentStore,
+            deviceInfo,
+            logger,
+        )
 
     private val online: StateFlow<Boolean> =
         deviceStateStore.state

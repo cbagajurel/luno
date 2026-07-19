@@ -55,6 +55,9 @@ dependencies:
   # --- Logging (UI side; forwards to the native LunoLogger) ---
   logger: ^2.7.0
 
+  # --- QR pairing (viewfinder only; payload parsing stays native) ---
+  mobile_scanner: ^7.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

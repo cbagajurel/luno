@@ -15,8 +15,8 @@ import org.junit.Test
 
 class RestClientTest {
     private val https = MockHttps()
-    private val deviceInfo = DeviceInfo("Pixel", "Google", 34, "1.0")
-    private val request = EnrollRequest("code-123", deviceInfo)
+    private val deviceInfo = DeviceInfo("Pixel", "Google", 34, "1.0", installId = "install-1")
+    private val request = EnrollRequest("code-123", nonce = "nonce-1", deviceInfo = deviceInfo)
 
     private fun client() = RestClient(client = https.client)
 

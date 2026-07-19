@@ -17,6 +17,9 @@ class FakeLunoBridge implements LunoBridge {
     this.receiveSmsPermission = PermissionStatus.granted,
     this.grantOnRequest = true,
     this.pairingResult,
+    this.payloadParse,
+    this.pending,
+    this.approvalResult,
   }) : deviceState =
            deviceState ??
            DeviceState(sims: const <SimInfo>[], signals: const <SignalInfo>[]);
@@ -36,9 +39,17 @@ class FakeLunoBridge implements LunoBridge {
   /// exercise denial and blocked paths, which the old fake could not reach.
   bool grantOnRequest;
   PairingResult? pairingResult;
+  PairingPayloadParse? payloadParse;
+
+  /// The enrolment native is holding for operator approval, if any.
+  PendingPairing? pending;
+
+  /// What the next approval poll returns; null means "nothing pending".
+  PairingResult? approvalResult;
 
   final List<({String recipient, String body, int? subId})> sent = [];
   int unpairCalls = 0;
+  int cancelPendingCalls = 0;
   int startAgentCalls = 0;
   int openAppSettingsCalls = 0;
 
@@ -131,7 +142,50 @@ class FakeLunoBridge implements LunoBridge {
   Future<PairingResult> startPairing(
     String backendUrl,
     String pairingCode,
-  ) async => pairingResult ?? PairingResult(ok: true, deviceId: 'dev-1');
+  ) async => _enrol();
+
+  @override
+  Future<PairingResult> startPairingFromPayload(String raw) async => _enrol();
+
+  PairingResult _enrol() {
+    final result =
+        pairingResult ??
+        PairingResult(outcome: PairingOutcome.success, deviceId: 'dev-1');
+    if (result.outcome == PairingOutcome.success) paired = true;
+    return result;
+  }
+
+  @override
+  Future<PairingPayloadParse> parsePairingPayload(String raw) async =>
+      payloadParse ??
+      PairingPayloadParse(
+        status: PairingPayloadStatus.ok,
+        payload: PairingPayloadInfo(
+          backendUrl: 'https://gw.example.com',
+          pairingCode: 'ABC123',
+        ),
+      );
+
+  @override
+  Future<PairingResult?> checkPairingApproval() async {
+    final result = approvalResult;
+    if (result?.outcome == PairingOutcome.success) {
+      paired = true;
+      pending = null;
+    } else if (result?.errorCode == 'approval_denied') {
+      pending = null;
+    }
+    return result;
+  }
+
+  @override
+  Future<PendingPairing?> pendingPairing() async => pending;
+
+  @override
+  Future<void> cancelPendingPairing() async {
+    cancelPendingCalls++;
+    pending = null;
+  }
 
   @override
   Future<bool> isPaired() async => paired;

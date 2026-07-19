@@ -104,6 +104,12 @@ int _deepHash(Object? value) {
 /// The two are indistinguishable through the public API and share one remedy.
 enum PermissionStatus { granted, denied, blocked }
 
+/// [pending] means the backend accepted the code but its policy requires an
+/// operator to approve this device before issuing a credential.
+enum PairingOutcome { success, pending, failure }
+
+enum PairingPayloadStatus { ok, unsupportedVersion, malformed }
+
 class SimInfo {
   SimInfo({
     required this.subscriptionId,
@@ -531,22 +537,29 @@ class DeviceState {
 
 class PairingResult {
   PairingResult({
-    required this.ok,
+    required this.outcome,
     this.deviceId,
     this.errorCode,
     this.message,
+    this.retryAfterMs,
   });
 
-  bool ok;
+  PairingOutcome outcome;
 
   String? deviceId;
 
+  /// A stable machine code from the backend's pairing taxonomy (`session_expired`,
+  /// `session_exhausted`, …). Unknown codes arrive verbatim so a backend can add
+  /// reasons without an app release; render [message] when one isn't recognised.
   String? errorCode;
 
   String? message;
 
+  /// How long to wait before re-checking a [PairingOutcome.pending] enrolment.
+  int? retryAfterMs;
+
   List<Object?> _toList() {
-    return <Object?>[ok, deviceId, errorCode, message];
+    return <Object?>[outcome, deviceId, errorCode, message, retryAfterMs];
   }
 
   Object encode() {
@@ -556,10 +569,11 @@ class PairingResult {
   static PairingResult decode(Object result) {
     result as List<Object?>;
     return PairingResult(
-      ok: result[0]! as bool,
+      outcome: result[0]! as PairingOutcome,
       deviceId: result[1] as String?,
       errorCode: result[2] as String?,
       message: result[3] as String?,
+      retryAfterMs: result[4] as int?,
     );
   }
 
@@ -572,10 +586,184 @@ class PairingResult {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(ok, other.ok) &&
+    return _deepEquals(outcome, other.outcome) &&
         _deepEquals(deviceId, other.deviceId) &&
         _deepEquals(errorCode, other.errorCode) &&
-        _deepEquals(message, other.message);
+        _deepEquals(message, other.message) &&
+        _deepEquals(retryAfterMs, other.retryAfterMs);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+/// A scanned QR payload after native parsing. Carries only enrolment *inputs* —
+/// pairing policy stays on the backend and never rides in the code.
+class PairingPayloadInfo {
+  PairingPayloadInfo({
+    required this.backendUrl,
+    required this.pairingCode,
+    this.sessionId,
+    this.label,
+    this.pin,
+  });
+
+  String backendUrl;
+
+  String pairingCode;
+
+  String? sessionId;
+
+  String? label;
+
+  String? pin;
+
+  List<Object?> _toList() {
+    return <Object?>[backendUrl, pairingCode, sessionId, label, pin];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static PairingPayloadInfo decode(Object result) {
+    result as List<Object?>;
+    return PairingPayloadInfo(
+      backendUrl: result[0]! as String,
+      pairingCode: result[1]! as String,
+      sessionId: result[2] as String?,
+      label: result[3] as String?,
+      pin: result[4] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PairingPayloadInfo || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(backendUrl, other.backendUrl) &&
+        _deepEquals(pairingCode, other.pairingCode) &&
+        _deepEquals(sessionId, other.sessionId) &&
+        _deepEquals(label, other.label) &&
+        _deepEquals(pin, other.pin);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class PairingPayloadParse {
+  PairingPayloadParse({required this.status, this.payload, this.reason});
+
+  PairingPayloadStatus status;
+
+  PairingPayloadInfo? payload;
+
+  String? reason;
+
+  List<Object?> _toList() {
+    return <Object?>[status, payload, reason];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static PairingPayloadParse decode(Object result) {
+    result as List<Object?>;
+    return PairingPayloadParse(
+      status: result[0]! as PairingPayloadStatus,
+      payload: result[1] as PairingPayloadInfo?,
+      reason: result[2] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PairingPayloadParse || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(status, other.status) &&
+        _deepEquals(payload, other.payload) &&
+        _deepEquals(reason, other.reason);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+/// An enrolment awaiting operator approval, held durably by native so the wait
+/// survives the UI being closed.
+class PendingPairing {
+  PendingPairing({
+    required this.enrollmentId,
+    required this.backendUrl,
+    required this.retryAfterMs,
+    required this.startedAtMs,
+    this.label,
+  });
+
+  String enrollmentId;
+
+  String backendUrl;
+
+  int retryAfterMs;
+
+  int startedAtMs;
+
+  String? label;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      enrollmentId,
+      backendUrl,
+      retryAfterMs,
+      startedAtMs,
+      label,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static PendingPairing decode(Object result) {
+    result as List<Object?>;
+    return PendingPairing(
+      enrollmentId: result[0]! as String,
+      backendUrl: result[1]! as String,
+      retryAfterMs: result[2]! as int,
+      startedAtMs: result[3]! as int,
+      label: result[4] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! PendingPairing || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(enrollmentId, other.enrollmentId) &&
+        _deepEquals(backendUrl, other.backendUrl) &&
+        _deepEquals(retryAfterMs, other.retryAfterMs) &&
+        _deepEquals(startedAtMs, other.startedAtMs) &&
+        _deepEquals(label, other.label);
   }
 
   @override
@@ -647,32 +835,47 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is PermissionStatus) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    } else if (value is SimInfo) {
+    } else if (value is PairingOutcome) {
       buffer.putUint8(130);
-      writeValue(buffer, value.encode());
-    } else if (value is BatteryStatus) {
+      writeValue(buffer, value.index);
+    } else if (value is PairingPayloadStatus) {
       buffer.putUint8(131);
-      writeValue(buffer, value.encode());
-    } else if (value is SignalInfo) {
+      writeValue(buffer, value.index);
+    } else if (value is SimInfo) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    } else if (value is NetworkStatus) {
+    } else if (value is BatteryStatus) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    } else if (value is OutboxEntry) {
+    } else if (value is SignalInfo) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    } else if (value is InboundEntry) {
+    } else if (value is NetworkStatus) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    } else if (value is DeviceState) {
+    } else if (value is OutboxEntry) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    } else if (value is PairingResult) {
+    } else if (value is InboundEntry) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    } else if (value is LogEntry) {
+    } else if (value is DeviceState) {
       buffer.putUint8(138);
+      writeValue(buffer, value.encode());
+    } else if (value is PairingResult) {
+      buffer.putUint8(139);
+      writeValue(buffer, value.encode());
+    } else if (value is PairingPayloadInfo) {
+      buffer.putUint8(140);
+      writeValue(buffer, value.encode());
+    } else if (value is PairingPayloadParse) {
+      buffer.putUint8(141);
+      writeValue(buffer, value.encode());
+    } else if (value is PendingPairing) {
+      buffer.putUint8(142);
+      writeValue(buffer, value.encode());
+    } else if (value is LogEntry) {
+      buffer.putUint8(143);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -686,22 +889,34 @@ class _PigeonCodec extends StandardMessageCodec {
         final value = readValue(buffer) as int?;
         return value == null ? null : PermissionStatus.values[value];
       case 130:
-        return SimInfo.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : PairingOutcome.values[value];
       case 131:
-        return BatteryStatus.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : PairingPayloadStatus.values[value];
       case 132:
-        return SignalInfo.decode(readValue(buffer)!);
+        return SimInfo.decode(readValue(buffer)!);
       case 133:
-        return NetworkStatus.decode(readValue(buffer)!);
+        return BatteryStatus.decode(readValue(buffer)!);
       case 134:
-        return OutboxEntry.decode(readValue(buffer)!);
+        return SignalInfo.decode(readValue(buffer)!);
       case 135:
-        return InboundEntry.decode(readValue(buffer)!);
+        return NetworkStatus.decode(readValue(buffer)!);
       case 136:
-        return DeviceState.decode(readValue(buffer)!);
+        return OutboxEntry.decode(readValue(buffer)!);
       case 137:
-        return PairingResult.decode(readValue(buffer)!);
+        return InboundEntry.decode(readValue(buffer)!);
       case 138:
+        return DeviceState.decode(readValue(buffer)!);
+      case 139:
+        return PairingResult.decode(readValue(buffer)!);
+      case 140:
+        return PairingPayloadInfo.decode(readValue(buffer)!);
+      case 141:
+        return PairingPayloadParse.decode(readValue(buffer)!);
+      case 142:
+        return PendingPairing.decode(readValue(buffer)!);
+      case 143:
         return LogEntry.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1079,6 +1294,107 @@ class LunoHostApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as PairingResult;
+  }
+
+  /// Parses a scanned QR payload without contacting the backend, so the UI can
+  /// show what it is about to enrol with before committing.
+  Future<PairingPayloadParse> parsePairingPayload(String raw) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.parsePairingPayload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[raw],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as PairingPayloadParse;
+  }
+
+  Future<PairingResult> startPairingFromPayload(String raw) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.startPairingFromPayload$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[raw],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as PairingResult;
+  }
+
+  /// Re-checks a pending enrolment. Null when nothing is pending.
+  Future<PairingResult?> checkPairingApproval() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.checkPairingApproval$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+    return pigeonVar_replyValue as PairingResult?;
+  }
+
+  Future<PendingPairing?> pendingPairing() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.pendingPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+    return pigeonVar_replyValue as PendingPairing?;
+  }
+
+  Future<void> cancelPendingPairing() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.cancelPendingPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   Future<bool> isPaired() async {
