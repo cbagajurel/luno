@@ -1,12 +1,16 @@
 # Luno — Backend SDK architecture (proposal)
 
-> Status: **approved; Phases 1–3 landed** (2026-07-19). `@luno/protocol` is
+> Status: **approved; Phases 1–4 landed** (2026-07-19). `@luno/protocol` is
 > cross-checked against the node's Kotlin codec over a shared fixture corpus;
 > `@luno/core` implements pairing, enrolment, device management, the connection
 > handshake and messaging behind injected ports; `@luno/testing` ships a
-> scriptable fake node and the store conformance kit; and `test-backend` is now a
-> thin adapter over `@luno/core`, validated end-to-end over a real socket.
-> Phases 4–5 (a fetch-native adapter + a durable store, then the rest) outstanding.
+> scriptable fake node and the store conformance kit; `test-backend` is now a
+> thin adapter over `@luno/core`, validated end-to-end over a real socket; and
+> Phase 4 proved the abstractions across a genuine boundary — `@luno/hono` (a
+> fetch-native enroll + WebSocket adapter) and `@luno/store-postgres` (a durable,
+> driver-agnostic `LunoStore` that passes the conformance suite), composed and run
+> together over a real socket. Phase 5 (the remaining adapters, each gated on the
+> conformance kit) is outstanding.
 > Companion to [`architecture.md`](architecture.md) (the node's side) and
 > [`pairing.md`](pairing.md) (the enrolment contract).
 
@@ -383,13 +387,23 @@ provable against the real Android node:
    delivered → inbound → revoke, plus a real `server.mjs` run driven by the
    fake-node CLI. The physical phone is the user's final confirmation; the wire
    path it exercises is now covered by an automated equivalent.
-4. **One socket adapter** and **one store** proving the abstractions across a
-   genuine boundary — my recommendation is Hono (fetch-native, runs almost
-   everywhere) plus Postgres.
+4. ~~**One socket adapter** and **one store** proving the abstractions across a
+   genuine boundary — Hono (fetch-native, runs almost everywhere) plus Postgres.~~
+   **Done.** `@luno/hono` mounts the enroll routes on `c.req.raw` and bridges the
+   `WS /ws` socket to `connections.open`; the same handler runs on Node, Workers,
+   Deno and Bun (only the `upgradeWebSocket` helper differs). `@luno/store-postgres`
+   is a durable `LunoStore` behind a tiny `Queryable` port — one `query(text,
+   params)` — so it binds to `pg`, a serverless HTTP driver, or PGlite unchanged;
+   `claim()` is the linearizable conditional `UPDATE … RETURNING`, and it passes
+   the conformance suite (including the 60-way concurrent-claim test) against real
+   Postgres semantics via PGlite. The two were run **together** over a genuine
+   loopback socket — pair → handshake → send → delivered — proving an adapter and a
+   store swap in across the boundary without touching core.
 5. **Remaining adapters**, each gated on the conformance suite.
 
 Phase 3 is the one that matters. Until a real device pairs against the extracted
-core, the abstraction is unvalidated.
+core, the abstraction is unvalidated. Phase 4 is the proof it generalises: a
+second framework and a real database, neither of which required a core change.
 
 ---
 
