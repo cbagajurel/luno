@@ -125,6 +125,18 @@ again, or `denied`. It exists as a separate endpoint so that waiting for
 approval never re-submits the pairing code — under a single-use policy a second
 `/enroll` would be correctly rejected as exhausted.
 
+**`enrollmentId` must be unguessable.** On approval this endpoint hands a device
+credential to whoever presents the id, which makes it a bearer secret in
+practice however it is described elsewhere — a sequential or otherwise
+predictable value turns the approval gate into an enrolment bypass. Backends
+should mint it from a CSPRNG with at least 128 bits of entropy. `@luno/core`
+uses 192.
+
+A node that polls again after `approved` has, by definition, not received the
+credential that was issued. Re-issuing on that poll is what makes a dropped
+response recoverable; it invalidates the previous credential, so the repeat is
+safe rather than a way to accumulate live credentials.
+
 ## QR payload
 
 Two interchangeable forms, both versioned:
