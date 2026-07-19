@@ -1,16 +1,17 @@
 # Luno — Backend SDK architecture (proposal)
 
-> Status: **approved; Phases 1–4 landed** (2026-07-19). `@luno/protocol` is
+> Status: **approved; Phases 1–5 landed** (2026-07-19). `@luno/protocol` is
 > cross-checked against the node's Kotlin codec over a shared fixture corpus;
 > `@luno/core` implements pairing, enrolment, device management, the connection
 > handshake and messaging behind injected ports; `@luno/testing` ships a
-> scriptable fake node and the store conformance kit; `test-backend` is now a
-> thin adapter over `@luno/core`, validated end-to-end over a real socket; and
-> Phase 4 proved the abstractions across a genuine boundary — `@luno/hono` (a
-> fetch-native enroll + WebSocket adapter) and `@luno/store-postgres` (a durable,
-> driver-agnostic `LunoStore` that passes the conformance suite), composed and run
-> together over a real socket. Phase 5 (the remaining adapters, each gated on the
-> conformance kit) is outstanding.
+> scriptable fake node and the store conformance kit; `test-backend` is a thin
+> adapter over `@luno/core`; `@luno/store-postgres` is a durable, driver-agnostic
+> `LunoStore` that passes the conformance suite; and six framework adapters now
+> ride the core unchanged — `@luno/hono`, `@luno/express`, `@luno/fastify`,
+> `@luno/nestjs` and `@luno/cloudflare` (plus the ported Next.js `test-backend`),
+> each gated on a fake-node run over its own transport (a real socket for the Node
+> frameworks, an in-memory `WebSocketPair` for the edge one). The SDK is
+> feature-complete against this proposal; further adapters and stores are additive.
 > Companion to [`architecture.md`](architecture.md) (the node's side) and
 > [`pairing.md`](pairing.md) (the enrolment contract).
 
@@ -399,11 +400,21 @@ provable against the real Android node:
    Postgres semantics via PGlite. The two were run **together** over a genuine
    loopback socket — pair → handshake → send → delivered — proving an adapter and a
    store swap in across the boundary without touching core.
-5. **Remaining adapters**, each gated on the conformance suite.
+5. ~~**Remaining adapters**, each gated on the conformance suite.~~ **Done.**
+   `@luno/express` and `@luno/fastify` prove the **non-fetch-native** path — the
+   `HttpRequest` shim plus a `ws` bridge on a classic Node server, a seam Hono
+   never touched; `@luno/nestjs` proves DI wiring (the engine resolved through the
+   container via a `LunoModule` + a `LUNO` token); and `@luno/cloudflare` proves
+   the **socketless/edge** §4 path (a `WebSocketPair` bridge, Durable-Object ready).
+   Each ships with a fake-node run over its own transport, so a phone pairs against
+   any of them the same way. The Node-framework socket bridge (auth-before-upgrade
+   → `connections.open`) is the same ~35 lines in each, deliberately self-contained
+   for copy-paste over a shared dependency.
 
 Phase 3 is the one that matters. Until a real device pairs against the extracted
-core, the abstraction is unvalidated. Phase 4 is the proof it generalises: a
-second framework and a real database, neither of which required a core change.
+core, the abstraction is unvalidated. Phases 4–5 are the proof it generalises: five
+frameworks and a real database, spanning fetch-native, classic-Node and edge
+runtimes — not one of which required a change to `@luno/core`.
 
 ---
 
