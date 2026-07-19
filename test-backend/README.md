@@ -1,14 +1,24 @@
 # Luno — Test Backend
 
 A **reference Luno-protocol server** for demoing the Android node's pairing and
-live connection. It speaks exactly the wire contract the node implements
-(`backend/protocol`, `backend/auth`, `backend/ws`): `POST /enroll` for pairing and
-a WebSocket at `/ws` running the §6 handshake, at-least-once event acks, and the
-backend→node command set.
+live connection. It is now a **thin adapter over [`@luno/core`](../packages/core)**:
+all pairing, enrolment, session-handshake and messaging logic lives in the SDK,
+and this app only translates HTTP and WebSocket to SDK calls. That is the point of
+the port — the same engine runs behind any framework, and this Next.js app is one
+~40-line-per-route example of it.
 
-It is **not** the production backend — it keeps everything in memory and mints
-credentials with no real trust store. It exists to prove the node works
-end-to-end and to give you a dashboard to drive it.
+- `POST /enroll` and `/enroll/status` hand the request straight to
+  `luno.http.handle` (a Next `Request` is already fetch-native).
+- `WS /ws` authorises with `luno.connections.authorize` and pumps frames through
+  `luno.connections.open` (see [`lib/ws.mjs`](lib/ws.mjs)).
+- The dashboard routes call `luno.pairing` / `luno.sms` / `luno.devices`.
+- [`lib/luno.mjs`](lib/luno.mjs) is the whole projection layer: it reads SDK state
+  and caches the two things the SDK emits but doesn't store (last heartbeat and
+  status per device) to build the dashboard snapshot.
+
+It is **not** the production backend — it uses the in-memory `memoryStore()` and a
+per-process secret, so restarting drops all devices and codes. It exists to prove
+the node (and the SDK) work end-to-end and to give you a dashboard to drive them.
 
 > **Stack note:** this is a Next.js app with a **custom Node server** (`server.mjs`)
 > because the node needs a long-lived `wss://` socket. That runs on Railway,
@@ -17,10 +27,12 @@ end-to-end and to give you a dashboard to drive it.
 
 ## Run locally
 
+This app is part of the pnpm workspace, so install from the repo root (it links
+the `@luno/*` packages):
+
 ```bash
-cd test-backend
-npm install
-npm run dev          # http://localhost:3000
+pnpm install                       # from the repo root, once
+pnpm --filter luno-test-backend dev   # http://localhost:3000
 ```
 
 Open http://localhost:3000 and click **Generate pairing code**.
@@ -61,9 +73,11 @@ build:  npm install && npm run build
 start:  npm start
 ```
 
-The platform provides `$PORT` and public `https`/`wss`. The `/enroll` response
-derives the WebSocket URL from the request host (`wss://<host>/ws`); override it
-with `PUBLIC_WS_URL` if needed.
+The platform provides `$PORT` and public `https`/`wss`. When the enrol response
+omits `wsUrl` (this adapter does not set one), the node derives `wss://<host>/ws`
+from the enrolment host. Set `LUNO_SECRET` to a durable value so issued codes and
+credentials survive a restart — without it the adapter generates a fresh secret
+each boot and everything paired before the restart must re-enrol.
 
 ## Protocol surface
 

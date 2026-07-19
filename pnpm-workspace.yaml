@@ -1,4 +1,6 @@
 packages:
   - 'packages/*'
+  - 'test-backend'
 allowBuilds:
   esbuild: true
+  sharp: false

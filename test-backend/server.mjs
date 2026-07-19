@@ -2,9 +2,8 @@ import { createServer } from 'node:http';
 import { parse } from 'node:url';
 import { networkInterfaces } from 'node:os';
 import next from 'next';
-import { WebSocketServer } from 'ws';
-import { getHub } from './lib/hub.mjs';
-import { authorizeUpgrade, handleConnection } from './lib/wsHandler.mjs';
+import { getLuno } from './lib/luno.mjs';
+import { attachNodeWebSocket } from './lib/ws.mjs';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -17,30 +16,12 @@ await app.prepare();
 
 const upgradeHandler = app.getUpgradeHandler();
 
-const hub = getHub();
-const wss = new WebSocketServer({ noServer: true });
-
 const server = createServer((req, res) => {
   handle(req, res, parse(req.url, true));
 });
 
-server.on('upgrade', (req, socket, head) => {
-  const { pathname } = parse(req.url);
-
-  if (pathname === '/ws') {
-    const auth = authorizeUpgrade(req, hub);
-    if (!auth.ok) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-    wss.handleUpgrade(req, socket, head, (ws) => handleConnection(ws, auth.device, hub));
-    return;
-  }
-
-  // Everything else (Next's HMR socket in dev) belongs to Next.
-  upgradeHandler(req, socket, head);
-});
+// `/ws` is the node's connection; everything else (Next's HMR socket) is Next's.
+attachNodeWebSocket(server, getLuno(), (req, socket, head) => upgradeHandler(req, socket, head));
 
 function lanAddresses() {
   const out = [];

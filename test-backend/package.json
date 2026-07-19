@@ -10,10 +10,15 @@
     "start": "NODE_ENV=production node server.mjs"
   },
   "dependencies": {
+    "@luno/core": "workspace:*",
+    "@luno/protocol": "workspace:*",
     "next": "^15.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@luno/testing": "workspace:*"
   },
   "engines": {
     "node": ">=20"
