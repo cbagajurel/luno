@@ -165,51 +165,63 @@ export function connectionsService(context: CoreContext, messaging: MessagingSer
         payload: { sessionId },
       });
 
-      return {
-        id: sessionId,
-        deviceId: device.id,
+      async function process(raw: string): Promise<void> {
+        const result = decodeFrame(raw);
+        if (result.status !== 'ok') {
+          await auditEvent(context, {
+            deviceId: device.id,
+            direction: 'in',
+            kind: 'quarantine',
+            type: result.status,
+            payload: { reason: result.reason },
+          });
+          return;
+        }
 
-        async receive(raw: string): Promise<void> {
-          const result = decodeFrame(raw);
-          if (result.status !== 'ok') {
+        const { frame } = result;
+        await touch();
+
+        switch (frame.body.kind) {
+          case 'control':
+            return onControl(frame, frame.body.control);
+          case 'event':
+            return onEvent(frame, frame.body.event);
+          case 'ack':
+            await auditEvent(context, {
+              deviceId: device.id,
+              direction: 'in',
+              kind: 'ack',
+              type: 'ack',
+              frameId: frame.body.ack.ackedId,
+            });
+            return;
+          case 'command':
+            // Commands only flow backend→node; a node sending one is a peer bug.
             await auditEvent(context, {
               deviceId: device.id,
               direction: 'in',
               kind: 'quarantine',
-              type: result.status,
-              payload: { reason: result.reason },
+              type: 'unexpected_command',
+              frameId: frame.id,
             });
             return;
-          }
+        }
+      }
 
-          const { frame } = result;
-          await touch();
+      // Frames must apply in arrival order: sms_sent looks up the message that
+      // sms_accepted just wrote, so a node that streams events without waiting —
+      // and it may — would race if we processed concurrently. Chaining serializes
+      // the whole session onto one queue, which every adapter then inherits.
+      let tail: Promise<void> = Promise.resolve();
 
-          switch (frame.body.kind) {
-            case 'control':
-              return onControl(frame, frame.body.control);
-            case 'event':
-              return onEvent(frame, frame.body.event);
-            case 'ack':
-              await auditEvent(context, {
-                deviceId: device.id,
-                direction: 'in',
-                kind: 'ack',
-                type: 'ack',
-                frameId: frame.body.ack.ackedId,
-              });
-              return;
-            case 'command':
-              // Commands only flow backend→node; a node sending one is a peer bug.
-              await auditEvent(context, {
-                deviceId: device.id,
-                direction: 'in',
-                kind: 'quarantine',
-                type: 'unexpected_command',
-                frameId: frame.id,
-              });
-              return;
-          }
+      return {
+        id: sessionId,
+        deviceId: device.id,
+
+        receive(raw: string): Promise<void> {
+          const run = tail.then(() => process(raw));
+          tail = run.catch(() => undefined);
+          return run;
         },
 
         async close(): Promise<void> {

@@ -179,6 +179,31 @@ describe('status tracking', () => {
     expect(seen).toEqual(['accepted', 'sent']);
   });
 
+  /**
+   * A node may stream accepted → sent → delivery_report without waiting for acks.
+   * sms_sent looks up the message that sms_accepted just wrote, so the session
+   * must apply a burst in arrival order even when receive() is not awaited between
+   * frames — which is how a real socket handler delivers them.
+   */
+  it('applies a burst of unawaited events in order', async () => {
+    const context = harness();
+    const { session, device } = await connectedDevice(context);
+    await handshake(session);
+    const message = await context.luno.sms.send({ deviceId: device.id, to: '+1', body: 'hi' });
+
+    void session.receive(
+      nodeEvent({ type: 'sms_accepted', commandId: message.commandId ?? '', messageId: 'm1' }, 10),
+    );
+    void session.receive(
+      nodeEvent({ type: 'sms_sent', messageId: 'm1', parts: [{ index: 0, status: 'SENT' }] }, 11),
+    );
+    await session.receive(
+      nodeEvent({ type: 'delivery_report', messageId: 'm1', part: 0, status: 'DELIVERED', at: 1 }, 12),
+    );
+
+    expect((await context.luno.sms.get(message.id)).status).toBe('delivered');
+  });
+
   it('ignores an event about a message it does not know', async () => {
     const context = harness();
     const { session } = await connectedDevice(context);
