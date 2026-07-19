@@ -97,6 +97,13 @@ int _deepHash(Object? value) {
   return value.hashCode;
 }
 
+/// [blocked] means the system will not show a permission dialog at all, so
+/// re-requesting is a no-op — only the app's settings page can resolve it. On
+/// Android 15+ a sideloaded build lands here for SMS permissions until the user
+/// taps "Allow restricted settings"; it is also where "Don't ask again" leads.
+/// The two are indistinguishable through the public API and share one remedy.
+enum PermissionStatus { granted, denied, blocked }
+
 class SimInfo {
   SimInfo({
     required this.subscriptionId,
@@ -637,32 +644,35 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    } else if (value is SimInfo) {
+    } else if (value is PermissionStatus) {
       buffer.putUint8(129);
-      writeValue(buffer, value.encode());
-    } else if (value is BatteryStatus) {
+      writeValue(buffer, value.index);
+    } else if (value is SimInfo) {
       buffer.putUint8(130);
       writeValue(buffer, value.encode());
-    } else if (value is SignalInfo) {
+    } else if (value is BatteryStatus) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    } else if (value is NetworkStatus) {
+    } else if (value is SignalInfo) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    } else if (value is OutboxEntry) {
+    } else if (value is NetworkStatus) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    } else if (value is InboundEntry) {
+    } else if (value is OutboxEntry) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    } else if (value is DeviceState) {
+    } else if (value is InboundEntry) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    } else if (value is PairingResult) {
+    } else if (value is DeviceState) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    } else if (value is LogEntry) {
+    } else if (value is PairingResult) {
       buffer.putUint8(137);
+      writeValue(buffer, value.encode());
+    } else if (value is LogEntry) {
+      buffer.putUint8(138);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -673,22 +683,25 @@ class _PigeonCodec extends StandardMessageCodec {
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
       case 129:
-        return SimInfo.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : PermissionStatus.values[value];
       case 130:
-        return BatteryStatus.decode(readValue(buffer)!);
+        return SimInfo.decode(readValue(buffer)!);
       case 131:
-        return SignalInfo.decode(readValue(buffer)!);
+        return BatteryStatus.decode(readValue(buffer)!);
       case 132:
-        return NetworkStatus.decode(readValue(buffer)!);
+        return SignalInfo.decode(readValue(buffer)!);
       case 133:
-        return OutboxEntry.decode(readValue(buffer)!);
+        return NetworkStatus.decode(readValue(buffer)!);
       case 134:
-        return InboundEntry.decode(readValue(buffer)!);
+        return OutboxEntry.decode(readValue(buffer)!);
       case 135:
-        return DeviceState.decode(readValue(buffer)!);
+        return InboundEntry.decode(readValue(buffer)!);
       case 136:
-        return PairingResult.decode(readValue(buffer)!);
+        return DeviceState.decode(readValue(buffer)!);
       case 137:
+        return PairingResult.decode(readValue(buffer)!);
+      case 138:
         return LogEntry.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -826,9 +839,9 @@ class LunoHostApi {
     return pigeonVar_replyValue! as DeviceState;
   }
 
-  Future<bool> hasPhonePermission() async {
+  Future<PermissionStatus> phonePermissionStatus() async {
     final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasPhonePermission$pigeonVar_messageChannelSuffix';
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.phonePermissionStatus$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -842,10 +855,10 @@ class LunoHostApi {
       pigeonVar_channelName,
       isNullValid: false,
     );
-    return pigeonVar_replyValue! as bool;
+    return pigeonVar_replyValue! as PermissionStatus;
   }
 
-  Future<void> requestPhonePermission() async {
+  Future<PermissionStatus> requestPhonePermission() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestPhonePermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -856,16 +869,17 @@ class LunoHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
-    _extractReplyValueOrThrow(
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
       pigeonVar_replyList,
       pigeonVar_channelName,
-      isNullValid: true,
+      isNullValid: false,
     );
+    return pigeonVar_replyValue! as PermissionStatus;
   }
 
-  Future<bool> hasSmsPermission() async {
+  Future<PermissionStatus> smsPermissionStatus() async {
     final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasSmsPermission$pigeonVar_messageChannelSuffix';
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.smsPermissionStatus$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -879,12 +893,33 @@ class LunoHostApi {
       pigeonVar_channelName,
       isNullValid: false,
     );
-    return pigeonVar_replyValue! as bool;
+    return pigeonVar_replyValue! as PermissionStatus;
   }
 
-  Future<void> requestSmsPermission() async {
+  Future<PermissionStatus> requestSmsPermission() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestSmsPermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as PermissionStatus;
+  }
+
+  /// Opens this app's system settings page — the only route out of
+  /// [PermissionStatus.blocked].
+  Future<void> openAppSettings() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.openAppSettings$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -965,9 +1000,9 @@ class LunoHostApi {
     return pigeonVar_replyValue! as bool;
   }
 
-  Future<bool> hasReceiveSmsPermission() async {
+  Future<PermissionStatus> receiveSmsPermissionStatus() async {
     final pigeonVar_channelName =
-        'dev.flutter.pigeon.sms_gateway.LunoHostApi.hasReceiveSmsPermission$pigeonVar_messageChannelSuffix';
+        'dev.flutter.pigeon.sms_gateway.LunoHostApi.receiveSmsPermissionStatus$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -981,10 +1016,10 @@ class LunoHostApi {
       pigeonVar_channelName,
       isNullValid: false,
     );
-    return pigeonVar_replyValue! as bool;
+    return pigeonVar_replyValue! as PermissionStatus;
   }
 
-  Future<void> requestReceiveSmsPermission() async {
+  Future<PermissionStatus> requestReceiveSmsPermission() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.sms_gateway.LunoHostApi.requestReceiveSmsPermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -995,11 +1030,12 @@ class LunoHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
-    _extractReplyValueOrThrow(
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
       pigeonVar_replyList,
       pigeonVar_channelName,
-      isNullValid: true,
+      isNullValid: false,
     );
+    return pigeonVar_replyValue! as PermissionStatus;
   }
 
   Future<List<InboundEntry>> getRecentInbox() async {

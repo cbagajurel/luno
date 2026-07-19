@@ -8,9 +8,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- usesCleartextTraffic: Android 9+ blocks http/ws outright, so pairing with
+         a plain-http self-hosted backend needs this in every build type, not just
+         debug. Remove it (and AgentGraph.ALLOW_CLEARTEXT) to go back to TLS-only. -->
     <application
         android:label="Luno"
         android:name=".LunoApplication"
+        android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

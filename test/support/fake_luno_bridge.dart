@@ -12,9 +12,10 @@ class FakeLunoBridge implements LunoBridge {
     this.outbox = const <OutboxEntry>[],
     this.inbox = const <InboundEntry>[],
     this.logs = const <LogEntry>[],
-    this.phonePermission = true,
-    this.smsPermission = true,
-    this.receiveSmsPermission = true,
+    this.phonePermission = PermissionStatus.granted,
+    this.smsPermission = PermissionStatus.granted,
+    this.receiveSmsPermission = PermissionStatus.granted,
+    this.grantOnRequest = true,
     this.pairingResult,
   }) : deviceState =
            deviceState ??
@@ -27,14 +28,19 @@ class FakeLunoBridge implements LunoBridge {
   List<OutboxEntry> outbox;
   List<InboundEntry> inbox;
   List<LogEntry> logs;
-  bool phonePermission;
-  bool smsPermission;
-  bool receiveSmsPermission;
+  PermissionStatus phonePermission;
+  PermissionStatus smsPermission;
+  PermissionStatus receiveSmsPermission;
+
+  /// When false, a request leaves the status untouched — the only way to
+  /// exercise denial and blocked paths, which the old fake could not reach.
+  bool grantOnRequest;
   PairingResult? pairingResult;
 
   final List<({String recipient, String body, int? subId})> sent = [];
   int unpairCalls = 0;
   int startAgentCalls = 0;
+  int openAppSettingsCalls = 0;
 
   @override
   Future<String> ping(String message) async => message;
@@ -61,19 +67,30 @@ class FakeLunoBridge implements LunoBridge {
   Future<DeviceState> getDeviceState() async => deviceState;
 
   @override
-  Future<bool> hasPhonePermission() async => phonePermission;
+  Future<PermissionStatus> phonePermissionStatus() async => phonePermission;
 
   @override
-  Future<void> requestPhonePermission() async => phonePermission = true;
+  Future<PermissionStatus> requestPhonePermission() async =>
+      phonePermission = _afterRequest(phonePermission);
 
   @override
   Stream<int> get deviceStateEvents => Stream.value(0);
 
   @override
-  Future<bool> hasSmsPermission() async => smsPermission;
+  Future<PermissionStatus> smsPermissionStatus() async => smsPermission;
 
   @override
-  Future<void> requestSmsPermission() async => smsPermission = true;
+  Future<PermissionStatus> requestSmsPermission() async =>
+      smsPermission = _afterRequest(smsPermission);
+
+  @override
+  Future<void> openAppSettings() async => openAppSettingsCalls++;
+
+  /// Blocked never flips on request — that is the whole point of the state.
+  PermissionStatus _afterRequest(PermissionStatus current) {
+    if (current == PermissionStatus.blocked) return current;
+    return grantOnRequest ? PermissionStatus.granted : current;
+  }
 
   @override
   Future<String> sendSms(
@@ -97,11 +114,12 @@ class FakeLunoBridge implements LunoBridge {
   Future<bool> isReceiveSmsSupported() async => receiveSmsSupported;
 
   @override
-  Future<bool> hasReceiveSmsPermission() async => receiveSmsPermission;
+  Future<PermissionStatus> receiveSmsPermissionStatus() async =>
+      receiveSmsPermission;
 
   @override
-  Future<void> requestReceiveSmsPermission() async =>
-      receiveSmsPermission = true;
+  Future<PermissionStatus> requestReceiveSmsPermission() async =>
+      receiveSmsPermission = _afterRequest(receiveSmsPermission);
 
   @override
   Future<List<InboundEntry>> getRecentInbox() async => inbox;

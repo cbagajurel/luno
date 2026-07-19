@@ -4,6 +4,7 @@ import com.luno.gateway.backend.auth.PairingManager
 import com.luno.gateway.backend.auth.PairingResult
 import com.luno.gateway.backend.ws.ConnectionManager
 import com.luno.gateway.bridge.generated.LunoHostApi
+import com.luno.gateway.bridge.generated.PermissionStatus
 import com.luno.gateway.data.db.dao.OutboxPartDao
 import com.luno.gateway.data.db.entity.InboxEntity
 import com.luno.gateway.data.db.entity.OutboxEntity
@@ -50,13 +51,17 @@ class LunoHostApiImpl(
 
     override fun getDeviceState(): DeviceStateDto = deviceStateStore.current.toDto()
 
-    override fun hasPhonePermission(): Boolean = host.hasPhonePermission()
+    override fun phonePermissionStatus(): PermissionStatus = host.phonePermissionStatus()
 
-    override fun requestPhonePermission() = host.requestPhonePermission()
+    override fun requestPhonePermission(callback: (Result<PermissionStatus>) -> Unit) =
+        host.requestPhonePermission { callback(Result.success(it)) }
 
-    override fun hasSmsPermission(): Boolean = host.hasSmsPermission()
+    override fun smsPermissionStatus(): PermissionStatus = host.smsPermissionStatus()
 
-    override fun requestSmsPermission() = host.requestSmsPermission()
+    override fun requestSmsPermission(callback: (Result<PermissionStatus>) -> Unit) =
+        host.requestSmsPermission { callback(Result.success(it)) }
+
+    override fun openAppSettings() = host.openAppSettings()
 
     override fun sendSms(recipient: String, body: String, subscriptionId: Long?): String {
         val message = OutboundMessage(
@@ -79,9 +84,10 @@ class LunoHostApiImpl(
 
     override fun isReceiveSmsSupported(): Boolean = host.isReceiveSmsSupported()
 
-    override fun hasReceiveSmsPermission(): Boolean = host.hasReceiveSmsPermission()
+    override fun receiveSmsPermissionStatus(): PermissionStatus = host.receiveSmsPermissionStatus()
 
-    override fun requestReceiveSmsPermission() = host.requestReceiveSmsPermission()
+    override fun requestReceiveSmsPermission(callback: (Result<PermissionStatus>) -> Unit) =
+        host.requestReceiveSmsPermission { callback(Result.success(it)) }
 
     override fun getRecentInbox(): List<InboundEntryDto> =
         runBlocking { inboxRepository.recent() }.map { it.toDto() }

@@ -2,7 +2,6 @@ package com.luno.gateway.di
 
 import android.content.Context
 import android.os.Build
-import com.luno.gateway.BuildConfig
 import com.luno.gateway.agent.AgentController
 import com.luno.gateway.agent.CommandRouter
 import com.luno.gateway.backend.auth.DeviceCredentialStore
@@ -118,7 +117,7 @@ class AgentGraph(context: Context) {
         )
 
     val pairingManager: PairingManager =
-        PairingManager(RestClient(allowInsecure = BuildConfig.DEBUG), credentialStore, deviceInfo, logger)
+        PairingManager(RestClient(allowInsecure = ALLOW_CLEARTEXT), credentialStore, deviceInfo, logger)
 
     private val online: StateFlow<Boolean> =
         deviceStateStore.state
@@ -136,7 +135,7 @@ class AgentGraph(context: Context) {
                 WebSocketClient(
                     logger = logger,
                     pinner = Pinning.buildPinner(CERT_PIN_HOST, CERT_PINS),
-                    allowInsecure = BuildConfig.DEBUG,
+                    allowInsecure = ALLOW_CLEARTEXT,
                 ),
             codec = codec,
             reconnectPolicy = ReconnectPolicy(),
@@ -256,5 +255,11 @@ class AgentGraph(context: Context) {
         private const val DATA_KEY_ALIAS = "luno_data_key"
         private const val CERT_PIN_HOST = ""
         private val CERT_PINS = emptyList<String>()
+
+        // Accept plain http:// and ws:// backends in every build type, so a
+        // self-hosted LAN backend can be paired without TLS. This sends the
+        // enrollment credential and all traffic in the clear; set it back to
+        // BuildConfig.DEBUG to restore the §8 https/wss-only requirement.
+        private const val ALLOW_CLEARTEXT = true
     }
 }

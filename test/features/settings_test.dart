@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sms_gateway/bridge/generated/luno_api.g.dart';
 import 'package:sms_gateway/features/settings/settings_screen.dart';
 
 import '../support/fake_luno_bridge.dart';
@@ -6,7 +7,7 @@ import '../support/pump.dart';
 
 void main() {
   testWidgets('shows a grant action for a missing permission', (tester) async {
-    final bridge = FakeLunoBridge(smsPermission: false);
+    final bridge = FakeLunoBridge(smsPermission: PermissionStatus.denied);
     await tester.pumpWidget(wrapScreen(bridge, const SettingsScreen()));
     await tester.pumpAndSettle();
 
@@ -17,7 +18,7 @@ void main() {
   testWidgets('sendOnly builds hide the un-grantable receive permission', (
     tester,
   ) async {
-    final bridge = FakeLunoBridge(receiveSmsPermission: false)
+    final bridge = FakeLunoBridge(receiveSmsPermission: PermissionStatus.denied)
       ..receiveSmsSupported = false;
     await tester.pumpWidget(wrapScreen(bridge, const SettingsScreen()));
     await tester.pumpAndSettle();

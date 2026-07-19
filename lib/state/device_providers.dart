@@ -26,19 +26,25 @@ enum AppPermission {
 
 class Permissions {
   const Permissions(
-    this.granted, {
+    this.statuses, {
     this.supported = const {...AppPermission.values},
   });
 
-  final Set<AppPermission> granted;
+  final Map<AppPermission, PermissionStatus> statuses;
 
   /// What this build can actually ask for. `sendOnly` builds omit RECEIVE_SMS from
   /// the manifest, so [AppPermission.receiveSms] is absent and must not be surfaced
   /// as missing — it is never grantable.
   final Set<AppPermission> supported;
 
-  bool has(AppPermission p) => granted.contains(p);
+  PermissionStatus statusOf(AppPermission p) =>
+      statuses[p] ?? PermissionStatus.denied;
+
+  bool has(AppPermission p) => statusOf(p) == PermissionStatus.granted;
   bool supports(AppPermission p) => supported.contains(p);
+
+  /// Re-requesting is futile — only the system settings page can resolve it.
+  bool isBlocked(AppPermission p) => statusOf(p) == PermissionStatus.blocked;
 
   bool get phone => has(AppPermission.phone);
   bool get sms => has(AppPermission.sms);
@@ -61,22 +67,20 @@ class PermissionsController extends AsyncNotifier<Permissions> {
 
   Future<Permissions> _read() async {
     final bridge = ref.read(bridgeProvider);
-    final results = await Future.wait([
-      bridge.hasPhonePermission(),
-      bridge.hasSmsPermission(),
-      bridge.hasReceiveSmsPermission(),
-      bridge.isReceiveSmsSupported(),
-    ]);
+    final phone = await bridge.phonePermissionStatus();
+    final sms = await bridge.smsPermissionStatus();
+    final receiveSms = await bridge.receiveSmsPermissionStatus();
+    final receiveSupported = await bridge.isReceiveSmsSupported();
     return Permissions(
       {
-        if (results[0]) AppPermission.phone,
-        if (results[1]) AppPermission.sms,
-        if (results[2]) AppPermission.receiveSms,
+        AppPermission.phone: phone,
+        AppPermission.sms: sms,
+        AppPermission.receiveSms: receiveSms,
       },
       supported: {
         AppPermission.phone,
         AppPermission.sms,
-        if (results[3]) AppPermission.receiveSms,
+        if (receiveSupported) AppPermission.receiveSms,
       },
     );
   }
@@ -85,18 +89,21 @@ class PermissionsController extends AsyncNotifier<Permissions> {
     state = await AsyncValue.guard(_read);
   }
 
-  Future<void> request(AppPermission permission) async {
+  /// Returns the real outcome — the native request now completes only after the
+  /// user answers, so callers can branch on [PermissionStatus.blocked] instead of
+  /// re-polling into a stale value.
+  Future<PermissionStatus> request(AppPermission permission) async {
     final bridge = ref.read(bridgeProvider);
-    switch (permission) {
-      case AppPermission.phone:
-        await bridge.requestPhonePermission();
-      case AppPermission.sms:
-        await bridge.requestSmsPermission();
-      case AppPermission.receiveSms:
-        await bridge.requestReceiveSmsPermission();
-    }
+    final status = switch (permission) {
+      AppPermission.phone => await bridge.requestPhonePermission(),
+      AppPermission.sms => await bridge.requestSmsPermission(),
+      AppPermission.receiveSms => await bridge.requestReceiveSmsPermission(),
+    };
     await refresh();
+    return status;
   }
+
+  Future<void> openAppSettings() => ref.read(bridgeProvider).openAppSettings();
 }
 
 final permissionsProvider =

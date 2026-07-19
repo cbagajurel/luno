@@ -8,7 +8,7 @@ Installing Luno from a browser, messaging app, or file manager can surface:
 > identity theft or financial fraud.
 
 This is **not a defect in the app** and not a malware detection. It is Google Play
-Protect's *enhanced fraud protection*, a policy heuristic that fires on the
+Protect's _enhanced fraud protection_, a policy heuristic that fires on the
 combination of two things:
 
 1. The app declares one of four sensitive permissions — `RECEIVE_SMS`, `READ_SMS`,
@@ -23,18 +23,63 @@ legitimate gateway trips it too.
 
 Worth being precise about what does **not** trigger it:
 
-- `SEND_SMS` is not on the list. Outbound-only builds are unaffected.
+- `SEND_SMS` is not on the list, so it never causes the *install-time* warning.
+  This is **not** the same as saying outbound-only builds are unaffected — see
+  [Restricted settings](#restricted-settings-a-separate-and-harder-block) below,
+  which blocks `SEND_SMS` after install.
 - Luno does not declare `READ_SMS`, does not request the default-SMS-handler role,
   and uses no accessibility or notification-listener APIs.
+
+## Restricted settings: a separate, and harder, block
+
+Play Protect's warning is about **installing**. Android's *restricted settings* is a
+distinct mechanism about **granting**, and it is the one that stops the gateway from
+working at all.
+
+From Android 15, `SEND_SMS` and `RECEIVE_SMS` are **hard-restricted permissions for
+any app not installed from an app store**. The permission toggle is greyed out and
+the runtime request is auto-denied with no dialog — the user sees "App was denied
+access to SMS". Nothing in the APK influences this: it is decided by the install
+source, so no manifest flag, `targetSdk`, or code path can opt out of it.
+
+The consequence for the flavor split is blunt: **`sendOnly` installs clean but still
+cannot send when sideloaded.** Dropping `RECEIVE_SMS` avoids the install warning and
+nothing more.
+
+Recovering on-device, per app: **Settings → Apps → Luno → ⋮ → Allow restricted
+settings**, then **Permissions → SMS → Allow**. Or over adb:
+
+```
+adb shell cmd appops set com.luno.gateway ACCESS_RESTRICTED_SETTINGS allow
+adb shell pm grant com.luno.gateway android.permission.SEND_SMS
+```
+
+The app detects this state rather than looping silently: native reports
+`PermissionStatus.BLOCKED` (`MainActivity.statusOf`), and the tile explains that
+Android refused the last prompt.
+
+`BLOCKED` is treated as a **hint, never a verdict**. Allowing restricted settings
+makes the permission grantable again without changing anything the app can observe —
+`shouldShowRequestPermissionRationale` still returns false — so a cached blocked
+status must never suppress the Grant action, or the user is stranded with no way to
+trigger the now-working prompt. `MainActivity.request` therefore always calls
+`requestPermissions`, and the UI escalates to the recovery sheet only when a *live*
+attempt comes back blocked.
+
+**Play Store installs are exempt**, which is why Play distribution is the supported
+path for anything beyond local development.
 
 ## Build flavors
 
 Because only the receive side trips the check, the app ships in two flavors:
 
-| Flavor | `RECEIVE_SMS` | Inbound SMS | Installs clean from any source |
-| --- | --- | --- | --- |
-| `full` | declared | yes | no — warns on internet-sideload |
-| `sendOnly` | absent | no | yes |
+| Flavor     | `RECEIVE_SMS` | Inbound SMS | Installs clean from any source  |
+| ---------- | ------------- | ----------- | ------------------------------- |
+| `full`     | declared      | yes         | no — warns on internet-sideload |
+| `sendOnly` | absent        | no          | yes                             |
+
+"Installs clean" means exactly that and no more. Neither flavor can be *granted*
+`SEND_SMS` when sideloaded on Android 15+ until the user allows restricted settings.
 
 ```
 flutter build apk --release --flavor full        # complete gateway

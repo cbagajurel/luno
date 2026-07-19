@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../bridge/generated/luno_api.g.dart';
 import '../../bridge/luno_bridge.dart';
 import '../../state/connection_providers.dart';
 import '../../state/device_providers.dart';
 import '../../state/pairing_providers.dart';
 import '../../state/theme_providers.dart';
 import '../../ui/ui.dart';
+import '../shared/restricted_settings_sheet.dart';
 import '../pairing/pairing_form.dart';
 import '../shared/status_ui.dart';
 
@@ -38,11 +40,11 @@ class SettingsScreen extends ConsumerWidget {
     return LunoScaffold(
       title: 'Settings',
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           LunoSpacing.md,
           0,
           LunoSpacing.md,
-          LunoSpacing.md,
+          context.navClearance,
         ),
         children: [
           const SectionHeader('Appearance'),
@@ -74,10 +76,23 @@ class SettingsScreen extends ConsumerWidget {
                         label: perm.label,
                         rationale: perm.rationale,
                         granted: p.has(perm),
+                        blocked: p.isBlocked(perm),
                         showGrantedState: true,
-                        onGrant: () => ref
-                            .read(permissionsProvider.notifier)
-                            .request(perm),
+                        // Always try the real prompt; the sheet is the fallback
+                        // only when the live attempt is itself blocked.
+                        onGrant: () async {
+                          final status = await ref
+                              .read(permissionsProvider.notifier)
+                              .request(perm);
+                          if (status == PermissionStatus.blocked &&
+                              context.mounted) {
+                            await showRestrictedSettingsSheet(
+                              context,
+                              ref,
+                              perm,
+                            );
+                          }
+                        },
                       ),
                 ],
               ),

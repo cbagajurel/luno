@@ -2,6 +2,13 @@
 //   dart run pigeon --input pigeons/luno_api.dart
 import 'package:pigeon/pigeon.dart';
 
+/// [blocked] means the system will not show a permission dialog at all, so
+/// re-requesting is a no-op — only the app's settings page can resolve it. On
+/// Android 15+ a sideloaded build lands here for SMS permissions until the user
+/// taps "Allow restricted settings"; it is also where "Don't ask again" leads.
+/// The two are indistinguishable through the public API and share one remedy.
+enum PermissionStatus { granted, denied, blocked }
+
 class SimInfo {
   SimInfo({
     required this.subscriptionId,
@@ -161,13 +168,19 @@ abstract class LunoHostApi {
 
   DeviceState getDeviceState();
 
-  bool hasPhonePermission();
+  PermissionStatus phonePermissionStatus();
 
-  void requestPhonePermission();
+  @async
+  PermissionStatus requestPhonePermission();
 
-  bool hasSmsPermission();
+  PermissionStatus smsPermissionStatus();
 
-  void requestSmsPermission();
+  @async
+  PermissionStatus requestSmsPermission();
+
+  /// Opens this app's system settings page — the only route out of
+  /// [PermissionStatus.blocked].
+  void openAppSettings();
 
   String sendSms(String recipient, String body, int? subscriptionId);
 
@@ -177,9 +190,10 @@ abstract class LunoHostApi {
   /// Play Protect. Inbound capture is unavailable and its permission unrequestable.
   bool isReceiveSmsSupported();
 
-  bool hasReceiveSmsPermission();
+  PermissionStatus receiveSmsPermissionStatus();
 
-  void requestReceiveSmsPermission();
+  @async
+  PermissionStatus requestReceiveSmsPermission();
 
   List<InboundEntry> getRecentInbox();
 

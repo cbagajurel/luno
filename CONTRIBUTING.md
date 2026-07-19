@@ -32,18 +32,25 @@ and satisfy that milestone's testing checklist.
 ## Development
 
 ```
-flutter pub get              # install dependencies
-flutter run                  # run on a connected device/emulator
-flutter analyze              # static analysis (must be clean)
-flutter test                 # run tests
-flutter build apk            # build a release APK
+flutter pub get                        # install dependencies
+flutter run --flavor full              # run on a connected device/emulator
+flutter analyze                        # static analysis (must be clean)
+flutter test                           # run tests
+flutter build apk --flavor full        # build a release APK
 ```
+
+Always name a `--flavor` (`full` or `sendOnly`), and pass it to the subcommand —
+`flutter build apk --flavor full`, not `flutter build --flavor full`. Omitting it
+does not fail: it silently produces an `app-release.apk` that declares
+`RECEIVE_SMS`, i.e. a `full` build wearing a neutral name. See
+[`docs/play-protect.md`](docs/play-protect.md).
 
 Gradle checks (run from `android/`):
 
 ```
-./gradlew lint               # Android lint (must be clean)
-./gradlew assembleDebug      # debug build
+./gradlew lint                                    # Android lint (must be clean)
+./gradlew testFullDebugUnitTest                   # Kotlin unit tests
+./gradlew assembleFullDebug assembleSendOnlyDebug # debug build, both flavors
 ```
 
 SMS send/receive requires a real device or two emulator instances — emulator
@@ -51,13 +58,22 @@ SMS can target another emulator's port but not a real SIM/carrier.
 
 ## Before you open a PR
 
-- `flutter analyze` is clean.
-- `flutter test` passes.
-- Android `lint` is clean and the app builds.
+- `dart format lib test pigeons` leaves nothing changed.
+- `flutter analyze --fatal-infos --fatal-warnings` is clean.
+- `flutter test` passes and line coverage stays at or above the CI floor.
+- Generated code is current: re-run `dart run pigeon --input pigeons/luno_api.dart`,
+  `dart run build_runner build`, then `dart format lib test pigeons`, and commit
+  anything that moves. Pigeon emits unformatted Dart, so the format pass is part
+  of the regeneration, not an afterthought.
+- Kotlin unit tests pass (`./gradlew testFullDebugUnitTest testSendOnlyDebugUnitTest`).
+- Android `lint` is clean and both flavors build.
+- Room schemas under `android/app/schemas/` are committed alongside any `@Entity`
+  change, with a matching migration.
 - The relevant milestone's testing checklist is satisfied.
-- No stray `com.example` references (`grep -r com.example`).
+- No stray `com.example` references in code.
 
-CI runs these same checks on every push and pull request.
+CI enforces all of the above on every push and pull request, and the single `CI`
+status check fails if any job does not succeed.
 
 ## Commit conventions
 

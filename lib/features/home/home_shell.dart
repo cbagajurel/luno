@@ -4,9 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../ui/ui.dart';
 
 /// Bottom-nav shell over the four paired-mode branches; [StatefulNavigationShell]
-/// preserves each tab's state across switches. The nav bar occupies its own strip
-/// at the bottom (standard [Scaffold.bottomNavigationBar]); content sits above it,
-/// so screens don't reserve any nav clearance themselves.
+/// preserves each tab's state across switches. [Scaffold.extendBody] lets content
+/// scroll behind the floating glass bar (which is what it frosts) and reports the
+/// bar's height to the body as bottom padding — screens add that back to their
+/// scrollables via `context.navClearance`.
 class HomeShell extends StatelessWidget {
   const HomeShell({super.key, required this.shell});
 
@@ -38,6 +39,7 @@ class HomeShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: shell,
       bottomNavigationBar: GlassNavigationBar(
         items: _items,

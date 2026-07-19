@@ -6,6 +6,7 @@ import '../../bridge/generated/luno_api.g.dart';
 import '../../state/bridge_providers.dart';
 import '../../state/device_providers.dart';
 import '../../ui/ui.dart';
+import '../shared/restricted_settings_sheet.dart';
 import '../shared/status_ui.dart';
 
 Future<void> showComposeSheet(BuildContext context) {
@@ -46,14 +47,22 @@ class _ComposeFormState extends ConsumerState<_ComposeForm> {
     final permissions = ref.read(permissionsProvider.notifier);
     var perms = ref.read(permissionsProvider).value;
     if (perms == null || !perms.sms) {
-      await permissions.request(AppPermission.sms);
+      final status = await permissions.request(AppPermission.sms);
       perms = ref.read(permissionsProvider).value;
       if (perms == null || !perms.sms) {
         if (mounted) {
           setState(() => _sending = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('SMS permission is required to send')),
-          );
+          // Blocked means re-prompting is futile, so offer the settings route
+          // rather than a snackbar the user can do nothing about.
+          if (status == PermissionStatus.blocked) {
+            await showRestrictedSettingsSheet(context, ref, AppPermission.sms);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('SMS permission is required to send'),
+              ),
+            );
+          }
         }
         return;
       }

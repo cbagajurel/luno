@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../tokens/colors.dart';
 import '../tokens/elevation.dart';
 import '../tokens/motion.dart';
 import '../tokens/spacing.dart';
+import 'glass_container.dart';
 
 class GlassNavItem {
   const GlassNavItem({
@@ -17,10 +20,19 @@ class GlassNavItem {
   final String label;
 }
 
+/// Bottom inset a scrollable should add so its last row scrolls clear of the
+/// floating nav bar with a little air to spare. Under [Scaffold.extendBody] the
+/// bar's height arrives as the body's bottom padding, so this only adds the
+/// breathing room on top of it.
+extension LunoNavClearance on BuildContext {
+  double get navClearance =>
+      MediaQuery.paddingOf(this).bottom + LunoSpacing.md;
+}
+
 /// A floating navigation bar. The selected destination expands into a tinted
-/// pill with its label; the others stay as icons. The bar is a solid tinted
-/// surface (not a live blur) so it floats over scrolling content without
-/// re-sampling the backdrop every frame.
+/// pill with its label; the others stay as icons. The bar is a live frosted
+/// surface, so hosts must set [Scaffold.extendBody] and let content scroll
+/// behind it — otherwise there is nothing to frost.
 class GlassNavigationBar extends StatelessWidget {
   const GlassNavigationBar({
     super.key,
@@ -36,39 +48,32 @@ class GlassNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final semantic = context.semantic;
+    final float = math.max(bottomInset, LunoSpacing.sm);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         LunoSpacing.xl,
-        0,
+        LunoSpacing.xs,
         LunoSpacing.xl,
-        LunoSpacing.xs + bottomInset,
+        float,
       ),
       child: Align(
         alignment: Alignment.bottomCenter,
         heightFactor: 1,
-        child: RepaintBoundary(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: semantic.glass,
-              borderRadius: LunoRadius.stadium,
-              border: Border.all(color: semantic.glassBorder),
-              boxShadow: LunoElevation.floating(Theme.of(context).brightness),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    _NavDestination(
-                      item: items[i],
-                      selected: i == selectedIndex,
-                      onTap: () => onSelect(i),
-                    ),
-                ],
-              ),
-            ),
+        child: GlassContainer(
+          borderRadius: LunoRadius.stadium,
+          sigma: 18,
+          padding: const EdgeInsets.all(6),
+          shadows: LunoElevation.card(Theme.of(context).brightness),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < items.length; i++)
+                _NavDestination(
+                  item: items[i],
+                  selected: i == selectedIndex,
+                  onTap: () => onSelect(i),
+                ),
+            ],
           ),
         ),
       ),

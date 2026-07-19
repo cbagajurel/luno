@@ -31,6 +31,7 @@ tests, release). See [`docs/milestones.md`](docs/milestones.md)
 for the authoritative status table — build one milestone at a time, don't skip ahead.
 
 Done so far:
+
 - **M1** package renamed to `com.luno.gateway`; LICENSE/CONTRIBUTING/CI.
 - **M2** Pigeon bridge (`LunoHostApi.ping` round-trip + native tick `EventChannel`).
 - **M3** foreground service (`GatewayForegroundService`) that survives swipe + agent-state bridge.
@@ -44,9 +45,9 @@ Done so far:
   `sendSms`/`getRecentOutbox` + `OutboxChannel`, and a Flutter debug send control.
 - **M10** multipart + multi-SIM send + delivery reports: `MultipartAssembler`,
   `SmsSender.sendMultipart`, sent-report rollup in `SmsTransport`; `DeliveryReportRouter`
-  + `Transport.deliveryReports()`; durable per-part `outbox_part` table (Room **v2**,
-  `MIGRATION_1_2`) + `DeliveryTracker` rollup to DELIVERED/UNDELIVERED with a
-  delivery-timeout. Real dual-SIM + carrier delivery reports still need a physical device.
+  - `Transport.deliveryReports()`; durable per-part `outbox_part` table (Room **v2**,
+    `MIGRATION_1_2`) + `DeliveryTracker` rollup to DELIVERED/UNDELIVERED with a
+    delivery-timeout. Real dual-SIM + carrier delivery reports still need a physical device.
 - **M11** receive SMS: manifest `SmsReceiver` (SMS_RECEIVED, `goAsync` capture),
   `MultipartAssembler.reassemble` + pure `SmsReceiver.buildInbound`, `RECEIVE_SMS` runtime
   flow, Pigeon `getRecentInbox` + `InboxChannel`, read-only received-messages list.
@@ -64,7 +65,7 @@ Done so far:
   the §6 SM: version_negotiate→AUTHENTICATED→resync→READY, 401/403 pauses instead of looping),
   `security/KeystoreManager`; pairing UI.
 - **M14** protocol wired to SMS + heartbeat: `agent/{AgentController(full),CommandRouter,
-  EventKeys,DeviceStatusMapper}`, `backend/ws/{EventPublisher,Heartbeat}`. Backend `send_sms`
+EventKeys,DeviceStatusMapper}`, `backend/ws/{EventPublisher,Heartbeat}`. Backend `send_sms`
   → durable outbox → SMS → `sms_accepted`/`sms_sent`/`delivery_report`; inbound inbox →
   `sms_received`; every node→backend event is at-least-once (stable id, buffered-until-acked,
   resent on READY — in-memory; durable resync is M15). `ConnectionManager` now sends
@@ -83,11 +84,11 @@ Done so far:
   `LunoLogger`'s redactor); `security/CryptoBox` seals PII at rest with a Keystore key
   (`luno_data_key`) — outbox/inbox/event-payload bodies + numbers sealed on write,
   opened on read (no schema change; dedup keys stay plaintext); `security/RateLimiter`
-  + `security/PolicyStore` enforce client-side backend-authoritative rate-limit +
-  allowlist in `CommandRouter` (reject → `error`, no enqueue); `revoke`/`wipe` do a full
-  node reset (credential + queues + policy cleared, disconnect, cancel watchdog);
-  `SmsTransport` maps revoked `SEND_SMS` to `AUTH`; `security/Pinning` + optional
-  `CertificatePinner` on `WebSocketClient` is a cert-pinning seam (off by default).
+  - `security/PolicyStore` enforce client-side backend-authoritative rate-limit +
+    allowlist in `CommandRouter` (reject → `error`, no enqueue); `revoke`/`wipe` do a full
+    node reset (credential + queues + policy cleared, disconnect, cancel watchdog);
+    `SmsTransport` maps revoked `SEND_SMS` to `AUTH`; `security/Pinning` + optional
+    `CertificatePinner` on `WebSocketClient` is a cert-pinning seam (off by default).
 - **M17** Flutter dashboard (UI-only): replaced the demo `ui/home` with `main.dart`
   (`ProviderScope` + `ScreenUtilInit`), `app/{luno_app,theme,router}` (Material 3 +
   `google_fonts`; `go_router` `isPaired` gate + `StatefulShellRoute` bottom nav),
@@ -104,14 +105,26 @@ flutter pub get              # install dependencies
 flutter run --flavor full    # run on a connected device/emulator
 flutter build apk --flavor full      # complete gateway (send + receive)
 flutter build apk --flavor sendOnly  # outbound only; installs past Play Protect
+flutter build appbundle --flavor full  # AAB, for Play Store upload
 flutter analyze              # static analysis (uses analysis_options.yaml / flutter_lints)
 flutter test                 # run tests
 flutter test test/some_test.dart   # run a single test file
 ```
 
-**A `--flavor` is required** for any run/build. `full` declares `RECEIVE_SMS` and is
-the complete node; `sendOnly` omits it so the APK installs without Play Protect's
-enhanced-fraud-protection warning. See [`docs/play-protect.md`](docs/play-protect.md).
+**Always pass a `--flavor`, and pass it to the *subcommand*** — `flutter build apk
+--flavor full`, not `flutter build --flavor full` (bare `flutter build` rejects the
+option outright: "Could not find an option named --flavor").
+
+Omitting the flavor is the trap: `flutter build apk` does **not** fail. It builds
+every variant and leaves a `build/app/outputs/apk/release/app-release.apk` that
+declares `RECEIVE_SMS` — a `full` build under a neutral name. Sideloading it trips
+Play Protect exactly as if you had asked for `full`. Name the flavor and use the
+flavored output (`app-full-release.apk` / `app-sendOnly-release.apk`) so the
+artifact says what it is.
+
+`full` declares `RECEIVE_SMS` and is the complete node; `sendOnly` omits it so the
+APK installs without Play Protect's enhanced-fraud-protection warning. See
+[`docs/play-protect.md`](docs/play-protect.md).
 
 SMS send/receive requires a real device or two emulator instances (emulator
 SMS can target another emulator's port but not a real SIM/carrier).
@@ -137,6 +150,7 @@ through community Flutter SMS plugins. This is a deliberate choice to keep
 the telephony layer directly on top of Android's own APIs.
 
 When implementing new capabilities, the native Android side owns:
+
 - `ForegroundService` for the 24/7 agent process
 - `BootReceiver` for auto-start after reboot
 - `WorkManager` for retry/backoff scheduling
@@ -150,7 +164,7 @@ does not implement retry/queueing/telephony logic itself.
 ## Code conventions
 
 - **Don't add code comments by default.** Write self-explanatory code (clear
-  names, small functions) instead. Add a comment *only* when it earns its place —
+  names, small functions) instead. Add a comment _only_ when it earns its place —
   e.g. a non-obvious "why", a genuine gotcha, an API/OS quirk, or a
   deliberate-looking-wrong decision. No restating what the code already says, no
   section-header banners, no doc blocks on every class/function.

@@ -192,6 +192,25 @@ class FlutterError (
   val details: Any? = null
 ) : Throwable()
 
+/**
+ * [blocked] means the system will not show a permission dialog at all, so
+ * re-requesting is a no-op — only the app's settings page can resolve it. On
+ * Android 15+ a sideloaded build lands here for SMS permissions until the user
+ * taps "Allow restricted settings"; it is also where "Don't ask again" leads.
+ * The two are indistinguishable through the public API and share one remedy.
+ */
+enum class PermissionStatus(val raw: Int) {
+  GRANTED(0),
+  DENIED(1),
+  BLOCKED(2);
+
+  companion object {
+    fun ofRaw(raw: Int): PermissionStatus? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 /** Generated class from Pigeon that represents data sent in messages. */
 data class SimInfo (
   val subscriptionId: Long,
@@ -637,46 +656,51 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
       129.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          SimInfo.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          PermissionStatus.ofRaw(it.toInt())
         }
       }
       130.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          BatteryStatus.fromList(it)
+          SimInfo.fromList(it)
         }
       }
       131.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          SignalInfo.fromList(it)
+          BatteryStatus.fromList(it)
         }
       }
       132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          NetworkStatus.fromList(it)
+          SignalInfo.fromList(it)
         }
       }
       133.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          OutboxEntry.fromList(it)
+          NetworkStatus.fromList(it)
         }
       }
       134.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          InboundEntry.fromList(it)
+          OutboxEntry.fromList(it)
         }
       }
       135.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          DeviceState.fromList(it)
+          InboundEntry.fromList(it)
         }
       }
       136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          PairingResult.fromList(it)
+          DeviceState.fromList(it)
         }
       }
       137.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          PairingResult.fromList(it)
+        }
+      }
+      138.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           LogEntry.fromList(it)
         }
@@ -686,40 +710,44 @@ private open class LunoApiPigeonCodec : StandardMessageCodec() {
   }
   override fun writeValue(stream: ByteArrayOutputStream, value: Any?)   {
     when (value) {
-      is SimInfo -> {
+      is PermissionStatus -> {
         stream.write(129)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is BatteryStatus -> {
+      is SimInfo -> {
         stream.write(130)
         writeValue(stream, value.toList())
       }
-      is SignalInfo -> {
+      is BatteryStatus -> {
         stream.write(131)
         writeValue(stream, value.toList())
       }
-      is NetworkStatus -> {
+      is SignalInfo -> {
         stream.write(132)
         writeValue(stream, value.toList())
       }
-      is OutboxEntry -> {
+      is NetworkStatus -> {
         stream.write(133)
         writeValue(stream, value.toList())
       }
-      is InboundEntry -> {
+      is OutboxEntry -> {
         stream.write(134)
         writeValue(stream, value.toList())
       }
-      is DeviceState -> {
+      is InboundEntry -> {
         stream.write(135)
         writeValue(stream, value.toList())
       }
-      is PairingResult -> {
+      is DeviceState -> {
         stream.write(136)
         writeValue(stream, value.toList())
       }
-      is LogEntry -> {
+      is PairingResult -> {
         stream.write(137)
+        writeValue(stream, value.toList())
+      }
+      is LogEntry -> {
+        stream.write(138)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -736,10 +764,15 @@ interface LunoHostApi {
   fun isAgentRunning(): Boolean
   fun requestNotificationPermission()
   fun getDeviceState(): DeviceState
-  fun hasPhonePermission(): Boolean
-  fun requestPhonePermission()
-  fun hasSmsPermission(): Boolean
-  fun requestSmsPermission()
+  fun phonePermissionStatus(): PermissionStatus
+  fun requestPhonePermission(callback: (Result<PermissionStatus>) -> Unit)
+  fun smsPermissionStatus(): PermissionStatus
+  fun requestSmsPermission(callback: (Result<PermissionStatus>) -> Unit)
+  /**
+   * Opens this app's system settings page — the only route out of
+   * [PermissionStatus.blocked].
+   */
+  fun openAppSettings()
   fun sendSms(recipient: String, body: String, subscriptionId: Long?): String
   fun getRecentOutbox(): List<OutboxEntry>
   /**
@@ -747,8 +780,8 @@ interface LunoHostApi {
    * Play Protect. Inbound capture is unavailable and its permission unrequestable.
    */
   fun isReceiveSmsSupported(): Boolean
-  fun hasReceiveSmsPermission(): Boolean
-  fun requestReceiveSmsPermission()
+  fun receiveSmsPermissionStatus(): PermissionStatus
+  fun requestReceiveSmsPermission(callback: (Result<PermissionStatus>) -> Unit)
   fun getRecentInbox(): List<InboundEntry>
   fun startPairing(backendUrl: String, pairingCode: String, callback: (Result<PairingResult>) -> Unit)
   fun isPaired(): Boolean
@@ -860,11 +893,11 @@ interface LunoHostApi {
         }
       }
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.hasPhonePermission$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.phonePermissionStatus$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
-              listOf(api.hasPhonePermission())
+              listOf(api.phonePermissionStatus())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }
@@ -878,24 +911,26 @@ interface LunoHostApi {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.requestPhonePermission$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
-            val wrapped: List<Any?> = try {
-              api.requestPhonePermission()
-              listOf(null)
-            } catch (exception: Throwable) {
-              LunoApiPigeonUtils.wrapError(exception)
+            api.requestPhonePermission{ result: Result<PermissionStatus> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(LunoApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(LunoApiPigeonUtils.wrapResult(data))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)
         }
       }
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.hasSmsPermission$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.smsPermissionStatus$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
-              listOf(api.hasSmsPermission())
+              listOf(api.smsPermissionStatus())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }
@@ -909,8 +944,26 @@ interface LunoHostApi {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.requestSmsPermission$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
+            api.requestSmsPermission{ result: Result<PermissionStatus> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(LunoApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(LunoApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.openAppSettings$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
-              api.requestSmsPermission()
+              api.openAppSettings()
               listOf(null)
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
@@ -971,11 +1024,11 @@ interface LunoHostApi {
         }
       }
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.hasReceiveSmsPermission$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.receiveSmsPermissionStatus$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
-              listOf(api.hasReceiveSmsPermission())
+              listOf(api.receiveSmsPermissionStatus())
             } catch (exception: Throwable) {
               LunoApiPigeonUtils.wrapError(exception)
             }
@@ -989,13 +1042,15 @@ interface LunoHostApi {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.sms_gateway.LunoHostApi.requestReceiveSmsPermission$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
-            val wrapped: List<Any?> = try {
-              api.requestReceiveSmsPermission()
-              listOf(null)
-            } catch (exception: Throwable) {
-              LunoApiPigeonUtils.wrapError(exception)
+            api.requestReceiveSmsPermission{ result: Result<PermissionStatus> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(LunoApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(LunoApiPigeonUtils.wrapResult(data))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)

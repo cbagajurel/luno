@@ -97,11 +97,11 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
           final windowed = rows.length > _visible ? _visible : rows.length;
           return ListView.separated(
             controller: _scroll,
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               LunoSpacing.md,
               LunoSpacing.xs,
               LunoSpacing.md,
-              LunoSpacing.md,
+              context.navClearance,
             ),
             itemCount: windowed,
             separatorBuilder: (_, _) => Divider(

@@ -118,18 +118,27 @@ class LunoBridge {
 
   Future<DeviceState> getDeviceState() => _hostApi.getDeviceState();
 
-  Future<bool> hasPhonePermission() => _hostApi.hasPhonePermission();
+  Future<PermissionStatus> phonePermissionStatus() =>
+      _hostApi.phonePermissionStatus();
 
-  Future<void> requestPhonePermission() => _hostApi.requestPhonePermission();
+  /// Completes with the real outcome once the user answers, so callers can react
+  /// without re-polling.
+  Future<PermissionStatus> requestPhonePermission() =>
+      _hostApi.requestPhonePermission();
 
   /// Fires on any telemetry change (and once on subscribe); carries only a
   /// revision counter — re-query [getDeviceState] for the data.
   Stream<int> get deviceStateEvents =>
       _deviceStateChannel.receiveBroadcastStream().map((event) => event as int);
 
-  Future<bool> hasSmsPermission() => _hostApi.hasSmsPermission();
+  Future<PermissionStatus> smsPermissionStatus() =>
+      _hostApi.smsPermissionStatus();
 
-  Future<void> requestSmsPermission() => _hostApi.requestSmsPermission();
+  Future<PermissionStatus> requestSmsPermission() =>
+      _hostApi.requestSmsPermission();
+
+  /// The only route out of [PermissionStatus.blocked].
+  Future<void> openAppSettings() => _hostApi.openAppSettings();
 
   /// Enqueues a send and returns the durable message id; observe [outboxEvents]
   /// and [getRecentOutbox] for the QUEUED→SENDING→SENT/FAILED progression.
@@ -147,9 +156,10 @@ class LunoBridge {
 
   Future<bool> isReceiveSmsSupported() => _hostApi.isReceiveSmsSupported();
 
-  Future<bool> hasReceiveSmsPermission() => _hostApi.hasReceiveSmsPermission();
+  Future<PermissionStatus> receiveSmsPermissionStatus() =>
+      _hostApi.receiveSmsPermissionStatus();
 
-  Future<void> requestReceiveSmsPermission() =>
+  Future<PermissionStatus> requestReceiveSmsPermission() =>
       _hostApi.requestReceiveSmsPermission();
 
   Future<List<InboundEntry>> getRecentInbox() => _hostApi.getRecentInbox();

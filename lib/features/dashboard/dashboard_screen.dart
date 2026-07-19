@@ -6,7 +6,9 @@ import '../../bridge/luno_bridge.dart';
 import '../../state/bridge_providers.dart';
 import '../../state/connection_providers.dart';
 import '../../state/device_providers.dart';
+import '../../state/messages_providers.dart';
 import '../../ui/ui.dart';
+import '../shared/restricted_settings_sheet.dart';
 import '../pairing/pairing_form.dart';
 import '../shared/status_ui.dart';
 
@@ -40,12 +42,15 @@ class DashboardScreen extends ConsumerWidget {
           await ref.read(deviceStateProvider.future);
         },
         child: ListView(
-          padding: const EdgeInsets.all(LunoSpacing.md),
+          padding: const EdgeInsets.all(
+            LunoSpacing.md,
+          ).copyWith(bottom: context.navClearance),
           children: const [
             _ConnectionBanner(),
             SizedBox(height: LunoSpacing.sm),
             _AgentControls(),
             _PermissionsCard(),
+            _BlockedSendsBanner(),
             _TelemetrySections(),
           ],
         ),
@@ -146,6 +151,36 @@ class _AgentControls extends ConsumerWidget {
   }
 }
 
+/// A send that failed on a missing SEND_SMS is classified AUTH — non-retryable —
+/// so it lands in FAILED_TERMINAL and vanishes silently. Surface it, and route
+/// to the same recovery flow rather than leaving the user to guess.
+class _BlockedSendsBanner extends ConsumerWidget {
+  const _BlockedSendsBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final blocked = ref.watch(smsBlockedSendsProvider);
+    if (blocked == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: LunoSpacing.sm),
+      child: StatusTile(
+        icon: Icons.sms_failed_outlined,
+        tone: StatusTone.danger,
+        title: blocked == 1
+            ? '1 message failed: no SMS permission'
+            : '$blocked messages failed: no SMS permission',
+        subtitle: 'They were not sent and will not retry automatically.',
+        trailing: LunoButton(
+          label: 'Fix',
+          variant: LunoButtonVariant.text,
+          onPressed: () =>
+              showRestrictedSettingsSheet(context, ref, AppPermission.sms),
+        ),
+      ),
+    );
+  }
+}
+
 class _PermissionsCard extends ConsumerWidget {
   const _PermissionsCard();
 
@@ -153,7 +188,18 @@ class _PermissionsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final permissions = ref.watch(permissionsProvider);
     final controller = ref.read(permissionsProvider.notifier);
-    void onGrant(AppPermission p) => controller.request(p);
+
+    // Always attempt the real system prompt first — a cached "blocked" goes stale
+    // as soon as the user allows restricted settings, and only the live request
+    // can tell us it became grantable. Escalate to the sheet only if the attempt
+    // itself comes back blocked.
+    Future<void> onGrant(AppPermission p) async {
+      final status = await controller.request(p);
+      if (status == PermissionStatus.blocked && context.mounted) {
+        await showRestrictedSettingsSheet(context, ref, p);
+      }
+    }
+
     void onRetry() => controller.refresh();
     return permissions.when(
       skipLoadingOnReload: true,
@@ -211,6 +257,7 @@ class _PermissionsCard extends ConsumerWidget {
                     label: perm.label,
                     rationale: perm.rationale,
                     granted: false,
+                    blocked: p.isBlocked(perm),
                     onGrant: () => onGrant(perm),
                   ),
               ],
