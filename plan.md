@@ -12,12 +12,12 @@ Linux/Windows) can be added later without redesign.
 This is the master roadmap. It is intentionally high-level and phase-oriented.
 The detailed design lives in four companion documents:
 
-| Document | Covers | Prompt step |
-|---|---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Responsibilities, all lifecycles & flows, wire protocol | Step 2 |
-| [`docs/folder-structure.md`](docs/folder-structure.md) | Every folder in Dart + Kotlin and why it exists | Step 3 |
-| [`docs/milestones.md`](docs/milestones.md) | Independently testable milestones with full detail | Steps 4 & 5 |
-| [`docs/pitfalls.md`](docs/pitfalls.md) | Architectural mistakes to avoid, with alternatives | Step 6 |
+| Document                                               | Covers                                                  | Prompt step |
+| ------------------------------------------------------ | ------------------------------------------------------- | ----------- |
+| [`docs/architecture.md`](docs/architecture.md)         | Responsibilities, all lifecycles & flows, wire protocol | Step 2      |
+| [`docs/folder-structure.md`](docs/folder-structure.md) | Every folder in Dart + Kotlin and why it exists         | Step 3      |
+| [`docs/milestones.md`](docs/milestones.md)             | Independently testable milestones with full detail      | Steps 4 & 5 |
+| [`docs/pitfalls.md`](docs/pitfalls.md)                 | Architectural mistakes to avoid, with alternatives      | Step 6      |
 
 ---
 
@@ -46,7 +46,7 @@ or a whole new node platform without touching the core).
 ## Guiding principles (how we'll judge every PR)
 
 1. **API-first & backend-agnostic.** The node↔backend wire protocol is specified
-   and versioned *before* the client is implemented. It is the real contract and
+   and versioned _before_ the client is implemented. It is the real contract and
    the real extension point. The node prescribes **no** server technology
    (Firebase, Supabase, Express, Next, Nest, … are all equally fine) and
    hardcodes no endpoints — a server just has to speak the protocol. How the
@@ -60,7 +60,7 @@ or a whole new node platform without touching the core).
    governs the **native agent**; the Flutter UI layer uses a conventional
    code-gen stack (Riverpod, go_router, freezed) and that's fine — the ban is
    specifically on plugins doing the agent's telephony/background/network job.
-4. **Durability before delivery.** Persist to disk *before* acting or acking.
+4. **Durability before delivery.** Persist to disk _before_ acting or acking.
    At-least-once delivery + idempotency keys. A dropped process must never lose
    or duplicate a message.
 5. **Secure by default.** WSS only, credentials in the Keystore, PII redacted
@@ -76,25 +76,25 @@ or a whole new node platform without touching the core).
 
 ## Phase overview
 
-| Phase | Theme | Ships when |
-|---|---|---|
-| 0 | Foundations, decisions, protocol spec, project hygiene | Repo is renamed, protocol v1 frozen, CI green |
-| 1 | Native skeleton + Pigeon bridge + foreground service | "Hello from Kotlin" round-trips; FGS stays alive |
-| 2 | Read-only device telemetry (SIM, battery, signal, network) | Dashboard shows live device health, no dangerous perms |
-| 3 | Domain core + durable persistence (Room, outbox/inbox, repos) | Queue survives process death; transport interface exists |
-| 4 | SMS send (SmsManager, multipart, sent/delivery reports, multi-SIM) | A button sends a real SMS and tracks it to DELIVERED |
-| 5 | SMS receive (BroadcastReceiver, multipart reassembly) | Inbound SMS is captured, reassembled, persisted |
-| 6 | Backend connectivity (WebSocket, protocol, auth, heartbeat, REST fallback) | Node pairs, connects, exchanges real protocol messages |
-| 7 | Reliability & lifecycle (boot, WorkManager, reconnect, queue drain, idempotency) | Node survives reboot + offline + kill and reconciles cleanly |
-| 8 | Security hardening (Keystore, encryption at rest, pinning, rate limits, redaction) | Threat-model checklist passes |
-| 9 | Flutter dashboard (pairing, status, logs, settings) | Operator can run the node end-to-end from the UI |
-| 10 | Observability, testing, docs, first stable release | v1.0 tag, signed APK, reproducible build, docs |
+| Phase | Theme                                                                              | Ships when                                                   |
+| ----- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 0     | Foundations, decisions, protocol spec, project hygiene                             | Repo is renamed, protocol v1 frozen, CI green                |
+| 1     | Native skeleton + Pigeon bridge + foreground service                               | "Hello from Kotlin" round-trips; FGS stays alive             |
+| 2     | Read-only device telemetry (SIM, battery, signal, network)                         | Dashboard shows live device health, no dangerous perms       |
+| 3     | Domain core + durable persistence (Room, outbox/inbox, repos)                      | Queue survives process death; transport interface exists     |
+| 4     | SMS send (SmsManager, multipart, sent/delivery reports, multi-SIM)                 | A button sends a real SMS and tracks it to DELIVERED         |
+| 5     | SMS receive (BroadcastReceiver, multipart reassembly)                              | Inbound SMS is captured, reassembled, persisted              |
+| 6     | Backend connectivity (WebSocket, protocol, auth, heartbeat, REST fallback)         | Node pairs, connects, exchanges real protocol messages       |
+| 7     | Reliability & lifecycle (boot, WorkManager, reconnect, queue drain, idempotency)   | Node survives reboot + offline + kill and reconciles cleanly |
+| 8     | Security hardening (Keystore, encryption at rest, pinning, rate limits, redaction) | Threat-model checklist passes                                |
+| 9     | Flutter dashboard (pairing, status, logs, settings)                                | Operator can run the node end-to-end from the UI             |
+| 10    | Observability, testing, docs, first stable release                                 | v1.0 tag, signed APK, reproducible build, docs               |
 
 Phases are ordered so each one is **independently testable without the next**.
-Notably, SMS send/receive (Phases 4–5) are built and verified *before* the
+Notably, SMS send/receive (Phases 4–5) are built and verified _before_ the
 backend client (Phase 6): they're triggered from a debug UI button so we prove
 the hard telephony layer locally before adding network complexity. The wire
-protocol is *designed* in Phase 0 but *implemented* in Phase 6 — API-first, not
+protocol is _designed_ in Phase 0 but _implemented_ in Phase 6 — API-first, not
 API-only-on-paper.
 
 ---
@@ -105,6 +105,7 @@ API-only-on-paper.
 starts on solid ground. Freeze the decisions that are expensive to change later.
 
 **What will be built.**
+
 - Rename package/namespace/applicationId from `com.example.sms_gateway` to a
   real identity (proposed: `com.luno.gateway`); update app label to `Luno`.
 - Resolve the [open decisions](#open-decisions-to-close-in-phase-0) below.
@@ -135,6 +136,7 @@ code paths are even legal.
 approved; frozen `protocol.md` section; CI running on every push.
 
 **Verify before moving on.**
+
 - `flutter run` launches the renamed app; `applicationId` is `com.luno.gateway`.
 - CI is green on a trivial PR.
 - Protocol v1 reviewed and explicitly signed off — no "we'll figure it out later"
@@ -149,6 +151,7 @@ approved; frozen `protocol.md` section; CI running on every push.
 shell that everything else will live inside — with nothing telephony-related yet.
 
 **What will be built.**
+
 - Pigeon schema + generated code; a trivial `HostApi.ping()` round-trip and a
   `FlutterApi`/`EventChannel` push from Kotlin to Dart ("hello from Kotlin").
 - `LunoApplication`, a lightweight manual DI graph (`AgentGraph`).
@@ -175,6 +178,7 @@ Kotlin coroutines. Nothing networking or telephony yet.
 notification, and a demonstrable two-way bridge.
 
 **Verify before moving on.**
+
 - `HostApi.ping()` returns; a Kotlin-initiated event reaches Dart.
 - Service survives the Activity being swiped away (visible via the persistent
   notification and logcat).
@@ -190,6 +194,7 @@ and stream them to the dashboard. **Deliberately dangerous-permission-free
 model using low-risk reads before we touch SMS.
 
 **What will be built.**
+
 - `SimInfoManager` (SubscriptionManager, multi-SIM aware),
   `BatteryMonitor` (BatteryManager / sticky broadcast),
   `SignalStrengthMonitor` (`TelephonyCallback` on API 31+, guarded fallback
@@ -210,6 +215,7 @@ differences early — while nothing can go out over a carrier yet.
 **Deliverables.** Dashboard showing live SIM(s), signal, battery, connectivity.
 
 **Verify before moving on.**
+
 - Correct on a dual-SIM device and a single-SIM device.
 - Correct across at least API 26, 31, and latest (behavior of the signal and
   subscription APIs changes at 29/31).
@@ -224,6 +230,7 @@ differences early — while nothing can go out over a carrier yet.
 transport abstraction — with **no real telephony and no backend yet.**
 
 **What will be built.**
+
 - Room database: `outbox`, `inbox`, `delivery_report`, `event_log` tables with
   status enums and idempotency keys.
 - Repositories: `OutboxRepository`, `InboxRepository`, `DeviceStateRepository`,
@@ -233,7 +240,7 @@ transport abstraction — with **no real telephony and no backend yet.**
 - The domain models and the normalized **error taxonomy** (transient vs
   permanent) that SMS result codes and backend errors will both map onto.
 
-**Why before SMS.** SMS send/receive must write to a durable queue *before*
+**Why before SMS.** SMS send/receive must write to a durable queue _before_
 touching the radio (persist-before-act). Building the queue first means Phase 4
 plugs `SmsManager` into an already-correct, already-tested persistence and
 state-machine layer, rather than smearing DB logic through the telephony code.
@@ -249,6 +256,7 @@ hardware.
 queue contents survive a process kill.
 
 **Verify before moving on.**
+
 - Enqueue → send → deliver transitions are correct and persisted.
 - Killing the process mid-flight leaves the DB in a recoverable state; on
   restart the queue resumes without duplicating.
@@ -262,6 +270,7 @@ queue contents survive a process kill.
 final state, including multipart and multi-SIM.
 
 **What will be built.**
+
 - `SmsTransport` (implements `Transport`), `SmsSender`, `MultipartAssembler`
   for outbound splitting, and a `SentReportRouter` / `DeliveryReportRouter`
   wiring `PendingIntent` result codes back into the outbox state machine.
@@ -283,6 +292,7 @@ request flow.
 with delivery report captured; failures classified correctly.
 
 **Verify before moving on.**
+
 - Single-part and multipart (>160 char / concatenated) both deliver.
 - Correct SIM is used on a dual-SIM device.
 - Radio-off / no-service / invalid-number produce the right taxonomy outcome
@@ -297,6 +307,7 @@ with delivery report captured; failures classified correctly.
 durably before any acknowledgement.
 
 **What will be built.**
+
 - `SmsReceiver` (`BroadcastReceiver` on `SMS_RECEIVED`) using
   `goAsync()` + coroutine hand-off to the service (no work on the broadcast
   thread past the ANR budget).
@@ -319,6 +330,7 @@ assembler; adds `RECEIVE_SMS` (and, if we choose to read existing threads,
 persisted even when the app UI is not open.
 
 **Verify before moving on.**
+
 - App-closed and screen-locked delivery still captured (service + manifest
   receiver).
 - Multipart reassembles correctly and in order; partial/never-completed
@@ -334,6 +346,7 @@ node, run the heartbeat, and drain both queues over the wire — with REST as a
 degraded fallback.
 
 **What will be built.**
+
 - `WebSocketClient` (OkHttp) with the connection state machine, `Heartbeat`,
   and `ReconnectPolicy` (exponential backoff + jitter, capped).
 - `ProtocolCodec` (envelope encode/decode, version negotiation),
@@ -361,6 +374,7 @@ heartbeats, and reconnects — verified against any server that implements the L
 protocol; a small stub server is enough to develop against.
 
 **Verify before moving on.**
+
 - Full round trip: backend command → SMS sent → delivery report event back.
 - Inbound SMS surfaces as an event and is acked exactly once (dedupe verified).
 - Kill the socket mid-exchange: reconnect + resync leaves no lost/dup messages.
@@ -374,6 +388,7 @@ protocol; a small stub server is enough to develop against.
 reconcile cleanly every time.
 
 **What will be built.**
+
 - `BootReceiver` (`BOOT_COMPLETED`) → restart the service, re-auth, resync.
 - WorkManager workers: `OutboxDrainWorker` (retry backoff), `ReconnectWorker`,
   `LogUploadWorker` — the safety net when the FGS is killed.
@@ -393,6 +408,7 @@ the actual failure modes rather than hypothetical ones.
 provably neither loses nor duplicates messages.
 
 **Verify before moving on.**
+
 - Reboot → node auto-reconnects and drains without user interaction (after the
   one-time first launch + battery exemption).
 - Airplane mode for an hour → queued sends drain correctly on return.
@@ -406,6 +422,7 @@ provably neither loses nor duplicates messages.
 model.
 
 **What will be built.**
+
 - Keystore-backed credential storage; `EncryptedSharedPreferences` /
   encrypted DB fields for message bodies at rest.
 - WSS enforcement + optional certificate pinning.
@@ -422,6 +439,7 @@ protect; doing it earlier means guessing at the attack surface.
 credentials never touch plaintext storage or logs.
 
 **Verify before moving on.**
+
 - Static scan: no secrets/PII in logs or plaintext prefs.
 - Pulled credential is unusable off-device (Keystore-bound).
 - Rate limits actually cap send throughput; allowlist rejects out-of-policy
@@ -435,6 +453,7 @@ credentials never touch plaintext storage or logs.
 pairing, live status, logs, settings.
 
 **What will be built.**
+
 - Pairing/enrollment flow (QR or code), device status dashboard, log viewer,
   settings (SIM selection defaults, rate-limit display, battery-exemption
   helper), connection indicator.
@@ -453,6 +472,7 @@ racing a moving target — and it keeps us honest about Flutter being UI-only.
 **Deliverables.** An operator can pair and run a node entirely from the app.
 
 **Verify before moving on.**
+
 - Killing/reopening the UI never disturbs the running gateway.
 - Every displayed value has a single native source of truth (no Dart-side
   duplication of gateway state).
@@ -464,6 +484,7 @@ racing a moving target — and it keeps us honest about Flutter being UI-only.
 **Goal.** Ship a trustworthy v1.0.
 
 **What will be built.**
+
 - Structured, throttled log upload; on-device ring-buffer log store.
 - Test coverage pass: Kotlin unit (JUnit) + Robolectric, instrumentation for
   receivers/service, Dart widget tests, protocol contract tests against a
@@ -477,6 +498,7 @@ racing a moving target — and it keeps us honest about Flutter being UI-only.
 **Deliverables.** Tagged, signed, documented v1.0 with CI-enforced quality gates.
 
 **Verify before shipping.**
+
 - Full end-to-end on ≥2 physical devices across ≥2 OEM skins and ≥3 API levels.
 - Cold-install → pair → send → receive → reboot → still-working, unassisted.
 - Docs let a stranger self-host and pair a node without reading the source.

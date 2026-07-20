@@ -1,0 +1,96 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Versioning',
+  description:
+    'What may change additively, what bumps the protocol version, and how old nodes and new backends stay interoperable.',
+  openGraph: { images: '/og?title=Versioning' }
+}
+
+# Versioning
+
+The protocol carries a version from v1 because adding one later would be a
+breaking migration across every node and every backend simultaneously — and
+nodes are phones in other people's buildings that update on their own schedule.
+
+## Negotiation
+
+`v` is sent on connect. The backend picks the **highest mutually supported**
+version and the session proceeds on that.
+
+```jsonc
+{ "kind": "control", "type": "version_negotiate", "payload": { "supported": [1] } }
+```
+
+This means a fleet can be upgraded gradually. A backend supporting v1 and v2
+speaks v2 to updated nodes and v1 to the rest, with no flag, no rollout
+coordination, and no window where both must be restarted together.
+
+## The rules
+
+| Change | Bumps `v`? |
+| --- | --- |
+| Adding a new optional field | No |
+| Adding a new command or event type | No |
+| Adding a new value to an existing enum | No |
+| Removing a field | **Yes** |
+| Making an optional field required | **Yes** |
+| Changing the meaning of an existing field | **Yes** |
+| Changing a field's type | **Yes** |
+
+The short version: **additive changes are free, removals and semantic changes
+are not.**
+
+## The two rules that make it work
+
+### Unknown fields are ignored, never rejected
+
+An older node receiving a frame with fields it has never heard of processes what
+it understands and drops the rest. Without this rule, every additive change
+would break every deployed node, and the version number would have to bump for
+everything.
+
+### Unknown types are quarantined, not fatal
+
+Decoding yields `Ok`, `Unsupported` or `Malformed`. An unrecognised `(kind,
+type)` pair produces `Unsupported`: the frame is shelved, the connection
+continues, and the node keeps doing its job.
+
+<Callout type="info">
+  This is what lets a backend start emitting a new event type, or accepting a
+  new command, before every node in the fleet has been updated. The old nodes
+  degrade rather than disconnecting.
+</Callout>
+
+The same principle applies at the application layer in
+[pairing](/docs/protocol/rest-api): a rejection code a build has never seen
+reaches the UI intact with its message, rather than being flattened into
+"invalid code".
+
+## Keeping two implementations honest
+
+The protocol has two implementations — Kotlin in the node, TypeScript in
+[`@luno/protocol`](/docs/backend-sdk) — and they are cross-checked against a
+shared fixture corpus. The same `fixtures/frames.json` is read by the node's
+`ProtocolFixturesTest` and by the TypeScript suite, both asserting byte-identical
+round-trips.
+
+<Callout type="warning">
+  When you change the protocol, change the fixtures. A protocol change that
+  updates only one implementation fails the other's tests in the same commit,
+  which is the entire point — silent codec drift between a phone and a server is
+  extremely expensive to diagnose in the field.
+</Callout>
+
+## Practical guidance
+
+- **Design new capability as additive first.** If a feature can be expressed as
+  a new optional field or a new event type, it costs nothing. If it requires
+  changing what an existing field means, reconsider the design before
+  reconsidering the version.
+- **Reserve fields early.** `publicKey`, `sessionId`, `installId`, `status` and
+  the payload `v` field were all reserved before they were needed, precisely so
+  that adding request signing or bulk provisioning later would not be a version
+  bump.
+- **Never assume the node is current.** A phone that has been running untouched
+  for eight months is the normal case, not the edge case.

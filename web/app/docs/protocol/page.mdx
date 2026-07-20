@@ -1,0 +1,101 @@
+import { Callout, Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Protocol',
+  description:
+    'The Luno wire protocol: the only thing a node requires of a server, and the real extension point of the whole system.',
+  openGraph: { images: '/og?title=Protocol' }
+}
+
+# Protocol
+
+The wire protocol is the contract between a node and a backend. It is the
+**only** thing the node requires of a server, which is why it is node-owned,
+versioned, and published as a standalone specification — any backend, in any
+language, can implement it without reading the Android source.
+
+## Design properties
+
+- **Transport-agnostic.** SMS today; MMS, USSD and voice fit the same envelope
+  with no redesign.
+- **Platform-agnostic.** Android today; a Linux or Windows GSM-modem node is a
+  different program speaking this same protocol, and the backend cannot tell the
+  difference.
+- **Versioned from v1.** Adding a version field later would be a breaking
+  migration across every node and server simultaneously.
+- **JSON over WSS** for the live session, **HTTPS** for enrolment and fallback.
+
+<Callout type="info">
+  Nothing in the protocol prescribes a backend technology. Endpoints are runtime
+  configuration set at pairing, never compiled into the node.
+</Callout>
+
+## The four frame kinds
+
+| Kind | Direction | Purpose |
+| --- | --- | --- |
+| `command` | backend → node | Ask the node to do something |
+| `event` | node → backend | Report what happened |
+| `ack` | both | Confirm receipt of a specific frame |
+| `control` | both | `resync`, `version_negotiate`, application-level ping/pong |
+
+Every frame shares [one envelope](/docs/protocol/envelope), and every frame
+carries an `id` that doubles as its idempotency key.
+
+## Session shape
+
+```
+Node connects (WSS, credential in the handshake)
+  → control:version_negotiate    ── pick the highest mutually supported version
+  → AUTHENTICATED
+  → control:resync               ── reconcile both directions
+  → READY                        ── commands flow, events flow, heartbeats tick
+```
+
+The node drives this as a single-consumer loop over an explicit state machine.
+A 401 or 403 pauses the node rather than putting it into a reconnect loop, so a
+revoked credential does not become a denial-of-service against your own server.
+
+## Two implementations, one corpus
+
+The protocol has a Kotlin implementation in the node (`ProtocolCodec`,
+`kotlinx.serialization`) and a TypeScript one in
+[`@luno/protocol`](/docs/backend-sdk). They are cross-checked against a shared
+fixture corpus — the same `fixtures/frames.json` is read by the node's
+`ProtocolFixturesTest` and by the TypeScript test suite, both asserting
+byte-identical round-trips.
+
+<Callout type="info">
+  This is what keeps the two codecs from drifting silently. A protocol change
+  that breaks one side fails the other side's tests in the same commit.
+</Callout>
+
+## Forward compatibility
+
+Decoding yields one of three results — `Ok`, `Unsupported`, or `Malformed` — and
+the distinction matters. An unknown frame type is *quarantined*, not treated as
+corruption, so an older node connected to a newer backend degrades rather than
+disconnecting.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Envelope" href="/docs/protocol/envelope" arrow>
+    The fields every frame carries, and what each is for.
+  </Cards.Card>
+  <Cards.Card title="Commands" href="/docs/protocol/commands" arrow>
+    Backend → node: send, cancel, status, config, revoke.
+  </Cards.Card>
+  <Cards.Card title="Events" href="/docs/protocol/events" arrow>
+    Node → backend: the full reporting surface.
+  </Cards.Card>
+  <Cards.Card title="WebSocket" href="/docs/protocol/websocket" arrow>
+    Handshake, acks, heartbeats and resync over the live session.
+  </Cards.Card>
+  <Cards.Card title="REST API" href="/docs/protocol/rest-api" arrow>
+    Enrolment endpoints and the QR payload format.
+  </Cards.Card>
+  <Cards.Card title="Versioning" href="/docs/protocol/versioning" arrow>
+    What may change additively and what bumps the version.
+  </Cards.Card>
+</Cards>

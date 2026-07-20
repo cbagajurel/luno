@@ -1,0 +1,107 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'OEM reliability',
+  description:
+    'Battery optimisation, Doze, and the manufacturer skins that kill background apps — what Luno does about them and what only you can do.',
+  openGraph: { images: '/og?title=OEM%20reliability' }
+}
+
+# OEM reliability
+
+This is where SMS gateways go to die. Treat OS hostility as the default, not the
+exception.
+
+## The problem
+
+Xiaomi/MIUI, Huawei/EMUI, Oppo/ColorOS, Vivo, OnePlus and Samsung all
+aggressively kill background apps and gate autostart behind settings that are
+not discoverable. The result is that the gateway silently dies on exactly the
+cheap, second-hand handsets most likely to be repurposed as gateways.
+
+<Callout type="error">
+  No amount of application code beats this. Any project claiming otherwise is
+  either using wake locks that destroy the battery, or has not been tested on
+  the affected devices for long enough.
+</Callout>
+
+## What Luno does about it
+
+Four moves, none of which pretend the problem is solvable from code alone:
+
+1. **Detect the OEM and deep-link to its settings.** The app links directly to
+   the manufacturer's autostart and battery screens rather than describing them
+   in prose.
+2. **Surface a "reliability at risk" health state** to the backend when kills or
+   coverage gaps are detected, so a fleet dashboard shows a degraded node before
+   someone notices missing messages.
+3. **Ship an OEM setup guide** in-app during first launch.
+4. **Rely on resync**, so a killed node recovers losslessly when it returns
+   rather than losing whatever happened while it was gone.
+
+## What you must do per device
+
+<Callout type="warning">
+  Complete these during initial setup. Discovering them after a week of missing
+  messages is the common failure story.
+</Callout>
+
+**Everywhere:**
+
+- Grant the **battery optimisation exemption** when prompted
+  (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`).
+- **Do not dismiss the ongoing notification.** Too-low importance or a
+  dismissible notification gets the foreground service reaped on some skins.
+- Keep the device **plugged in**. Charging state alone changes how aggressively
+  several skins reap background work.
+
+**Per manufacturer:**
+
+| OEM | Where to look |
+| --- | --- |
+| Xiaomi / MIUI | Security → Permissions → Autostart; Battery saver → No restrictions; lock the app in Recents |
+| Huawei / EMUI | App launch → Manage manually (all three toggles on) |
+| Oppo, Realme / ColorOS | Battery → Allow background running; Startup manager |
+| Vivo / FunTouch | Battery → High background power consumption; Autostart |
+| OnePlus / OxygenOS | Battery optimisation → Don't optimise; Advanced → disable deep optimisation |
+| Samsung / One UI | Battery → Background usage limits → Never sleeping apps |
+
+[dontkillmyapp.com](https://dontkillmyapp.com) tracks the current settings per
+vendor and firmware version, and is more up to date than any static list.
+
+## Doze and App Standby
+
+Even on stock Android, Doze defers network, alarms and jobs when the device is
+idle. Luno's approach:
+
+- The foreground service plus a real-time socket is the **primary path**, and is
+  exempt while the service runs.
+- WorkManager is the **deferred safety net** only. The design never depends on
+  exact timing, because it cannot.
+- **No long-held wake locks.** They murder the battery and still lose to OEM
+  killers.
+
+## Choosing a device
+
+If you are buying a handset for this:
+
+- Stock or near-stock Android (Pixel, Motorola, Nokia) causes dramatically fewer
+  problems than heavily skinned firmware.
+- Android 13 or 14 is a sweet spot — new enough for modern telephony APIs,
+  before Android 15's sideload restrictions bite.
+- A removable, replaceable battery matters less than permanent power; a phone
+  left charging at 100% for years will swell. A charge limiter or a device that
+  supports charge-level capping is worth the effort.
+
+## Verifying it actually survives
+
+The only test that counts is time. Before trusting a device:
+
+1. Pair it, send a message, confirm delivery.
+2. Reboot. Confirm the node reconnects with no interaction.
+3. Leave it untouched and unplugged from any debugger for 48 hours.
+4. Send again. If it works without opening the app, the device is configured.
+
+Watch the heartbeat freshness in your dashboard over those 48 hours — a node
+that goes quiet and returns has been killed and revived, which is a warning even
+though nothing was lost.

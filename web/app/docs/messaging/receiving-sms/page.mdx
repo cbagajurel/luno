@@ -1,0 +1,120 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Receiving SMS',
+  description:
+    'How Luno captures inbound SMS: the broadcast receiver, the ANR budget that shapes it, multipart reassembly, and the sms_received event.',
+  openGraph: { images: '/og?title=Receiving%20SMS' }
+}
+
+# Receiving SMS
+
+Inbound capture requires the `full` build flavor and the `RECEIVE_SMS`
+permission. There is nothing else to configure — a paired node reports every
+message that reaches the SIM.
+
+<Callout type="info">
+  The `sendOnly` flavor omits both the permission and the receiver registration.
+  Native exposes this as `isReceiveSmsSupported()` so the settings screen hides
+  a permission that could never be granted. See [build
+  flavors](/docs/android/play-protect#build-flavors).
+</Callout>
+
+## The path
+
+```
+SMS_RECEIVED broadcast → SmsReceiver.goAsync()
+  → hand PDUs to the service → MultipartAssembler.reassemble
+  → InboxRepository.insert(RECEIVED)     [PERSIST FIRST]
+  → event:sms_received(id=E7) ─────────▶ Backend
+  → Backend ack(E7) → inbox: mark reported/acked
+```
+
+## The ANR budget shapes the design
+
+A `BroadcastReceiver` has roughly a **ten-second** budget before Android
+declares an ANR. Reassembling, persisting and reporting inline would blow it
+under load — and load is exactly when you least want the receiver to die.
+
+So `SmsReceiver` does the minimum: it calls `goAsync()` to hold the broadcast
+open, captures the PDUs, and hands them straight to the service. All real work
+happens on a coroutine outside the receiver's window.
+
+<Callout type="warning">
+  This is the single most common way a homegrown SMS gateway loses messages
+  silently. The receiver appears to work in testing — where messages arrive one
+  at a time — and starts dropping them the moment a burst arrives.
+</Callout>
+
+## Multipart reassembly
+
+Concatenated SMS arrives as separate PDUs carrying a reference number, a part
+count and an index. `MultipartAssembler.reassemble` joins them.
+
+Parts can arrive out of order, and sometimes a part never arrives at all. The
+assembler is therefore time-bounded: on `REASSEMBLY_TIMEOUT` the message is
+reported as partial rather than held forever waiting for a part that is not
+coming.
+
+`SmsReceiver.buildInbound` is deliberately a **pure function** — PDUs in, domain
+model out — so the parsing that is hardest to get right is unit-testable without
+a device or a radio.
+
+## The event
+
+```jsonc
+{
+  "kind": "event",
+  "type": "sms_received",
+  "id": "evt_7",
+  "payload": {
+    "from": "+9779800000000",
+    "body": "…",
+    "subscriptionId": 1,
+    "receivedAt": "2026-07-19T09:00:00Z",
+    "parts": 1
+  }
+}
+```
+
+Handled server-side with:
+
+```ts
+const luno = createLuno({
+  store,
+  secret: process.env.LUNO_SECRET!,
+  onEvent: {
+    'sms.received': async msg => {
+      await db.messages.insert({ from: msg.from, body: msg.body })
+    }
+  }
+})
+```
+
+## Delivery guarantees
+
+Inbound reporting is **at-least-once**. The event is persisted in the node's
+durable event outbox under a stable id, resent on every reconnect until the
+backend acks it, and cleared on ack. It survives process death, not just socket
+drops.
+
+<Callout type="warning">
+  Your `sms.received` handler must be idempotent. A network drop between the
+  backend persisting the message and the node receiving the ack results in a
+  redelivery of the same event id. Dedupe on the event id, or use it as a
+  primary key.
+</Callout>
+
+The ack follow-up is itself keyed off a persisted `correlationId`, so the chain
+survives a restart at any point in it.
+
+## What is not captured
+
+- **MMS** is out of scope for v1. An MMS arriving at the SIM is not reported.
+- **RCS** is not accessible to third-party apps at all.
+- **Messages received while the app was force-stopped** are not delivered by
+  Android to a stopped app. This is one of the reasons the node's health state
+  matters — a silently stopped node is not just idle, it is missing inbound
+  traffic that will never be recoverable.
+- **Class 0 / flash messages** and carrier service messages are delivered by the
+  system differently and may not reach the receiver.

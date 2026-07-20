@@ -1,0 +1,110 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Roadmap',
+  description:
+    'What is shipped, what is next, and what is deliberately out of scope for Luno v1.',
+  openGraph: { images: '/og?title=Roadmap' }
+}
+
+# Roadmap
+
+Luno is built in milestones, each independently testable. This is where things
+stand.
+
+## Shipped
+
+**The node — M1 through M17.**
+
+| Area | State |
+| --- | --- |
+| Foreground service surviving swipe and reboot | Done |
+| Device telemetry — SIM, signal, battery, network, multi-SIM | Done |
+| Durable Room outbox and inbox behind a `Transport` interface | Done |
+| SMS send — single-part, multipart, multi-SIM, delivery reports | Done |
+| SMS receive — broadcast capture, reassembly, durable inbox | Done |
+| Wire protocol codec and connection state machine | Done |
+| Pairing, auth and live WSS with heartbeats | Done |
+| Boot receiver, WorkManager backstop, durable resync | Done |
+| Security hardening — redaction, encryption at rest, rate limits, pinning seam | Done |
+| Flutter dashboard — pairing, dashboard, messages, logs, settings | Done |
+
+**Pairing sessions.** The node became a pure pairing *client*: it submits a code
+and renders the verdict, enforcing no expiry, usage limit, revocation or
+approval rule of its own. Every enrolment policy is backend configuration rather
+than an app release.
+
+**The backend SDK — all five phases.** `@luno/protocol` cross-checked against
+the Kotlin codec over a shared fixture corpus; `@luno/core` implementing pairing,
+enrolment, device management, the handshake and messaging behind injected ports;
+`@luno/testing` shipping a scriptable fake node and the store conformance kit;
+`@luno/store-postgres` passing conformance against real Postgres semantics; and
+five framework adapters riding the core unchanged — Hono, Express, Fastify,
+NestJS and Cloudflare Workers.
+
+<Callout type="info">
+  Phases 4 and 5 are the proof the abstraction generalises: five frameworks and
+  a real database, spanning fetch-native, classic-Node and edge runtimes — not
+  one of which required a change to `@luno/core`.
+</Callout>
+
+## Next
+
+**M18 — observability, tests and release.** The remaining gate before a
+tagged release. Real devices across OEM skins, API levels and dual-SIM
+hardware; carrier delivery-report behaviour; the on-device soak.
+
+**Physical-device validation.** Real dual-SIM sends and genuine carrier delivery
+reports still need hardware. The automated equivalent covers the wire path; it
+cannot cover the radio.
+
+## Designed, not built
+
+**HTTP fallback transport.** Specified with its protocol surface reserved, but
+v1 implements sockets only. `FrameSink` is defined so a long-poll or SSE buffer
+satisfies it without change, and `SessionRegistry` distinguishes local from
+routed sessions already. The additive versioning rules mean it lands later
+without a redesign.
+
+This is what socketless platforms — Firebase Functions, Appwrite, Vercel
+serverless — need to become first-class rather than requiring a companion
+service.
+
+**More stores.** Firestore, D1 and others are additive: implement the ports,
+pass the conformance suite.
+
+## Deliberately out of scope
+
+<Callout type="warning">
+  These are decisions, not omissions. Each has a reason, and reversing one
+  should require making the case against that reason.
+</Callout>
+
+**Linux and Windows nodes.** They would require external USB GSM modems and
+AT-command integration, sharing no code with the Android telephony layer. macOS
+has no cellular hardware path at all. The wire protocol is the extension point —
+a modem node is a *separate program*, and building it is not blocked by anything
+here. It is simply not started until the Android app is solid.
+
+**MMS, USSD and voice.** The `Transport` interface and the protocol are both
+transport-neutral, so each is one new implementation registered beside `sms/`
+with no change to the queue, protocol or UI. They are not in v1.
+
+**A hosted Luno service.** There is no Luno cloud and none is planned. Your
+backend is the only server involved.
+
+**Client SDKs.** `@luno/react`, `@luno/flutter`, `@luno/go` would talk to *your*
+backend, never to a node directly — the backend holds the privileged position
+and all node credentials. They would consume `@luno/protocol` for types only.
+Anticipated, not scheduled.
+
+## Long-term direction
+
+The stated ambition is a complete communication infrastructure platform:
+messaging, gateways, device communication, monitoring, distributed nodes and
+additional protocols.
+
+The architecture is shaped for that — transport-neutral domain models, a
+versioned protocol as the extension seam, and a framework-independent server
+core — but SMS on Android is what exists today, and the roadmap above is what is
+actually planned.

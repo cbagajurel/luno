@@ -1,0 +1,133 @@
+import { Callout, Steps } from 'nextra/components'
+
+export const metadata = {
+  title: 'Pairing',
+  description:
+    'Enrol an Android node against your backend with a pairing session — typed code or QR — and receive a Keystore-sealed device credential.',
+  openGraph: { images: '/og?title=Pairing' }
+}
+
+# Pairing
+
+Pairing is how a node acquires its identity. The operator creates a **pairing
+session** on the backend, the node submits the session's code, and on approval
+the backend registers the device and issues a long-lived **device credential**
+that the node presents on every subsequent connection.
+
+<Callout type="info">
+  The full contract — request and response shapes, error codes, QR payload
+  format, extension points — is documented in [REST
+  API](/docs/protocol/rest-api). This page is the operator's walkthrough.
+</Callout>
+
+## The governing rule
+
+**The node enforces no pairing policy.** It does not know whether a session
+expires, how many devices it admits, whether it was revoked, or whether an
+operator must approve the device. It submits a code and renders the verdict.
+
+Every policy therefore lives on the backend and is configurable without an app
+release: expiry or no expiry, one device or many, auto-invalidate on use,
+approval gates, device replacement, QR or typed code or both.
+
+Two consequences are worth stating explicitly:
+
+- **Policy never travels in the pairing code.** A QR payload carries enrolment
+  *inputs* only. If expiry rode in the payload, a stale QR could assert its own
+  validity; instead a stale code is refused by the server that owns the truth.
+- **Unknown verdicts survive.** A rejection code this build has never seen
+  reaches the UI intact rather than being flattened into "invalid code", so a
+  backend can add new reasons unilaterally.
+
+## Walkthrough
+
+<Steps>
+### Create a session on the backend
+
+```ts
+const session = await luno.pairing.createSession({
+  label: 'Warehouse phone 1',
+  createdBy: user.id
+})
+
+session.code       // 'ABCD-1234' — plaintext, returned exactly once
+session.qrPayload  // 'luno://pair?v=1&u=…&c=ABCD-1234&s=ses_9f3&l=Acme'
+```
+
+The backend stores only a **hash** of the code. The plaintext is returned once
+at creation and is never retrievable again — if it is lost, mint a new session.
+
+### Present it to the operator
+
+Render `session.qrPayload` as a QR code, or display `session.code` for manual
+entry. Both carry the same authority; the SDK applies identical policy to each.
+
+### Submit it from the app
+
+In the app, choose **Pair device** and either scan the QR code or type the code.
+Scanning shows a confirmation sheet with the session's display label before
+anything is submitted, so an operator can tell they are about to enrol against
+the right deployment.
+
+### The node stores its credential
+
+On approval the node writes the credential into a Keystore-sealed store —
+plaintext never touches disk — and immediately opens its WebSocket session.
+The dashboard flips to **Connected**.
+</Steps>
+
+## Approval gates
+
+If your deployment sets `requireApproval`, the first response is not a
+credential:
+
+```jsonc
+{ "status": "pending", "enrollmentId": "enr_7", "retryAfterMs": 5000 }
+```
+
+The node persists this (sealed, Keystore-bound) and polls `POST /enroll/status`
+until it receives `approved` or `denied`. It survives an app restart mid-wait.
+
+<Callout type="warning">
+  `enrollmentId` is a bearer secret in practice — on approval, that endpoint
+  hands a device credential to whoever presents the id. A sequential or
+  otherwise predictable value turns the approval gate into an enrolment bypass.
+  Mint it from a CSPRNG with at least 128 bits of entropy; `@luno/core` uses
+  192.
+</Callout>
+
+## Secure defaults
+
+Defaults belong to the SDK, not to the protocol — the node works with any of
+them. The recommended defaults in `@luno/core`:
+
+- one device per session
+- a short expiry
+- session invalidated after a successful enrolment
+- no reuse unless explicitly configured
+- identical rules whether the session is delivered as a QR code or a typed code
+
+## When pairing fails
+
+The app shows the backend's own message. These are the codes `@luno/core`
+emits; a backend may define others, and the node will display whatever message
+accompanies them.
+
+| Code | Meaning |
+| --- | --- |
+| `invalid_code` | No such session, or the code does not match |
+| `session_expired` | Session is past its expiry |
+| `session_exhausted` | Enrolment limit reached |
+| `session_revoked` | Session was revoked |
+| `already_enrolled` | Device is registered and replacement is not permitted |
+| `approval_denied` | An operator rejected the device |
+| `policy_rejected` | Refused by some other deployment policy |
+
+## Unpairing
+
+A backend can issue `revoke` or `wipe` at any time over the open connection.
+Both trigger a full node reset: credential cleared, queues emptied, policy
+dropped, socket closed, watchdog cancelled. The device returns to its
+pre-pairing state and can be enrolled again with a fresh session.
+
+Next: [send your first message](/docs/getting-started/first-message).

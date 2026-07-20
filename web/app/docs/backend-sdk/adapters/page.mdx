@@ -1,0 +1,183 @@
+import { Callout, Tabs } from 'nextra/components'
+
+export const metadata = {
+  title: 'Adapters',
+  description:
+    'Mount the Luno engine on Hono, Express, Fastify, NestJS or Cloudflare Workers — each adapter is glue, never business logic.',
+  openGraph: { images: '/og?title=Adapters' }
+}
+
+# Adapters
+
+An adapter translates between a runtime and the core. It exposes three things —
+`POST /enroll`, `POST /enroll/status`, and the `WS /ws` session socket — and it
+never parses a protocol frame. The core drives the entire handshake, acks,
+resync and command dispatch.
+
+<Callout type="info">
+  Every adapter listed here ships with a fake-node run over its own transport, so
+  a phone pairs against any of them identically. None of them required a change
+  to `@luno/core`.
+</Callout>
+
+## Hono
+
+Fetch-native, so the same handler runs on Node, Workers, Deno and Bun. Only the
+`upgradeWebSocket` helper differs per runtime, and you pass it in.
+
+<Tabs items={['Node', 'Cloudflare', 'Deno', 'Bun']}>
+  <Tabs.Tab>
+```ts
+import { serve } from '@hono/node-server'
+import { createNodeWebSocket } from '@hono/node-ws'
+import { Hono } from 'hono'
+import { createLuno, memoryStore } from '@luno/core'
+import { registerLuno } from '@luno/hono'
+
+const luno = createLuno({
+  store: memoryStore(),
+  secret: process.env.LUNO_SECRET!
+})
+
+const app = new Hono()
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
+registerLuno(app, { luno, upgradeWebSocket })
+
+const server = serve({ fetch: app.fetch, port: 3000 })
+injectWebSocket(server)
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```ts
+import { upgradeWebSocket } from 'hono/cloudflare-workers'
+registerLuno(app, { luno, upgradeWebSocket })
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```ts
+import { upgradeWebSocket } from 'hono/deno'
+registerLuno(app, { luno, upgradeWebSocket })
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```ts
+import { createBunWebSocket } from 'hono/bun'
+const { upgradeWebSocket, websocket } = createBunWebSocket()
+registerLuno(app, { luno, upgradeWebSocket })
+```
+  </Tabs.Tab>
+</Tabs>
+
+`lunoHono({ luno, upgradeWebSocket })` returns a `Hono` app you can serve
+directly, or mount under a larger one with
+`registerLuno(app, options, basePath)`.
+
+## Express and Fastify
+
+These prove the **non-fetch-native** path — an `HttpRequest` shim plus a `ws`
+bridge on a classic Node server, a seam Hono never touches.
+
+```ts
+import express from 'express'
+import { createLuno, memoryStore } from '@luno/core'
+import { registerLuno } from '@luno/express'
+
+const app = express()
+const luno = createLuno({
+  store: memoryStore(),
+  secret: process.env.LUNO_SECRET!
+})
+
+const server = app.listen(3000)
+registerLuno(app, server, { luno })
+```
+
+The socket bridge — authorise before upgrade, then hand off to
+`connections.open` — is the same roughly thirty-five lines in each adapter. That
+duplication is deliberate: each adapter stays self-contained and
+copy-pasteable rather than introducing a shared dependency between them.
+
+## NestJS
+
+Wires the engine through DI with a `LunoModule` and a `LUNO` injection token.
+
+```ts
+import { Module } from '@nestjs/common'
+import { LunoModule } from '@luno/nestjs'
+import { memoryStore } from '@luno/core'
+
+@Module({
+  imports: [
+    LunoModule.forRoot({
+      store: memoryStore(),
+      secret: process.env.LUNO_SECRET!
+    })
+  ]
+})
+export class AppModule {}
+```
+
+```ts
+import { Inject, Injectable } from '@nestjs/common'
+import { LUNO, type Luno } from '@luno/nestjs'
+
+@Injectable()
+export class AlertService {
+  constructor(@Inject(LUNO) private readonly luno: Luno) {}
+
+  notify(deviceId: string, to: string) {
+    return this.luno.sms.send({ deviceId, to, body: 'Alert' })
+  }
+}
+```
+
+## Cloudflare Workers
+
+Proves the **edge** path with a `WebSocketPair` bridge, ready for Durable
+Objects.
+
+```ts
+import { createLuno } from '@luno/core'
+import { createLunoWorker } from '@luno/cloudflare'
+
+export default createLunoWorker(env =>
+  createLuno({ store: yourStore(env), secret: env.LUNO_SECRET })
+)
+```
+
+<Callout type="warning">
+  On Workers, a plain Worker instance cannot reliably hold a session across
+  requests — use a Durable Object, one per device, so the DO *is* the session.
+  The adapter is built for this shape.
+</Callout>
+
+## Authentication at the boundary
+
+An unknown device credential fails the `WS /ws` upgrade with an **HTTP 401**.
+The authorisation runs *before* the socket is upgraded, deliberately: the node
+treats a 401 as "re-enrolment required" and pauses, whereas a post-upgrade close
+looks like a transient failure and it would reconnect through it forever.
+
+<Callout type="error">
+  If you write your own adapter, authorise before upgrading. Accepting the
+  socket and closing it on bad credentials turns every revoked device into a
+  reconnect loop against your server.
+</Callout>
+
+Operator and API auth for your own dashboard routes is your application's
+concern — adapters only handle the node credential. See [the two
+axes](/docs/backend-sdk/core#authentication--two-axes).
+
+## Writing your own
+
+A new adapter is "done" when it passes the [conformance
+suite](/docs/backend-sdk/testing). Concretely it needs to:
+
+1. Route `POST /enroll` and `POST /enroll/status` to `luno.http.handle`
+2. Authorise the `WS /ws` upgrade with `luno.connections.authorize`
+3. Open a session with `luno.connections.open(device, sink)` and pump frames
+   into `session.receive`
+4. Call `session.close()` when the socket ends
+
+That is the whole contract. If you find yourself parsing a frame, the logic
+belongs in the core.

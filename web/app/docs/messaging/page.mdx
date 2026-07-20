@@ -1,0 +1,68 @@
+import { Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Messaging',
+  description:
+    'How messages move through a Luno node: the durable outbox and inbox, the state machines that drain them, and the events they emit.',
+  openGraph: { images: '/og?title=Messaging' }
+}
+
+# Messaging
+
+Every message in Luno — inbound or outbound — obeys one invariant:
+
+> The durable store is written before the network is trusted and before any ack
+> is sent.
+
+Everything else is a state machine draining that store. This section covers what
+those machines do and which events they emit.
+
+## Outbound at a glance
+
+```
+QUEUED ─▶ SENDING ─▶ SENT ─────────▶ DELIVERED       (terminal, success)
+   │         │         └─▶ UNDELIVERED               (terminal, delivery failed)
+   │         └─▶ FAILED_RETRYABLE ─▶ (backoff) ─▶ QUEUED
+   │         └─▶ FAILED_TERMINAL                     (terminal, e.g. bad number)
+   └─▶ CANCELLED                                     (backend cancel before send)
+```
+
+Three events mark the path: `sms_accepted` when the command is durably queued,
+`sms_sent` when the radio reports transmission, and `delivery_report` when the
+carrier confirms handset delivery.
+
+## Inbound at a glance
+
+```
+RECEIVED ─▶ REASSEMBLED ─▶ REPORTED ─▶ ACKED
+   └─▶ REASSEMBLY_TIMEOUT → REPORTED (as partial) → ACKED
+```
+
+One event: `sms_received`, emitted after the message is persisted and
+reassembled, acked by the backend, and marked reported.
+
+## Idempotency
+
+Status transitions are the only place message state changes, they are all
+persisted, and they are all idempotent on the message or part id. This is what
+makes at-least-once delivery safe in both directions — a replayed `send_sms`
+command does not double-send, and a resent `sms_received` event does not create
+a duplicate row on the server.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Sending SMS" href="/docs/messaging/sending-sms" arrow>
+    Multipart, multi-SIM, retry classification and rate limits.
+  </Cards.Card>
+  <Cards.Card title="Receiving SMS" href="/docs/messaging/receiving-sms" arrow>
+    Broadcast capture, reassembly, and the ANR budget that shapes it.
+  </Cards.Card>
+  <Cards.Card
+    title="Delivery reports"
+    href="/docs/messaging/delivery-reports"
+    arrow
+  >
+    Why reports hang or never arrive, and how Luno bounds them.
+  </Cards.Card>
+</Cards>

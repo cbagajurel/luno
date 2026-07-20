@@ -1,0 +1,111 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Testing',
+  description:
+    'The conformance kit: a scriptable fake node, store contract tests, and shared protocol fixtures that keep two codecs honest.',
+  openGraph: { images: '/og?title=Testing' }
+}
+
+# Testing
+
+With one core, several adapters and several stores, the thing that actually
+prevents ecosystem drift is an executable contract. `@luno/testing` is that
+contract.
+
+## What is in the kit
+
+| Piece | Purpose |
+| --- | --- |
+| **Fake node driver** | A scriptable client that performs the real handshake, sends events and asserts acks |
+| **Store contract suite** | Runs against any store, including the atomicity assertions |
+| **Protocol fixtures** | Golden frames shared with the node's Kotlin tests |
+| **Adapter suite** | Boots an adapter and runs the fake node against it end to end |
+
+<Callout type="info">
+  The main entry point is deliberately vitest-free, so demos and real servers
+  can import the fake node without pulling a test framework into production
+  dependencies. The store conformance suite lives on the `/store` subpath.
+</Callout>
+
+## The fake node
+
+It performs the genuine connection handshake — `version_negotiate` → `resync` →
+READY — over any transport, with no mocks in the core. It is the closest thing
+to a phone that runs in CI.
+
+```ts
+import { createFakeNode } from '@luno/testing'
+
+const node = createFakeNode({ url: 'ws://localhost:3000/ws', credential })
+
+await node.connect()          // full handshake
+await node.expectCommand('send_sms')
+await node.emit('sms_sent', { messageId, parts: [{ index: 0, status: 'sent' }] })
+await node.expectAck()
+await node.close()
+```
+
+Use it to test your own event handlers, your dashboard, and any adapter you
+write.
+
+## Store conformance
+
+```ts
+import { describe } from 'vitest'
+import { storeConformance } from '@luno/testing/store'
+
+describe('MyStore', () => {
+  storeConformance(() => new MyStore(connection))
+})
+```
+
+The suite covers the ordinary CRUD contract of every port, plus the concurrency
+assertions described in [Stores](/docs/backend-sdk/stores#atomicity-is-a-contract-not-an-implementation-detail).
+
+## Protocol fixtures
+
+The golden frames stayed in `@luno/protocol`, next to the codec they check.
+The node's Kotlin `ProtocolFixturesTest` reads the same `fixtures/frames.json`
+and asserts the same byte-identical round-trip.
+
+<Callout type="warning">
+  This is the mechanism that stops the Kotlin and TypeScript codecs drifting.
+  When you change the protocol, change the fixtures — a change that updates only
+  one implementation fails the other's tests in the same commit, which is
+  exactly what you want. Silent codec drift between a phone in the field and a
+  server is extremely expensive to diagnose.
+</Callout>
+
+## Testing your own integration
+
+A reasonable ladder, cheapest first:
+
+1. **Unit-test your handlers** against plain payload objects. No Luno machinery
+   needed.
+2. **Run the fake node against your server** over a real loopback socket. This
+   catches adapter wiring, auth, and anything that depends on real frame
+   ordering.
+3. **Run your store through the conformance suite** if you wrote one.
+4. **Pair a real phone.** The physical device is the final confirmation — the
+   wire path it exercises is covered by the automated equivalent, but the
+   radio, the carrier and the OEM firmware are not.
+
+<Callout type="info">
+  Steps 1–3 run in CI in seconds. Step 4 is the one that finds OEM battery
+  management, carrier delivery-report behaviour and multi-SIM quirks — none of
+  which any emulator reproduces.
+</Callout>
+
+## What is proven today
+
+- `@luno/protocol` — 91 tests, cross-checked against the Kotlin codec over the
+  shared fixture corpus
+- `@luno/core` — 73 tests, including the exported store conformance suite
+  asserting `claim()` linearizability under real concurrency, and an end-to-end
+  smoke run (pair → connect → handshake → send → delivered) against built
+  bundles on real Web Crypto
+- Every adapter — gated on a fake-node run over its own transport: a real socket
+  for the Node frameworks, an in-memory `WebSocketPair` for the edge one
+- `@luno/store-postgres` — passes conformance, including a 60-way concurrent
+  claim test, against real Postgres semantics via PGlite

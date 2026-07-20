@@ -1,0 +1,172 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'REST API',
+  description:
+    'The HTTPS enrolment contract: POST /enroll, POST /enroll/status, the QR payload format, and the error codes a node understands.',
+  openGraph: { images: '/og?title=REST%20API' }
+}
+
+# REST API
+
+The REST surface is small on purpose: two endpoints, both concerned with
+enrolment. Everything else happens over [the WebSocket
+session](/docs/protocol/websocket).
+
+This page is the contract that the `@luno/*` SDKs implement and that the Android
+node implements the client half of, exactly as written.
+
+## `POST /enroll`
+
+```jsonc
+{
+  "protocolVersion": 1,
+  "pairingCode": "ABCD-1234",
+  "nonce": "iA9…",          // fresh per attempt; reject replays
+  "sessionId": "ses_9f3",   // optional, from the QR payload
+  "publicKey": null,        // reserved for request signing / mTLS
+  "deviceInfo": {
+    "model": "Pixel 8",
+    "manufacturer": "Google",
+    "androidSdk": 34,
+    "appVersion": "1.0.0",
+    "installId": "b2c1…",   // stable per install, survives unpairing
+    "platform": "android"
+  }
+}
+```
+
+<Callout type="info">
+  `installId` is generated locally by the node and is **never a hardware
+  identifier**. It is what a device-replacement policy should key on.
+</Callout>
+
+Backends validate that the session exists, that the submitted code matches the
+stored hash, that the session has not expired (if expiry is enabled), has not
+been revoked, has enrolments remaining, and satisfies any further policy the
+deployment defines. All of it is policy-driven, and none of it is assumed by the
+node.
+
+### Success
+
+```jsonc
+{ "status": "approved", "deviceId": "dev_9", "credential": "…", "wsUrl": "wss://…/ws" }
+```
+
+`status` may be omitted — it defaults to `approved`, so a two-field
+`{deviceId, credential}` response from an older server still works. `wsUrl` is
+optional; the node derives it from the enrolment host when absent.
+
+### Awaiting approval
+
+```jsonc
+{ "status": "pending", "enrollmentId": "enr_7", "retryAfterMs": 5000 }
+```
+
+The node persists this — sealed, Keystore-bound — and polls. `retryAfterMs` is
+clamped to between 1 and 60 seconds.
+
+### Rejection
+
+Any 4xx or 5xx carrying:
+
+```jsonc
+{ "error": "session_expired", "message": "…" }
+```
+
+`error` must be a lowercase token matching `[a-z0-9][a-z0-9_.:-]*`. Prose is
+treated as a message rather than a code, and the node falls back to classifying
+on the HTTP status — 400, 401, 403, 409 and 410 all map to "invalid code".
+
+| Code | Meaning |
+| --- | --- |
+| `invalid_code` | No such session, or the code does not match |
+| `session_expired` | Session is past its expiry |
+| `session_exhausted` | Enrolment limit reached |
+| `session_revoked` | Session was revoked |
+| `already_enrolled` | Device registered and replacement not permitted |
+| `approval_denied` | An operator rejected the device |
+| `policy_rejected` | Refused by some other deployment policy |
+
+<Callout type="info">
+  A backend may send codes not on this list. The node shows the accompanying
+  `message` rather than flattening it into "invalid code", so you can add new
+  rejection reasons without shipping an app update.
+</Callout>
+
+## `POST /enroll/status`
+
+```jsonc
+{ "protocolVersion": 1, "enrollmentId": "enr_7", "nonce": "…" }
+```
+
+Returns the same shape as `/enroll`: `approved` with a credential, `pending`
+again, or `denied`.
+
+It exists as a separate endpoint so that waiting for approval never re-submits
+the pairing code — under a single-use policy a second `/enroll` would be
+correctly rejected as exhausted.
+
+<Callout type="error">
+  **`enrollmentId` must be unguessable.** On approval this endpoint hands a
+  device credential to whoever presents the id, which makes it a bearer secret
+  in practice however it is described elsewhere. A sequential or otherwise
+  predictable value turns the approval gate into an enrolment bypass. Mint it
+  from a CSPRNG with at least 128 bits of entropy; `@luno/core` uses 192.
+</Callout>
+
+A node that polls again after `approved` has, by definition, not received the
+credential that was issued. Re-issuing on that poll is what makes a dropped
+response recoverable — and it invalidates the previous credential, so the repeat
+is safe rather than a way to accumulate live credentials.
+
+## QR payload
+
+Two interchangeable forms, both versioned:
+
+```
+luno://pair?v=1&u=https%3A%2F%2Fgw.example.com&c=ABCD-1234&s=ses_9f3&l=Acme&p=sha256%2FAAAA
+```
+
+```jsonc
+{"v":1,"u":"https://gw.example.com","c":"ABCD-1234","s":"ses_9f3","l":"Acme","p":"sha256/AAAA"}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `v` | Payload version; a newer version tells the operator to update rather than being guessed at |
+| `u` | Enrolment base URL (https; http only in debug builds, for LAN) |
+| `c` | Pairing code |
+| `s` | Session id — a non-secret handle for lookup and audit |
+| `l` | Display label, shown on the confirm sheet before enrolling |
+| `p` | Optional SHA-256 SPKI pin, to bootstrap certificate pinning |
+
+<Callout type="warning">
+  The QR payload **is** the enrolment bearer secret, because it carries the
+  code. It carries nothing else sensitive — in particular it never carries a
+  device credential. Treat a photographed QR code as a live pairing code.
+</Callout>
+
+Parsing lives in `backend/auth/PairingPayload.kt` as pure Kotlin — no
+`android.net.Uri` — so the format has one implementation, is unit-testable off
+device, and is reusable by future desktop and IoT nodes.
+
+## Storage requirements
+
+The backend stores **only a hash** of the pairing code. The plaintext is
+returned once at creation and is never retrievable again.
+
+## Extension points
+
+Deliberately reserved so later work is additive rather than a redesign:
+
+- `publicKey` on the enrol request — request signing, mTLS, public-key auth
+- `protocolVersion` on both requests — negotiated evolution
+- `sessionId` and `installId` — organisations, workspaces, bulk provisioning,
+  device replacement, audit history
+- `status` — new enrolment outcomes beyond approved, pending and denied
+- `p` in the payload — pinning delivered at pairing time
+- the payload `v` field — new QR formats without breaking installed nodes
+
+Non-Android node types implement this same contract; none of it is
+Android-specific.

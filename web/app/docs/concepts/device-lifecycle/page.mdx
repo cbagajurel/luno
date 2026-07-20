@@ -1,0 +1,107 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Device lifecycle',
+  description:
+    'How a Luno node moves from installed to paired to running, and every path back — reboots, process death, credential rotation and wipes.',
+  openGraph: { images: '/og?title=Device%20lifecycle' }
+}
+
+# Device lifecycle
+
+A node passes through a small number of states. Knowing which one a device is in
+explains most support questions.
+
+```
+INSTALLED
+  └─ first launch (required once)
+       └─ PERMISSIONS granted (phone state → SMS)
+            └─ BATTERY EXEMPTION + OEM autostart guidance accepted
+                 └─ PAIRED (credential stored)
+                      └─ RUNNING  ◀───────────────────────┐
+                           ├─ reboot → BootReceiver → service → re-auth → resync ─┘
+                           ├─ process killed → WorkManager revives → resync
+                           ├─ credential rotated (config_update)
+                           └─ UNPAIRED / WIPED → credential + queues cleared → idle
+```
+
+## The one-time steps
+
+### First launch is mandatory
+
+Android does not deliver `BOOT_COMPLETED` to an app that has never been launched
+or that has been force-stopped. A node that was installed but never opened would
+therefore never auto-start after a reboot. One manual launch fixes this
+permanently.
+
+### Battery exemption is not optional in practice
+
+Without a battery-optimisation exemption, Doze will defer the node's network
+work and the foreground service becomes a candidate for termination. The app
+prompts for `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` during setup.
+
+<Callout type="warning">
+  On Xiaomi, Huawei, Oppo, Vivo, OnePlus and Samsung devices the exemption alone
+  is not enough — each has its own autostart and background restriction settings.
+  See [OEM reliability](/docs/android/oem-reliability).
+</Callout>
+
+### Permissions are requested in order
+
+Phone state first, then SMS. Requesting SMS cold, before the app has explained
+what it is, is the fastest way to a permanent denial.
+
+## The steady state
+
+Once `RUNNING`, the node should be hands-off across reboots and process deaths.
+Two rules govern every re-entry:
+
+1. **Every return to RUNNING goes through re-auth and
+   [resync](/docs/concepts/reliability#resync)** — never a blind resume. The
+   node tells the backend the last inbound sequence it acked and which outbox
+   commands are still outstanding, and the two sides reconcile.
+2. **Nothing that physically happened on the radio is lost.** Messages sent or
+   received while the link was down are persisted and delivered when it returns.
+
+## Credential rotation
+
+The backend can push a new credential over the authenticated channel with
+`config_update`. Credentials carry an expiry, and the node refreshes before it
+lapses. Rotation does not interrupt service and does not require operator
+involvement.
+
+## Unpairing and wipe
+
+`revoke` and `wipe` both perform a full node reset:
+
+- device credential cleared from the Keystore-sealed store
+- outbox, inbox and event outbox emptied
+- policy (rate limits, allowlist) dropped
+- socket closed, watchdog worker cancelled
+
+The device returns to the `INSTALLED` state and can be enrolled again with a
+fresh pairing session. A revoked `SEND_SMS` attempt in flight is mapped to the
+`AUTH` error class rather than being retried.
+
+<Callout type="info">
+  `wipe` is the remote kill switch for a lost or stolen device. Because the
+  credential is Keystore-bound it is already useless off the handset, but wipe
+  also removes message history from the device.
+</Callout>
+
+## Health signals
+
+The node continuously reports enough for a dashboard to distinguish "idle" from
+"broken":
+
+| Signal | Meaning |
+| --- | --- |
+| Connection state | Where the node is in the [connection state machine](/docs/concepts/architecture#connection-state-machine) |
+| Heartbeat freshness | Whether the peer is actually processing, not just socket-alive |
+| Queue depth | Outbound backlog — a growing depth with a healthy link means send failures |
+| Reliability at risk | The node detected kills or gaps consistent with OEM battery management |
+| SIM / signal / battery | Per-subscription radio state and device power |
+
+A node that stops heartbeating has not necessarily lost data — it will resync on
+return — but it has stopped being useful, and that distinction is what the
+dashboard is for.

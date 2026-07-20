@@ -1,0 +1,148 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Sending SMS',
+  description:
+    'How a send_sms command becomes radio traffic: durable queueing, multipart splitting, multi-SIM selection, retry classification and rate limiting.',
+  openGraph: { images: '/og?title=Sending%20SMS' }
+}
+
+# Sending SMS
+
+## The command
+
+```jsonc
+{
+  "kind": "command",
+  "type": "send_sms",
+  "id": "cmd_1",
+  "payload": {
+    "to": "+9779800000000",
+    "body": "Hello from Luno",
+    "subscriptionId": 2,      // optional; defaults to the system default SMS SIM
+    "deliveryReport": true,
+    "ref": "order-42"         // your correlation id, echoed on every event
+  }
+}
+```
+
+From the SDK:
+
+```ts
+const msg = await luno.sms.send({
+  deviceId,
+  to: '+9779800000000',
+  body: 'Hello from Luno',
+  ref: 'order-42'
+})
+```
+
+## What happens on the device
+
+1. **Persist first.** The command is written to the Room outbox, keyed on the
+   command id. A replay of the same id is recognised and does not re-enqueue.
+2. **Ack.** `sms_accepted` goes back to the backend. At this point the message
+   is guaranteed to be attempted, even if the process dies immediately.
+3. **Split.** Bodies longer than a single SMS are divided by
+   `MultipartAssembler` into parts, each with its own durable row and its own
+   `PendingIntent` correlation id.
+4. **Send.** `SmsSender` calls `SmsManager` for the chosen subscription.
+5. **Report.** Each part's `sentIntent` fires, the outbox rolls up, and
+   `sms_sent` is emitted.
+
+<Callout type="info">
+  If the device is offline the send still queues. Commands accumulate durably
+  and drain when the link returns — see
+  [Reliability](/docs/concepts/reliability).
+</Callout>
+
+## Multipart
+
+A logical message fans out to N parts. The rollup rules are strict:
+
+- `SENT` only when **all** parts report sent
+- `DELIVERED` only when **all** parts report delivered
+- otherwise the message takes the **worst** part outcome
+
+The `sms_sent` event carries the per-part detail so a backend can see partial
+failure rather than only the summary:
+
+```jsonc
+{
+  "messageId": "msg_1",
+  "parts": [
+    { "index": 0, "status": "sent" },
+    { "index": 1, "status": "failed", "errorCode": "no_service" }
+  ]
+}
+```
+
+<Callout type="warning">
+  Non-GSM-7 characters (emoji, most non-Latin scripts) force UCS-2 encoding,
+  which cuts the per-part limit from 160 to 70 characters. A message that looks
+  short can still be a five-part send, and carriers bill per part.
+</Callout>
+
+## Multi-SIM
+
+`subscriptionId` selects the SIM. Omit it and the node uses the system default
+SMS subscription.
+
+<Callout type="error">
+  Never hardcode a subscription id or assume slot order. Slots renumber and eSIM
+  profiles appear and disappear. Always resolve the current set from the
+  device's reported `sims[]` in `device_status`, and key on `subscriptionId` —
+  never on the phone number, which is frequently unavailable and is best-effort
+  at all times.
+</Callout>
+
+On dual-SIM-dual-standby hardware only one radio may be fully active at a time,
+so signal and data for the standby SIM can be stale. The node reports per-
+subscription state honestly, including "unknown" and "standby", rather than
+pretending both SIMs are equally live.
+
+## Retry classification
+
+Send outcomes map onto the [error
+taxonomy](/docs/concepts/reliability#the-error-taxonomy):
+
+| Outcome | Class | Retried? |
+| --- | --- | --- |
+| Radio off, no service, transient RIL error | `TRANSIENT` | Yes, with backoff and a max-attempt cap |
+| Invalid number, no SIM, body too long after split | `TERMINAL` | Never |
+| Local or backend rate limit hit | `THROTTLED` | Delayed to the next window |
+| Revoked `SEND_SMS` permission | `AUTH` | Paused, prompts for re-grant |
+
+Only `FAILED_RETRYABLE` outcomes re-enter the queue. A message with a bad
+recipient fails fast and is reported, rather than consuming retry budget
+forever.
+
+## Rate limits and allowlists
+
+Limits are **backend-authoritative but client-enforced**. The backend pushes
+policy with `config_update`:
+
+```jsonc
+{ "rateLimitPerMinute": 30, "allowlist": ["+977*"] }
+```
+
+The node stores it and applies it in `CommandRouter` *before* anything is
+enqueued. A rejected command produces an `error` event and never reaches the
+outbox.
+
+<Callout type="warning">
+  This is a **safety** control, not just a policy one. It exists so that a
+  compromised backend, or a bug in your own code, cannot blast messages and get
+  the SIM blocked or the operator billed. Do not treat client-side enforcement
+  as redundant with your server-side checks — it is the layer that survives your
+  server being wrong.
+</Callout>
+
+## Cancelling
+
+```jsonc
+{ "kind": "command", "type": "cancel_sms", "payload": { "commandId": "cmd_1" } }
+```
+
+Best-effort, and only effective if the message has not already reached `SENT`.
+Once the radio has it, it is gone.

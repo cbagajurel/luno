@@ -1,0 +1,136 @@
+import { Callout, Steps } from 'nextra/components'
+
+export const metadata = {
+  title: 'WebSocket',
+  description:
+    'The live session: authentication, version negotiation, the resync handshake, heartbeats, and reconnection behaviour.',
+  openGraph: { images: '/og?title=WebSocket' }
+}
+
+# WebSocket
+
+The WebSocket session is the primary transport. It carries commands, events,
+acks and control frames, and it is where the connection state machine lives.
+
+## Connecting
+
+The node opens a WSS connection to the `wsUrl` it received at enrolment, or one
+derived from the enrolment host. The device credential travels in the
+handshake — as an `Authorization` header, or in a first `AUTH` frame where
+headers are not available.
+
+<Callout type="error">
+  Plaintext is refused. `ws://` is permitted only by debug builds on a LAN;
+  release builds require `wss://`. Optional certificate pinning is available and
+  can be bootstrapped from the QR payload.
+</Callout>
+
+## The handshake
+
+<Steps>
+### Authenticate
+
+The backend validates the credential and binds the session to a `deviceId`.
+
+**A 401 or 403 pauses the node** rather than triggering a reconnect loop. This
+matters: a revoked credential retried with exponential backoff by a fleet of
+nodes is a denial-of-service against your own server. Instead the node stops and
+surfaces a re-enrolment prompt.
+
+### Negotiate the version
+
+```jsonc
+{ "kind": "control", "type": "version_negotiate", "payload": { "supported": [1] } }
+```
+
+The backend picks the highest mutually supported version and replies. From that
+point both sides speak it. See [Versioning](/docs/protocol/versioning).
+
+### Resync
+
+Reconcile both directions before any new traffic flows — detailed below.
+
+### READY
+
+Commands flow, events flow, heartbeats tick. The reconnect backoff counter is
+reset only after the connection has been *stably* READY, so a flapping network
+does not reset it on every brief success.
+</Steps>
+
+## Resync
+
+On every reconnect, after `AUTHENTICATED`:
+
+```
+Node ──▶ control:resync {
+           lastAckedInboundEventSeq: 128,
+           outstandingOutboxIds: ["cmd_7", "cmd_9"]
+         }
+
+Backend ──▶ re-dispatches commands the node hasn't acked
+            acks or ignores events it already has (by id)
+
+Node ──▶ replays unacked events
+         skips commands whose ids it has already applied
+```
+
+This makes reconnection **lossless and duplicate-free regardless of which side
+dropped first**. The idempotency keys do the real work; the handshake is the
+mechanism that puts them to use.
+
+<Callout type="info">
+  Resync is durable, not in-memory. The node's unacked events live in an
+  `event_outbox` table and replay from disk, so a process death mid-session is
+  no different from a network drop.
+</Callout>
+
+## Two layers of liveness
+
+| Layer | Mechanism | Detects |
+| --- | --- | --- |
+| Transport | WebSocket ping/pong | A dead socket, fast |
+| Application | `heartbeat` event every 30–60s | A *useless* connection — socket up, peer not processing |
+
+Both are needed. A socket can remain perfectly open while the process on the
+other end has wedged, and only the application heartbeat catches that. The
+backend marks a node offline after N missed heartbeats.
+
+## Reconnection
+
+Exponential backoff with **full jitter**, capped at around 60 seconds:
+
+```
+1s → 2s → 4s → 8s → … → 60s (max)
+```
+
+Full jitter — a random value between zero and the current ceiling — matters at
+fleet scale. Without it, a backend restart brings every node back
+simultaneously in synchronised waves.
+
+Network transitions are driven by `ConnectivityManager.NetworkCallback`, never
+by polling. When the OS says there is no transport, the node sits in
+`OFFLINE_NO_NETWORK` and stops trying entirely, which is both correct and
+considerably cheaper than retrying into a void.
+
+WorkManager schedules a reconnect attempt even when the foreground service has
+been killed, but it is a backstop only — its 15-minute periodic floor makes it
+unsuitable as the primary mechanism.
+
+## Implementing the server side
+
+You do not need to implement any of this yourself. `@luno/core` drives the
+entire handshake, acks, resync and dispatch; an adapter's only job is to
+authorise the upgrade and hand the socket over:
+
+```ts
+const device = await luno.connections.authorize(bearerToken)
+const session = await luno.connections.open(device, sink)
+
+socket.on('message', raw => session.receive(raw))
+socket.on('close', () => session.close())
+```
+
+`sink` is a `FrameSink` — `{ send(frame): Promise<void> }`. That one interface
+is the entire transport abstraction, satisfied identically by a `ws` socket, a
+Cloudflare Durable Object, an SSE stream or a long-poll buffer. See
+[Adapters](/docs/backend-sdk/adapters).

@@ -1,0 +1,148 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Events',
+  description:
+    'Node → backend frames: the complete reporting surface, from message lifecycle to device telemetry and errors.',
+  openGraph: { images: '/og?title=Events' }
+}
+
+# Events
+
+Events travel node → backend. They are the node's entire reporting surface, and
+they are **at-least-once**: reliable events persist under their stable id,
+resend on every reconnect, and clear only on ack.
+
+## Summary
+
+| Type | Payload |
+| --- | --- |
+| `sms_accepted` | `{commandId, messageId}` |
+| `sms_sent` | `{messageId, parts:[{index, status, errorCode?}]}` |
+| `delivery_report` | `{messageId, part, status, at}` |
+| `sms_received` | `{from, body, subscriptionId, receivedAt, parts}` |
+| `device_status` | `{battery?, network?, sims[]}` |
+| `heartbeat` | `{queueDepth, battery?, signals[], transports[]}` |
+| `log` | `{level, tag, msg, at}` — redacted |
+| `error` | `{ref?, code, message}` |
+
+## Message lifecycle events
+
+### `sms_accepted`
+
+```jsonc
+{ "commandId": "cmd_1", "messageId": "msg_1" }
+```
+
+The command is durably queued and idempotency-checked. Nothing has touched the
+radio. Receiving this guarantees the message will be attempted even if the
+process dies immediately after.
+
+### `sms_sent`
+
+```jsonc
+{
+  "messageId": "msg_1",
+  "parts": [
+    { "index": 0, "status": "sent" },
+    { "index": 1, "status": "failed", "errorCode": "no_service" }
+  ]
+}
+```
+
+The radio reported transmission, per part. Per-part detail is preserved so
+partial failure is visible rather than collapsed into a summary.
+
+### `delivery_report`
+
+```jsonc
+{ "messageId": "msg_1", "part": 0, "status": "delivered", "at": "…" }
+```
+
+The carrier confirmed handset delivery. May arrive minutes later or never — see
+[Delivery reports](/docs/messaging/delivery-reports).
+
+### `sms_received`
+
+```jsonc
+{
+  "from": "+9779800000000",
+  "body": "…",
+  "subscriptionId": 1,
+  "receivedAt": "2026-07-19T09:00:00Z",
+  "parts": 1
+}
+```
+
+An inbound message, persisted and reassembled before it was reported.
+
+## Telemetry events
+
+### `device_status`
+
+A full `DeviceState` snapshot — battery, network, and every SIM with its
+per-subscription signal. Emitted on change, and on demand in response to
+[`get_status`](/docs/protocol/commands#get_status).
+
+### `heartbeat`
+
+```jsonc
+{
+  "queueDepth": 0,
+  "battery": { "level": 98, "charging": true },
+  "signals": [{ "subscriptionId": 1, "dbm": -87 }],
+  "transports": [{ "id": "sms", "state": "ready" }]
+}
+```
+
+Emitted every 30–60 seconds, configurable with `config_update`. Its purpose is
+twofold: prove the peer is *processing*, not merely socket-alive, and carry
+cheap telemetry so a dashboard stays live without full status events flooding
+the radio.
+
+<Callout type="info">
+  `queueDepth` is the single most useful number for monitoring. A rising depth
+  on a node with healthy heartbeats means sends are failing — the link is fine
+  and the radio is not.
+</Callout>
+
+## Diagnostics
+
+### `log`
+
+```jsonc
+{ "level": "warn", "tag": "SmsTransport", "msg": "…", "at": "…" }
+```
+
+Throttled, and **redacted at the source**. Phone numbers and message bodies are
+masked by a single central redactor before the line ever exists, so no call site
+can leak PII into your log pipeline. Full bodies live only in the node's
+encrypted tables.
+
+### `error`
+
+```jsonc
+{ "ref": "order-42", "code": "policy_rejected", "message": "…" }
+```
+
+Normalised onto the [error
+taxonomy](/docs/concepts/reliability#the-error-taxonomy), so your handling never
+has to special-case a subsystem. `ref` correlates the failure back to whatever
+you sent.
+
+## Acknowledgement and replay
+
+The backend acks each event it has durably recorded:
+
+```jsonc
+{ "kind": "ack", "type": "ack", "payload": { "ackedId": "evt_7" } }
+```
+
+Until that ack arrives, the event stays in the node's durable `event_outbox` and
+is resent on every transition to READY.
+
+<Callout type="warning">
+  Your event handlers must be idempotent. Dedupe on the envelope `id` — a
+  network drop between your server persisting the event and the node receiving
+  the ack causes a redelivery of the identical frame.
+</Callout>

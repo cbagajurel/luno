@@ -1,0 +1,125 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Device management',
+  description:
+    'Running a fleet of Luno nodes: provisioning, health monitoring, policy, replacement and decommissioning.',
+  openGraph: { images: '/og?title=Device%20management' }
+}
+
+# Device management
+
+Everything here assumes more than one device. A single node needs almost none of
+it; a fleet needs all of it.
+
+## Provisioning
+
+For more than a handful of devices, the friction is in the Android setup rather
+than in pairing. Two things help:
+
+- **Managed Google Play / EMM.** Apps installed through an enterprise agent are
+  exempt from Play Protect's sideloading warning *and* from the restricted
+  settings block. For fleets this is the most reliable route by a wide margin.
+- **A per-device checklist.** Permissions, battery exemption, OEM autostart,
+  pairing, 48-hour soak. See [OEM
+  reliability](/docs/android/oem-reliability).
+
+Give every session a meaningful `label` at creation — it appears on the
+confirmation sheet before the operator enrols, which is what stops a device
+being paired against the wrong deployment.
+
+```ts
+await luno.pairing.createSession({
+  label: 'Warehouse 2 — north door',
+  createdBy: operator.id
+})
+```
+
+## Health monitoring
+
+The four signals worth alerting on:
+
+| Signal | What a bad value means |
+| --- | --- |
+| Heartbeat freshness | The node is gone, or wedged. Nothing is lost yet — it resyncs on return — but it is not working |
+| Queue depth | Rising depth with healthy heartbeats means sends are failing, not that the link is down |
+| Undelivered rate | A step change usually means a flagged SIM, no credit, or lost service |
+| `AUTH` errors | A silently revoked permission or an expired credential |
+
+<Callout type="info">
+  Distinguish "quiet" from "broken". A node with nothing to send is silent
+  except for heartbeats — that is healthy. A node whose heartbeats stopped is
+  not idle, it is absent, and on the `full` flavor it is also missing inbound
+  messages that will never be recoverable.
+</Callout>
+
+## Pushing policy
+
+Policy changes take effect without an app update:
+
+```jsonc
+{
+  "kind": "command",
+  "type": "config_update",
+  "payload": {
+    "heartbeatSec": 45,
+    "rateLimitPerMinute": 20,
+    "allowlist": ["+977*"]
+  }
+}
+```
+
+It is stored durably on the node, survives restarts, and applies to already-
+queued commands as well as new ones — so tightening a limit takes effect
+immediately rather than at the next reconnect.
+
+<Callout type="warning">
+  Raising `heartbeatSec` reduces traffic and battery use but increases how long
+  a dead node goes unnoticed. Thirty to sixty seconds is the useful range;
+  minutes means you find out about outages from your users.
+</Callout>
+
+## Multi-SIM fleets
+
+Address SIMs by `subscriptionId`, always resolved from what the device reports
+in `device_status`. Never hardcode one, and never key on the phone number —
+MSISDN is frequently unavailable and is best-effort at all times.
+
+On dual-SIM-dual-standby hardware only one radio may be fully active at once, so
+signal for the standby SIM can be stale. The node reports "unknown" and
+"standby" honestly rather than guessing.
+
+## Replacing a device
+
+`installId` is stable per install and survives unpairing, which is what a
+device-replacement policy should key on. A typical flow:
+
+1. Revoke the old device: `await luno.devices.revoke(oldDeviceId)`
+2. Create a pairing session, optionally with `already_enrolled` replacement
+   permitted for that `installId`
+3. Pair the new handset
+4. Confirm the old device no longer connects
+
+<Callout type="info">
+  Revoke *before* pairing the replacement. A revoked node clears its queues, so
+  anything it had not yet sent is lost — check its queue depth is zero first if
+  that matters.
+</Callout>
+
+## Decommissioning
+
+Use `wipe` rather than `revoke` when the device is leaving your control. Both
+clear the credential; `wipe` also removes message history from the handset.
+
+Then factory-reset the device. A phone that once held message bodies should not
+be resold or repurposed on the assumption that app-level wiping is sufficient.
+
+## Scaling considerations
+
+- **Sessions are per-device.** With a multi-instance deployment, the
+  `SessionRegistry` port needs a *routed* implementation so a command originating
+  on one instance reaches a socket held by another.
+- **One SIM is one serial resource.** Throughput per node is bounded by the
+  radio, not by your server. Scale by adding devices, not by raising limits.
+- **Carriers notice fleets.** Many SIMs on one account sending similar traffic
+  is a recognisable pattern. Understand your carrier's position before you grow.

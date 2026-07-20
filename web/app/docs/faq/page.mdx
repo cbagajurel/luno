@@ -1,0 +1,185 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'FAQ',
+  description:
+    'Common questions about Luno: what it is, what it costs, what it can and cannot do, and whether it is legal where you are.',
+  openGraph: { images: '/og?title=FAQ' }
+}
+
+# FAQ
+
+## General
+
+### What is Luno, in one sentence?
+
+An open-source agent that turns an Android phone into a self-hosted SMS gateway
+your own backend controls over a versioned, real-time protocol.
+
+### Is there a hosted version?
+
+No, and none is planned. There is no Luno cloud. Your backend is the only server
+involved, and message content never touches infrastructure you do not own.
+
+### What does it cost?
+
+The software is free and open source under Apache-2.0. Your costs are a handset,
+a SIM, and whatever your carrier charges per message.
+
+### Why not just use Twilio or a similar provider?
+
+Often you should. A commercial provider gives you deliverability, sender ids,
+compliance tooling and throughput that a consumer SIM cannot match.
+
+Luno makes sense when the economics or the privacy requirements point the other
+way: internal alerting, markets where local A2P routes are expensive or
+unavailable, or cases where message content must not leave your infrastructure.
+
+### Does it work on iOS?
+
+No, and it cannot. iOS provides no API for a third-party app to send or receive
+SMS programmatically. This is a platform restriction, not a missing feature.
+
+### Will there be Linux or Windows nodes?
+
+They are anticipated in the design but out of scope for now. Such a node would
+need an external USB GSM modem and AT-command integration, sharing no code with
+the Android telephony layer. The wire protocol is the extension point — it would
+be a separate program speaking the same protocol.
+
+## Capabilities
+
+### Can it send MMS?
+
+Not in v1. The `Transport` interface and the protocol are transport-neutral, so
+MMS is one new implementation rather than a redesign — but it does not exist
+today.
+
+### Can it read existing messages on the phone?
+
+No. Luno does not declare `READ_SMS` and does not request the default-SMS-handler
+role. It captures messages that arrive while it is running; it does not read the
+message database.
+
+### Does it support multiple SIMs?
+
+Yes. Multi-SIM is first-class — `subscriptionId` selects the SIM on every send,
+and per-subscription signal state is reported. Always resolve ids from what the
+device reports rather than hardcoding them.
+
+### How many messages per minute can one device send?
+
+Bounded by the radio, not by Luno, and typically well under what a carrier will
+tolerate before flagging the SIM. Scale by adding devices, not by raising limits.
+
+<Callout type="warning">
+  Set `rateLimitPerMinute` to what your plan tolerates, not to the maximum you
+  might want. Carriers block SIMs that behave like bulk senders, usually with no
+  warning.
+</Callout>
+
+### Can several backends share one device?
+
+No. A node has one credential and one connection. Put the fan-out in your
+backend, which is the component designed for it.
+
+## Reliability
+
+### What happens if the phone loses network?
+
+Outbound sends still queue durably and inbound messages are still captured.
+On reconnect, a resync handshake reconciles both directions. Nothing that
+physically happened on the radio is lost.
+
+### What happens if Android kills the app?
+
+`BootReceiver` and a WorkManager backstop revive it, and resync makes the return
+lossless. The node is designed for recovery rather than immortality — see
+[Reliability](/docs/concepts/reliability).
+
+<Callout type="info">
+  Nothing already persisted is lost. But inbound messages that arrive while the
+  app is *force-stopped* are never delivered to it by Android at all, and those
+  are not recoverable.
+</Callout>
+
+### Will it survive on a cheap Xiaomi or Oppo phone?
+
+With configuration. Those skins kill background apps aggressively and gate
+autostart behind hidden settings. Luno detects the OEM and deep-links to the
+right screens, but somebody has to accept them. See [OEM
+reliability](/docs/android/oem-reliability).
+
+### Do I get delivery confirmation?
+
+When the carrier provides one. Many routes never return a delivery report at
+all. Gate business logic on `sent`; treat `delivered` as enrichment.
+
+## Backend
+
+### Do I have to use the `@luno/*` SDK?
+
+No. The protocol is published precisely so any backend in any language can
+implement it. The SDK exists so you do not have to.
+
+### Which frameworks are supported?
+
+Hono, Express, Fastify, NestJS and Cloudflare Workers ship as adapters. Because
+the core's HTTP surface is a plain request handler, most others are about thirty
+lines of glue.
+
+### Can I run it on Vercel or Firebase Functions?
+
+Partly. Those runtimes are request-scoped and cannot hold a WebSocket open, so
+enrolment works but the session socket needs a companion service. The HTTP
+fallback transport that would fix this is designed but not built. See
+[Backend SDK](/docs/backend-sdk#not-every-platform-can-hold-a-socket).
+
+### Which database?
+
+Postgres is supported today via `@luno/store-postgres`, and `memoryStore()`
+covers development. Others are additive — implement the ports and pass the
+conformance suite.
+
+## Legal and policy
+
+### Is running an SMS gateway legal?
+
+It depends entirely on your jurisdiction, your carrier contract and what you
+send. Unsolicited commercial messaging is regulated nearly everywhere and
+carries real penalties.
+
+<Callout type="error">
+  Luno is a tool. Complying with telecommunications law, consumer protection
+  rules and your carrier's terms is your responsibility. Do not use it to send
+  unsolicited bulk messages.
+</Callout>
+
+### Is it on the Play Store?
+
+Yes — [Luno is on Google
+Play](https://play.google.com/store/apps/details?id=com.luno.gateway), and that
+is the recommended way to install it. A Play install avoids the sideloading
+warning *and* the Android 15+ restriction that otherwise prevents SMS
+permissions being granted at all.
+
+If you distribute your own fork, SMS permissions require a Permissions
+Declaration Form and a policy review. See [Play
+Protect](/docs/android/play-protect).
+
+### Why does Android warn when I install it?
+
+Play Protect's enhanced fraud protection fires on the combination of a sensitive
+permission and an internet-sideloading install source. Installing from Play or over
+`adb` avoids it entirely. It is a heuristic, not a malware detection.
+
+### Who can read the messages?
+
+On the device, bodies and numbers are encrypted at rest with a Keystore-wrapped
+key and redacted from every log line. In transit, TLS. After that they are in
+your backend, and their handling is entirely your responsibility.
+
+<Callout type="warning">
+  Documented residual risk: a rooted device with the app unlocked can access
+  decrypted data in memory. Luno does not claim otherwise.
+</Callout>

@@ -1,0 +1,119 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Reliability',
+  description:
+    'Retry strategy, heartbeats, the resync handshake, offline behaviour and the normalized error taxonomy that ties them together.',
+  openGraph: { images: '/og?title=Reliability' }
+}
+
+# Reliability
+
+An SMS gateway is an appliance that must run untouched for months on a hostile
+OS, carrying sensitive data through a scarce, abuse-prone resource. This page
+covers the machinery that makes that survivable.
+
+## Retry strategy
+
+Three kinds of retry, deliberately distinct:
+
+**Connection retry** — exponential backoff with full jitter, capped (1s → 2s →
+4s … → 60s). WorkManager schedules a reconnect attempt even if the foreground
+service has been killed. Backoff resets only after a *stably* READY connection.
+
+**Send retry** — only `FAILED_RETRYABLE` outcomes re-enter the queue, with
+backoff and a max-attempt cap. Terminal outcomes never retry.
+
+**Event delivery retry** — unacked events are resent on reconnect,
+at-least-once. The backend dedupes on event id.
+
+## The error taxonomy
+
+`SmsManager` result codes and backend/transport errors map onto **one** taxonomy,
+so retry logic never special-cases a subsystem:
+
+| Class | Meaning | Policy | Examples |
+| --- | --- | --- | --- |
+| `TRANSIENT` | Will likely succeed later | Retry with backoff, capped | Radio off, no service, network down |
+| `TERMINAL` | Will never succeed as-is | Fail fast, report, no retry | Invalid number, no SIM, policy reject |
+| `THROTTLED` | Rate or policy limited now | Delay to next window, then retry | Local or backend rate limit hit |
+| `AUTH` | Credential problem | Pause, re-auth or re-enrol | Expired or invalid credential |
+| `INTERNAL` | Our bug, invariant broken | Log loudly, quarantine message | Assertion failure, decode error |
+
+<Callout type="info">
+  A `SecurityException` from a runtime permission revoked months after install
+  is caught and surfaced as `AUTH`/`TERMINAL` with a UI prompt — never an
+  uncaught crash. Android auto-resets permissions for unused apps, so this is a
+  real path, not a theoretical one.
+</Callout>
+
+## Heartbeat
+
+Two layers, kept separate on purpose:
+
+- **Transport ping/pong** — at the WebSocket level, proves the socket is alive.
+- **Application heartbeat** — every 30–60s the node sends
+  `heartbeat{queueDepth, battery, signals, transports}`. The backend marks the
+  node offline after N missed.
+
+The second exists because a socket can be perfectly alive while the peer has
+stopped processing. It also carries cheap telemetry, so a dashboard stays live
+without full status events flooding the radio.
+
+## Resync
+
+On every reconnect, after `AUTHENTICATED`:
+
+```
+Node ──▶ resync{lastAckedInboundEventSeq, outstandingOutboxIds}
+Backend ──▶ re-dispatches commands the node hasn't acked,
+            acks/ignores events it already has (by id)
+Node ──▶ replays unacked events; skips commands whose ids it already applied
+```
+
+This makes reconnection lossless and duplicate-free regardless of which side
+dropped first. Idempotency keys — command id, event id — are the backbone; the
+handshake is just the mechanism that puts them to work.
+
+Resync is durable, not in-memory. Reliable events persist in an `event_outbox`
+table under their stable id, resend from disk on each READY, and clear on ack —
+so they survive process death, not merely a socket drop.
+
+## Offline behaviour
+
+| Situation | What happens |
+| --- | --- |
+| No network | Connection SM sits in `OFFLINE_NO_NETWORK`; outbound sends still queue durably; inbound still captured durably; heartbeats suppressed |
+| Network but no backend | Backoff reconnect; queues keep filling; past a threshold, REST fallback may flush critical events |
+| On reconnect | Resync reconciles both directions |
+| Sustained offline | Queues have a max depth and an oldest-first retention policy with a surfaced warning, so a node offline for a week does not fill the disk |
+
+The user-visible promise: **anything that physically happened on the radio while
+offline is never lost — it is delivered to the backend, in order, once, when the
+link returns.**
+
+## Designing for being killed
+
+The foreground service is not immortal, and no amount of code makes it so. Luno
+plans for recovery instead:
+
+- `BootReceiver` starts the service on `BOOT_COMPLETED` when the device is paired
+- `AgentWatchdogWorker` is a periodic WorkManager backstop that revives the
+  service, or drains the outbox headless when a background service start is
+  disallowed
+- Resync makes the return lossless
+
+<Callout type="warning">
+  Deliberate non-solutions: no long-held wake locks (they murder the battery and
+  still lose to OEM killers), and no "reconnect every 30s" periodic job
+  (WorkManager's periodic floor is 15 minutes — reconnection is driven by the
+  socket state machine and `NetworkCallback` instead).
+</Callout>
+
+## Delivery reports are time-bounded
+
+Delivery reports arrive as `PendingIntent` broadcasts, correlated back to the
+exact part via a unique request id. They can arrive minutes later, or never.
+Delivery tracking is therefore durable *and* time-bounded: a `deliveryTimeout`
+moves a message to `UNDELIVERED`-unknown rather than leaving it pending forever.
+See [Delivery reports](/docs/messaging/delivery-reports).

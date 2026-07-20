@@ -1,0 +1,56 @@
+import { Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Core Concepts',
+  description:
+    'The ideas that shape Luno: the headless agent, the durable spine, the versioned protocol, and designing for recovery rather than immortality.',
+  openGraph: { images: '/og?title=Core%20Concepts' }
+}
+
+# Core Concepts
+
+Five decisions prevent most of the pain in a system like this. Everything else
+in these docs is downstream of them.
+
+1. **A headless native agent; Flutter is a detachable control panel.** The
+   gateway must keep working when there is no UI — after a reboot, during
+   backgrounding, under memory pressure. So the agent is native Kotlin in a
+   foreground service, and Dart renders state it does not own.
+2. **Persist before you act; at-least-once plus idempotency keys.** The durable
+   store is written before the network is trusted and before any ack is sent.
+   Duplicates are made harmless by keying on command and event ids rather than
+   being prevented by careful ordering.
+3. **A versioned, transport-neutral wire protocol as the real extension point.**
+   Not a class hierarchy. A future MMS transport or a Linux modem node plugs in
+   at the protocol, which is why it carries a version number from v1.
+4. **Design for being killed, not for immortality.** Android and OEM skins will
+   kill the process. The answer is recovery — boot receiver, WorkManager
+   backstop, resync handshake — not wake locks and wishful thinking.
+5. **Backend-authoritative but client-enforced limits, and PII never in logs.**
+   Rate limits and allowlists are policy from the server, enforced again on the
+   device, so a compromised backend still cannot turn a SIM into a spam cannon.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Architecture" href="/docs/concepts/architecture" arrow>
+    Responsibilities, communication flows, and the state machines that run them.
+  </Cards.Card>
+  <Cards.Card
+    title="Device lifecycle"
+    href="/docs/concepts/device-lifecycle"
+    arrow
+  >
+    From install to paired to running, and every way back.
+  </Cards.Card>
+  <Cards.Card title="Reliability" href="/docs/concepts/reliability" arrow>
+    Retry, heartbeat, resync, offline behaviour and error taxonomy.
+  </Cards.Card>
+  <Cards.Card
+    title="Folder structure"
+    href="/docs/concepts/folder-structure"
+    arrow
+  >
+    Every directory in the repository and the reason it exists.
+  </Cards.Card>
+</Cards>

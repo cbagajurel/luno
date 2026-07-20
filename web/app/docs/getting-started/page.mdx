@@ -1,0 +1,73 @@
+import { Callout, Steps } from 'nextra/components'
+
+export const metadata = {
+  title: 'Getting Started',
+  description:
+    'What you need to run a Luno node, and the shape of the setup from empty repository to first delivered message.',
+  openGraph: { images: '/og?title=Getting%20Started' }
+}
+
+# Getting Started
+
+This section takes you from nothing to a phone that sends a message on command
+from your own server. It is four steps, and the whole path is meant to take
+under an hour.
+
+## What you need
+
+- **An Android device**, API 26 (Android 8.0) or newer, with an active SIM and a
+  plan that permits person-to-person SMS. A spare or second-hand handset is the
+  normal choice — this device will be plugged in and running permanently.
+- **The app**, from [Google
+  Play](https://play.google.com/store/apps/details?id=com.luno.gateway). To
+  build it yourself instead you need the Flutter SDK and `adb` — note that
+  sideloading has real consequences on Android 15+, see [Play
+  Protect](/docs/android/play-protect).
+- **A server that speaks the Luno protocol.** The fastest route is the
+  [`@luno/*` SDK](/docs/backend-sdk), which implements the server half for you
+  and runs on Node, Bun, Deno or Cloudflare Workers.
+- **HTTPS.** The node refuses plaintext transport. For local development a
+  tunnel (`cloudflared`, `ngrok`, `tailscale funnel`) is the usual answer;
+  `http://` is permitted only by debug builds on a LAN.
+
+<Callout type="warning">
+  Do not use your personal SIM for testing. Delivery-report and rate-limit
+  behaviour is best explored on a SIM you are willing to have flagged.
+</Callout>
+
+## The path
+
+<Steps>
+### Install the app
+
+Install from Google Play, or build a flavored APK and install it over `adb`.
+→ [Installation](/docs/getting-started/installation)
+
+### Stand up a backend
+
+Create a Luno engine, give it a store, and mount it on the framework you already
+use. → [Backend SDK](/docs/backend-sdk)
+
+### Pair the device
+
+Mint a pairing session on the server, then scan the QR code or type the code
+into the app. The device receives a Keystore-sealed credential and connects.
+→ [Pairing](/docs/getting-started/pairing)
+
+### Send your first message
+
+Call `luno.sms.send(...)` and watch the message move through `sms_accepted` →
+`sms_sent` → `delivery_report`. → [First message](/docs/getting-started/first-message)
+</Steps>
+
+## A note on the mental model
+
+It helps to keep one sentence in mind while setting this up:
+
+> The node's entire responsibility is: receive a command, act on the radio,
+> report faithfully what happened.
+
+Everything else — who may send, how many messages per minute, which recipients
+are permitted, how long a pairing code lives, what happens to a message after
+delivery — belongs to your backend. The node deliberately holds no policy of its
+own, so changing policy never requires shipping an app update.

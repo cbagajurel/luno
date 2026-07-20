@@ -1,0 +1,144 @@
+import { Callout, Steps } from 'nextra/components'
+
+export const metadata = {
+  title: 'Contributing',
+  description:
+    'How to work on Luno: repository layout, conventions, the boundaries that must not be crossed, and what a good pull request looks like.',
+  openGraph: { images: '/og?title=Contributing' }
+}
+
+# Contributing
+
+Luno is open source and contributions are welcome. This page covers what you
+need to know before opening a pull request.
+
+## Repository layout
+
+| Path | What it is |
+| --- | --- |
+| `lib/` | Flutter — UI only |
+| `android/` | The native Kotlin agent; the actual gateway |
+| `pigeons/` | The Flutter↔native contract |
+| `packages/` | The `@luno/*` server SDK (TypeScript) |
+| `docs/` | Design documents — architecture, pairing, pitfalls, roadmap |
+| `web/` | This documentation site |
+
+See [Folder structure](/docs/concepts/folder-structure) for the full breakdown.
+
+## Development
+
+```sh
+flutter pub get                    # install dependencies
+flutter run --flavor full          # run on a device or emulator
+flutter analyze                    # static analysis
+flutter test                       # Dart tests
+flutter test test/some_test.dart   # a single test file
+```
+
+<Callout type="error">
+  Always pass `--flavor`, and pass it to the *subcommand*. Bare `flutter build
+  apk` silently builds every variant and produces a `full` build under a neutral
+  name. See [Installation](/docs/getting-started/installation).
+</Callout>
+
+SMS send and receive require a real device or two emulator instances. An
+emulator can target another emulator's port, but never a real SIM or carrier.
+
+## The boundaries
+
+Two rules are architectural, not stylistic, and a pull request that crosses
+either will be asked to change.
+
+### Flutter is UI-only
+
+All telephony — sending and reading SMS, reading SIM, signal and battery state,
+surviving reboot — belongs in the native Android layer and is exposed to Dart
+through Pigeon-generated channels. Not through community Flutter SMS plugins.
+
+Dart owns pairing UI, status display, settings and log viewing. It does not
+implement retry, queueing or telephony logic.
+
+### The node names no backend
+
+No server technology appears in the node's code, config or branching logic, and
+no endpoint is compiled in — endpoints are runtime configuration set at pairing.
+The node depends only on the [versioned wire protocol](/docs/protocol).
+
+## Conventions
+
+**Comments.** Do not add code comments by default. Write self-explanatory code —
+clear names, small functions — instead. Add a comment only when it earns its
+place: a non-obvious "why", a genuine gotcha, an API or OS quirk, or a decision
+that looks wrong but is deliberate. No restating what the code already says, no
+section-header banners, no doc blocks on every class. This applies to Kotlin,
+Dart and TypeScript alike.
+
+**Commits.** A concise one-line subject; add a body only when the change
+genuinely needs explaining. Scope commits by concern — one logical change each.
+
+<Callout type="warning">
+  Never add a `Co-Authored-By` trailer to a commit message.
+</Callout>
+
+**Dependencies.** The native agent stays dependency-minimal. The Flutter stack
+lives only in `lib/` and never leaks into the agent. `@luno/core` and
+`@luno/protocol` import nothing beyond each other.
+
+## Changing the protocol
+
+<Steps>
+### Update both implementations
+
+The Kotlin codec in the node and `@luno/protocol` in TypeScript.
+
+### Update the shared fixtures
+
+`fixtures/frames.json` is read by both test suites. A change that updates only
+one implementation fails the other's tests in the same commit — which is the
+point.
+
+### Check the versioning rules
+
+Additive changes are free. Removals and semantic changes bump `v`. See
+[Versioning](/docs/protocol/versioning).
+
+### Consider deployed nodes
+
+A phone running untouched for eight months is the normal case. Ask whether an
+old node still works against your new backend.
+</Steps>
+
+## Changing the Pigeon bridge
+
+Edit `pigeons/luno_api.dart`, regenerate, and commit the output under
+`lib/bridge/generated/` and the matching Kotlin package.
+
+<Callout type="warning">
+  A `HostApi` change needs a full native rebuild and reinstall. Hot reload will
+  not pick it up, and the failure mode is a confusing missing-method error at
+  runtime.
+</Callout>
+
+## What makes a good pull request
+
+- **One logical change.** Split refactors from behaviour changes.
+- **Tests for logic that can be tested off-device.** Codec, state machines,
+  reassembly and payload parsing are all pure and should be covered.
+- **A note on what you could not test.** Radio behaviour, carrier delivery
+  reports and OEM battery management need hardware — say what you verified and
+  what you did not.
+- **No new dependency without a reason** stated in the description.
+
+## Documentation
+
+These docs are built from the design documents in `docs/`, which remain the
+source of truth. If you change behaviour, update the relevant design document
+and this site together.
+
+The site is a Next.js and Nextra app in `web/`:
+
+```sh
+cd web
+npm install
+npm run dev
+```

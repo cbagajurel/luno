@@ -1,0 +1,15 @@
+.DS_Store
+.next/
+node_modules/
+*.log
+out/
+
+.vercel/
+.idea/
+.env
+
+tsconfig.tsbuildinfo
+
+_pagefind/
+next-env.d.ts
+.vercel

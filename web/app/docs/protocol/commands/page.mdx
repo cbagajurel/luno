@@ -1,0 +1,143 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Commands',
+  description:
+    'Backend → node frames: send_sms, cancel_sms, get_status, config_update, revoke and wipe.',
+  openGraph: { images: '/og?title=Commands' }
+}
+
+# Commands
+
+Commands travel backend → node. Each is acknowledged, each is idempotent on its
+envelope `id`, and each may be replayed after a reconnect without side effects.
+
+## Summary
+
+| Type | Payload | Notes |
+| --- | --- | --- |
+| `send_sms` | `{to, body, subscriptionId?, deliveryReport, ref}` | `ref` is echoed back on every resulting event |
+| `cancel_sms` | `{commandId}` | Best-effort; only before `SENT` |
+| `get_status` | `{}` | Node replies with a full `device_status` event |
+| `config_update` | `{heartbeatSec?, rateLimitPerMinute?, allowlist?, credential?}` | Rotate credentials, push policy |
+| `revoke` / `wipe` | `{}` | Unpair: clear credential and queues |
+
+## `send_sms`
+
+```jsonc
+{
+  "v": 1,
+  "kind": "command",
+  "type": "send_sms",
+  "id": "cmd_1",
+  "deviceId": "dev_abc123",
+  "seq": 41,
+  "payload": {
+    "to": "+9779800000000",
+    "body": "Hello from Luno",
+    "subscriptionId": 2,
+    "deliveryReport": true,
+    "ref": "order-42"
+  }
+}
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `to` | yes | E.164 recommended; validated against the allowlist before enqueue |
+| `body` | yes | Split into parts automatically; UCS-2 content reduces the per-part limit to 70 characters |
+| `subscriptionId` | no | Defaults to the system default SMS subscription |
+| `deliveryReport` | no | Defaults to `true` |
+| `ref` | no | Your correlation id, echoed on `sms_accepted`, `sms_sent` and `delivery_report` |
+
+Produces `sms_accepted` → `sms_sent` → `delivery_report`. See [Sending
+SMS](/docs/messaging/sending-sms).
+
+<Callout type="warning">
+  A command rejected by the node's client-side rate limiter or allowlist emits
+  an `error` event and is **never enqueued**. It does not retry, and it does not
+  appear in the outbox.
+</Callout>
+
+## `cancel_sms`
+
+```jsonc
+{ "kind": "command", "type": "cancel_sms", "payload": { "commandId": "cmd_1" } }
+```
+
+Best-effort. If the message has already reached `SENT`, the radio has it and
+cancellation is impossible — the node reports the current state rather than
+pretending.
+
+## `get_status`
+
+```jsonc
+{ "kind": "command", "type": "get_status", "payload": {} }
+```
+
+Triggers a full [`device_status`](/docs/protocol/events#device_status) event: a
+complete `DeviceState` snapshot with battery, network and every SIM.
+
+Use this on demand — for a dashboard refresh — rather than on a timer. The
+periodic [`heartbeat`](/docs/protocol/events#heartbeat) already carries cheap
+telemetry, and polling full status floods the socket and the radio.
+
+## `config_update`
+
+```jsonc
+{
+  "kind": "command",
+  "type": "config_update",
+  "payload": {
+    "heartbeatSec": 45,
+    "rateLimitPerMinute": 30,
+    "allowlist": ["+977*"],
+    "credential": "…"
+  }
+}
+```
+
+Every field is optional; send only what changes.
+
+- `heartbeatSec` — how often the node emits `heartbeat`
+- `rateLimitPerMinute` — enforced client-side in `CommandRouter` before enqueue
+- `allowlist` — recipient patterns; a non-matching `to` is rejected as `TERMINAL`
+- `credential` — **rotates the device credential in place**, with no
+  interruption and no operator involvement
+
+<Callout type="info">
+  Policy pushed this way is stored durably on the node and survives restarts. It
+  is applied to commands the node has already queued as well as new ones, so
+  tightening a limit takes effect immediately rather than at the next reconnect.
+</Callout>
+
+## `revoke` and `wipe`
+
+```jsonc
+{ "kind": "command", "type": "revoke", "payload": {} }
+```
+
+Both perform a full node reset: credential cleared, outbox, inbox and event
+outbox emptied, policy dropped, socket closed, watchdog worker cancelled. The
+device returns to its unpaired state.
+
+<Callout type="error">
+  This is not reversible from the backend. The device must be paired again with
+  a fresh session, which requires physical access to scan or type a code.
+</Callout>
+
+An in-flight `SEND_SMS` interrupted by a revoke is mapped to the `AUTH` error
+class rather than retried.
+
+## Acknowledgement
+
+The node acks every command it accepts:
+
+```jsonc
+{ "kind": "ack", "type": "ack", "payload": { "ackedId": "cmd_1" } }
+```
+
+An unacked command is re-dispatched by the backend on the next
+[resync](/docs/protocol/websocket#resync). Because commands are idempotent on
+`id`, a command that was in fact applied before the ack was lost is recognised
+and skipped rather than applied twice.

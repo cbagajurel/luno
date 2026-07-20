@@ -1,0 +1,83 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Permissions',
+  description:
+    'The Android permissions Luno declares, why each is needed, when it is requested, and how silent revocation is detected and recovered from.',
+  openGraph: { images: '/og?title=Permissions' }
+}
+
+# Permissions
+
+Luno declares the minimum set that a working gateway requires, and nothing
+dangerous is declared before the milestone that uses it.
+
+## What is declared
+
+| Permission | Flavor | Why |
+| --- | --- | --- |
+| `SEND_SMS` | both | Outbound messages via `SmsManager` |
+| `RECEIVE_SMS` | `full` only | Inbound capture via the `SMS_RECEIVED` broadcast |
+| `READ_PHONE_STATE` | both | SIM identity and per-subscription signal |
+| `POST_NOTIFICATIONS` | both | The ongoing foreground-service notification (runtime from API 33) |
+| `RECEIVE_BOOT_COMPLETED` | both | Restart the service after a reboot |
+| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` | both | The 24/7 agent process |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | both | Prompt for the Doze exemption |
+| `INTERNET` / `ACCESS_NETWORK_STATE` | both | Backend connection and network monitoring |
+
+<Callout type="info">
+  Luno does **not** declare `READ_SMS`, does not request the default-SMS-handler
+  role, and uses no accessibility or notification-listener APIs. This matters
+  for both privacy and Play Protect.
+</Callout>
+
+## Request order
+
+Phone state first, then SMS. Asking for SMS access cold — before the app has
+shown what it is and what it does — is the fastest route to a permanent denial,
+and a permanently denied SMS permission cannot be re-prompted from within the
+app.
+
+The battery-optimisation exemption is requested after permissions, because it
+opens a system settings screen rather than a dialog and is easier to explain
+once the rest is in place.
+
+## Revocation happens, months later
+
+Two Android behaviours mean a granted permission is not permanently granted:
+
+- **Permission auto-reset** (Android 11+) revokes runtime permissions for apps
+  the user has not opened in a few months. A gateway is precisely the kind of
+  app nobody opens.
+- **App hibernation** additionally forces the app to stop.
+
+The consequence is a `SecurityException` thrown from a send that has worked for
+months. Every telephony call is wrapped in taxonomy-aware error handling, so
+this surfaces as an `AUTH`/`TERMINAL` error with a re-grant prompt rather than a
+crash, and the app requests exemption from auto-reset where the OS allows it.
+
+<Callout type="warning">
+  A node whose `SEND_SMS` has been silently revoked will still accept commands
+  and still report — it just fails every send with a terminal error. Watch for
+  this pattern in your dashboard: healthy heartbeats plus a rising terminal
+  failure rate.
+</Callout>
+
+## Blocked is a hint, never a verdict
+
+On Android 15, a sideloaded app's SMS permission toggle is greyed out and the
+runtime request is auto-denied with no dialog. Native reports
+`PermissionStatus.BLOCKED` and the UI explains that Android refused the last
+prompt.
+
+That status is treated as advisory. Allowing restricted settings makes the
+permission grantable again **without changing anything the app can observe** —
+`shouldShowRequestPermissionRationale` still returns `false`. So a cached
+blocked status must never suppress the Grant action, or the user is stranded
+with no way to trigger the now-working prompt.
+
+The implementation follows from that: `MainActivity.request` always calls
+`requestPermissions`, and the UI escalates to the recovery sheet only when a
+*live* attempt comes back blocked.
+
+See [Play Protect](/docs/android/play-protect) for how to lift the restriction.

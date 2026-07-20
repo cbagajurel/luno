@@ -1,0 +1,115 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Authentication',
+  description:
+    'How a node proves its identity: device-bound credentials, session auth on every connect, rotation, and revocation.',
+  openGraph: { images: '/og?title=Authentication' }
+}
+
+# Authentication
+
+The design goal is narrow and specific: a node proves its identity with a
+credential that is **bound to the device** — useless if exfiltrated — and
+**rotatable**.
+
+## Enrolment, once
+
+```
+1. Operator triggers pairing in the app.
+2. Backend issues a short-lived, single-use pairing code (or a QR encoding
+   {backendUrl, pairingCode}). The operator enters or scans it.
+3. Node POSTs /enroll {pairingCode, deviceInfo, nonce, installId} over HTTPS.
+4. Backend validates, registers the device, returns a long-lived
+   DEVICE CREDENTIAL.
+5. Node stores it in DeviceCredentialStore: a Keystore-wrapped key sealing
+   EncryptedSharedPreferences. Plaintext never hits disk.
+```
+
+See [Pairing](/docs/getting-started/pairing) for the operator walkthrough and
+[REST API](/docs/protocol/rest-api) for the exact contract.
+
+## Session auth, every connect
+
+The WSS handshake carries the device credential — an `Authorization` header, or
+a first `AUTH` frame where headers are not available. The backend validates it
+and binds the session to a `deviceId`.
+
+<Callout type="warning">
+  On an invalid or expired credential the socket is **refused**, and the node
+  **pauses** rather than reconnecting. A revoked credential retried with
+  exponential backoff across a fleet is a denial-of-service against your own
+  server. The node falls back to a re-enrolment prompt instead.
+</Callout>
+
+## Why bearer-token-in-Keystore for v1
+
+mTLS is stronger. It is also considerably more complex to provision, and that
+complexity lands on every backend author and every operator.
+
+A Keystore-bound bearer token is the simplest thing that is genuinely secure
+when stored correctly, easy for any backend to validate, and easy for future
+non-Android nodes to reproduce. The protocol reserves `publicKey` on the
+enrolment request specifically so that request signing or mTLS can be adopted
+later without a redesign.
+
+<Callout type="info">
+  "Keystore-bound" is the load-bearing part. The credential is sealed by a key
+  that cannot leave the device's hardware-backed keystore, so copying the file
+  off the phone yields nothing usable.
+</Callout>
+
+## Rotation
+
+The backend pushes a new credential over the authenticated channel:
+
+```jsonc
+{ "kind": "command", "type": "config_update", "payload": { "credential": "…" } }
+```
+
+Rotation is seamless — no interruption, no operator involvement. Credentials
+carry an expiry and the node refreshes before it lapses.
+
+Rotate when:
+
+- a credential is nearing expiry (automatic)
+- you suspect compromise
+- an operator with access to the backend leaves
+- on a schedule, if your policy requires one
+
+## Revocation
+
+```jsonc
+{ "kind": "command", "type": "revoke", "payload": {} }
+```
+
+Triggers a full node reset — credential, queues, policy, socket, watchdog. The
+device returns to its unpaired state and requires physical access to re-pair.
+
+`wipe` does the same and also removes message history from the device. It is the
+remote kill switch for a lost or stolen handset.
+
+<Callout type="info">
+  Because the credential is already Keystore-bound and useless off-device, the
+  urgency of a remote wipe is about the message history on the phone rather than
+  about the credential itself.
+</Callout>
+
+## Server-side responsibilities
+
+The core owns node credential auth — hashing, constant-time comparison, rotation
+and revocation — because it is protocol-defined and security-critical, and
+implementing it once beats implementing it in every adapter.
+
+You own **operator and API-consumer auth**: whoever calls `luno.sms.send` must
+be authenticated by your application, which passes an authenticated `Principal`
+into the core. The core then authorizes — does this principal own this device? —
+but never authenticates. See [the two
+axes](/docs/backend-sdk/core#authentication--two-axes).
+
+<Callout type="error">
+  An unauthenticated endpoint that forwards to `luno.sms.send` is an open SMS
+  relay pointed at a SIM you are paying for. The SDK cannot prevent this — the
+  authentication boundary is deliberately yours, because only you know what a
+  principal is in your system.
+</Callout>

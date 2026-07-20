@@ -1,0 +1,153 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Troubleshooting',
+  description:
+    'Diagnosing the common failure modes: permissions, connections, sends that never arrive, and nodes that go quiet.',
+  openGraph: { images: '/og?title=Troubleshooting' }
+}
+
+# Troubleshooting
+
+Symptoms first, in rough order of how often they occur.
+
+## The app was denied access to SMS
+
+**Symptom.** The permission toggle is greyed out; the runtime request is
+auto-denied with no dialog.
+
+**Cause.** Android 15+ hard-restricts `SEND_SMS` and `RECEIVE_SMS` for any app
+not installed from an app store. This is decided by the install source — nothing
+in the APK affects it.
+
+**Fix.** Settings → Apps → Luno → ⋮ → **Allow restricted settings**, then
+Permissions → SMS → Allow. Or:
+
+```sh
+adb shell cmd appops set com.luno.gateway ACCESS_RESTRICTED_SETTINGS allow
+adb shell pm grant com.luno.gateway android.permission.SEND_SMS
+```
+
+**Avoid it.** Install with `adb install` or through managed Google Play. See
+[Play Protect](/docs/android/play-protect).
+
+## Sends worked for months, now every one fails
+
+**Cause.** Android auto-resets runtime permissions for apps the user has not
+opened in a few months — and nobody opens a gateway. A `SecurityException`
+surfaces as `AUTH`/`TERMINAL`.
+
+**Fix.** Re-grant SMS permission and allow exemption from auto-reset.
+
+**Detect it.** Healthy heartbeats plus a rising terminal failure rate is the
+signature. Alert on it.
+
+## The node goes quiet, then comes back hours later
+
+**Cause.** OEM battery management killed the process. `AgentWatchdogWorker`
+eventually revived it.
+
+<Callout type="info">
+  Nothing was lost — resync makes the return lossless. But the node was not
+  sending or receiving during the gap, and on the `full` flavor inbound messages
+  that arrived while it was force-stopped were never delivered to it at all.
+</Callout>
+
+**Fix.** Battery optimisation exemption, OEM autostart settings, do not dismiss
+the notification, keep it plugged in. See [OEM
+reliability](/docs/android/oem-reliability).
+
+## The node will not connect at all
+
+Work down this list:
+
+1. **Is it paired?** An unpaired node has no credential and does not try.
+2. **Is the URL reachable from the phone?** A tunnel that died, a LAN address on
+   a different network, an expired certificate.
+3. **Is it TLS?** Release builds refuse `ws://` and `http://` outright.
+4. **Is the credential valid?** A 401 or 403 **pauses** the node deliberately —
+   it does not retry. Check the app's connection state; it will say re-enrolment
+   is required.
+5. **Certificate pinning?** If a pin was delivered at pairing and the
+   certificate has since rotated, every pinned node will refuse the connection.
+
+## Messages are accepted but never sent
+
+`sms_accepted` arrives, `sms_sent` does not.
+
+- **No signal or no service.** Check `device_status` — the SIM's reported state
+  is authoritative, not the icon on screen.
+- **Rate limited.** A `THROTTLED` error means the client-side limiter deferred
+  it to the next window. Check the pushed `rateLimitPerMinute`.
+- **Allowlist rejection.** A non-matching recipient produces an `error` event
+  and is never enqueued at all — if there is no outbox row, this is why.
+- **Wrong `subscriptionId`.** A stale id for a SIM that has been removed or
+  renumbered.
+
+## Messages send but never show as delivered
+
+Usually not a fault.
+
+Delivery reports are optional at nearly every hop, and plenty of carriers and
+routes never return one. After the `deliveryTimeout` the message moves to
+`UNDELIVERED` with an unknown reason.
+
+<Callout type="error">
+  Do not auto-resend on a delivery timeout. A timeout means *no report arrived*,
+  not *the message failed* — resending on timeout is how you send everything
+  twice. See [Delivery reports](/docs/messaging/delivery-reports).
+</Callout>
+
+Measure your own baseline delivery-report rate before setting any threshold; it
+is specific to your SIM, carrier and destinations.
+
+## Inbound messages are not arriving
+
+1. **Is this the `full` flavor?** `sendOnly` omits `RECEIVE_SMS` and the
+   receiver entirely. Check `isReceiveSmsSupported()`.
+2. **Is `RECEIVE_SMS` granted?** See the restricted-settings section above.
+3. **Was the app force-stopped?** Android does not deliver broadcasts to a
+   stopped app, and those messages are not recoverable.
+4. **Multipart still assembling?** An incomplete multipart message is reported
+   as partial only after the reassembly timeout.
+5. **MMS or RCS?** Neither is captured. MMS is out of scope for v1; RCS is not
+   accessible to third-party apps at all.
+
+## Duplicate messages on the server
+
+**Cause.** Working as designed — delivery is at-least-once. A drop between your
+server persisting an event and the node receiving the ack causes redelivery of
+the identical frame.
+
+**Fix.** Dedupe on the envelope `id`, or use it as a primary key. Do not use
+`seq`, which is monotonic per direction per session and not unique across
+reconnects.
+
+## Two devices enrolled from a one-device session
+
+**Cause.** A store whose `claim()` is not linearizable. A `get()` then `put()`
+implementation races, and the bug only appears under concurrency.
+
+**Fix.** Implement `claim()` with a real atomic primitive and run the
+[conformance suite](/docs/backend-sdk/stores#conformance), which includes a
+concurrent-claim test specifically for this.
+
+## Pigeon method not found after a code change
+
+**Cause.** Changing a `HostApi` requires a full native rebuild and reinstall.
+Hot reload does not regenerate or reinstall the native half.
+
+**Fix.** Stop the app, rebuild, reinstall.
+
+## Getting more detail
+
+- **In-app log viewer** — a bounded ring buffer of structured, redacted log
+  lines with the relevant `messageId` or `commandId` on each.
+- **`log` events** — throttled and redacted, delivered to your backend.
+- **`adb logcat`** — for anything that happens before the app can report it.
+
+<Callout type="info">
+  Every log line carries the correlation id for the message it concerns, so a
+  single message can be traced end to end across the database, the radio and the
+  wire. Start from the `ref` you sent.
+</Callout>

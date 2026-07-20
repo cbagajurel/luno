@@ -1,0 +1,91 @@
+import { Callout, Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Android App',
+  description:
+    'What the Luno Android app is, how it is structured, and the platform constraints that shape it.',
+  openGraph: { images: '/og?title=Android%20App' }
+}
+
+# Android App
+
+The Android app *is* the node. Everything load-bearing — the socket, the queue,
+telephony, retries, crypto — lives in a native Kotlin agent hosted by a
+foreground service. The Flutter layer on top is a control panel that renders
+what the agent reports.
+
+## What runs where
+
+| Concern | Owner |
+| --- | --- |
+| Process lifetime | `GatewayForegroundService`, `BootReceiver` |
+| Orchestration | `AgentController` |
+| Backend connection | `WebSocketClient`, `ProtocolCodec`, `Heartbeat`, `RestClient` |
+| Telephony | `SmsTransport`, `SmsSender`, `SmsReceiver`, per-SIM monitors |
+| Durability | Room outbox, inbox and event outbox, plus repositories |
+| Recovery | `AgentWatchdogWorker`, resync |
+| Security | Keystore, `CryptoBox`, `Redaction`, `RateLimiter` |
+| UI | Flutter — pairing, dashboard, messages, logs, settings |
+
+<Callout type="info">
+  All telephony goes directly on top of Android's own APIs — `SmsManager`,
+  `TelephonyManager`, `SubscriptionManager`, `BroadcastReceiver` — exposed to
+  Dart through Pigeon-generated channels. Community Flutter SMS plugins are
+  deliberately not used.
+</Callout>
+
+## The foreground service
+
+A persistent SMS gateway matches none of Android's narrow standard foreground
+service types cleanly, so Luno declares `specialUse` with a documented
+justification.
+
+<Callout type="error">
+  On Android 14+, a foreground service started without a valid
+  `foregroundServiceType` **crashes on start**. This is not a warning — it is an
+  immediate `ForegroundServiceStartNotAllowedException`.
+</Callout>
+
+The service posts an ongoing notification on a dedicated channel. Dismissing it
+or lowering its importance gets the service reaped on some OEM skins, which is
+why the app tells you not to.
+
+## Build flavors
+
+| Flavor | `RECEIVE_SMS` | Inbound SMS | Installs clean from any source |
+| --- | --- | --- | --- |
+| `full` | declared | yes | no — warns on internet-sideload |
+| `sendOnly` | absent | no | yes |
+
+The split lives in `android/app/src/full/AndroidManifest.xml`. Native exposes
+the choice as `BuildConfig.RECEIVE_SMS_ENABLED`, surfaced to Dart through
+`isReceiveSmsSupported()` so the settings screen hides a permission that could
+never be granted. CI asserts the `sendOnly` APK genuinely contains no
+`RECEIVE_SMS`.
+
+## Platform constraints worth knowing before you deploy
+
+- **Background service starts are restricted** from Android 12. The service is
+  started from a user action on first launch, and from allowed exemptions such
+  as `BOOT_COMPLETED`.
+- **`BOOT_COMPLETED` is not guaranteed.** It is not delivered to apps that were
+  force-stopped or never launched, and some OEMs delay or withhold it entirely.
+- **WorkManager's periodic floor is 15 minutes**, so it can only ever be a
+  backstop — never the reconnection mechanism.
+- **SMS permissions are auto-reset for unused apps** from Android 11, and
+  hard-restricted for sideloaded apps from Android 15.
+- **`minSdk` is 26**, which caps the legacy API surface the code has to branch on.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Permissions" href="/docs/android/permissions" arrow>
+    Which permissions Luno declares, when it asks, and how revocation is handled.
+  </Cards.Card>
+  <Cards.Card title="Play Protect" href="/docs/android/play-protect" arrow>
+    The sideloading warning, restricted settings, and install paths that avoid both.
+  </Cards.Card>
+  <Cards.Card title="OEM reliability" href="/docs/android/oem-reliability" arrow>
+    Battery optimisation, Doze, and the manufacturers that kill your process.
+  </Cards.Card>
+</Cards>

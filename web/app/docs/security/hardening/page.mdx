@@ -1,0 +1,108 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Hardening',
+  description:
+    'A deployment checklist for running Luno in production: transport, credentials, limits, physical security and monitoring.',
+  openGraph: { images: '/og?title=Hardening' }
+}
+
+# Hardening
+
+A checklist for taking a working setup to a production one. Most items take
+minutes; the ones that do not are marked.
+
+## Transport
+
+- [ ] **Serve enrolment and the socket over TLS only.** The node refuses
+      plaintext in release builds, but check that no reverse proxy is
+      terminating TLS and forwarding `ws://` over an untrusted hop.
+- [ ] **Consider certificate pinning.** Deliver a SHA-256 SPKI pin in the QR
+      payload's `p` field at pairing time.
+- [ ] **Always configure a backup pin** before enabling pinning.
+
+<Callout type="error">
+  Pinning without a backup pin is how you brick a fleet. When the certificate
+  rotates and no deployed node accepts the new one, recovery requires physical
+  access to every device.
+</Callout>
+
+## Credentials and secrets
+
+- [ ] `LUNO_SECRET` comes from a secret manager, never from source control.
+- [ ] Rotate device credentials on a schedule, and immediately when an operator
+      with backend access leaves.
+- [ ] Pairing sessions use short expiries and `maxEnrollments: 1`.
+- [ ] `enrollmentId` is generated from a CSPRNG with at least 128 bits of
+      entropy. Verify this if you wrote your own store or backend —
+      [it is a bearer secret](/docs/protocol/rest-api#post-enrollstatus).
+
+## Authorization
+
+- [ ] **Every route that reaches `luno.sms.send` is authenticated.** This is the
+      single most consequential item on the list.
+- [ ] Principals are scoped to the devices they own; check that
+      `luno.devices.list({ ownerId })` is actually filtered by the caller's
+      identity rather than by a value they supply.
+- [ ] Admin operations — creating pairing sessions, revoking devices — are
+      restricted separately from send access.
+
+## Rate limits and allowlists
+
+- [ ] Set `rateLimitPerMinute` to a value your SIM's plan tolerates, not to the
+      maximum you might ever want.
+- [ ] Set an `allowlist` if your traffic goes to a predictable set of numbers or
+      country prefixes.
+- [ ] Add your own server-side limit as well. The device-side limit protects the
+      SIM from your backend; a server-side limit protects your backend from its
+      own callers.
+
+<Callout type="warning">
+  Carriers apply anti-spam heuristics to consumer plans and will block a SIM
+  that behaves like a bulk sender. There is rarely a warning, and reinstating a
+  blocked SIM is a slow manual process. Start conservative.
+</Callout>
+
+## The device itself
+
+- [ ] Screen lock enabled with a non-trivial PIN.
+- [ ] Full-disk encryption on (default on modern Android).
+- [ ] Developer options and USB debugging **off** after setup.
+- [ ] The handset is physically secured — a gateway phone in an unlocked drawer
+      is an unlocked gateway.
+- [ ] The SIM has a PIN, so removing it and putting it in another handset is not
+      trivially useful.
+- [ ] Consider a dedicated SIM with a spend cap, so a runaway loop has a
+      financial ceiling.
+
+## Monitoring
+
+- [ ] Alert on **heartbeat gaps** — a node that stops reporting.
+- [ ] Alert on **rising queue depth** with a healthy link, which means sends are
+      failing.
+- [ ] Alert on a **rising `undelivered` rate**, which often means the SIM has
+      been flagged or has lost service.
+- [ ] Alert on **repeated `AUTH` errors**, which usually means a silently
+      revoked permission or an expired credential.
+- [ ] Log `error` events with their `ref`, so failures can be traced back to the
+      request that caused them.
+
+## Data handling
+
+- [ ] Decide how long you retain message bodies on your server, and enforce it.
+      Luno encrypts them on the device; what happens after they reach you is
+      entirely your responsibility.
+- [ ] Confirm your own logs do not capture message bodies or phone numbers. The
+      node redacts at source; your handlers can undo that in one careless line.
+- [ ] Know your obligations. Operating an SMS gateway means processing personal
+      communications, with the legal consequences that follow in your
+      jurisdiction.
+
+## Before you call it production
+
+- [ ] A device has survived 48 hours untouched and still sends. See [OEM
+      reliability](/docs/android/oem-reliability#verifying-it-actually-survives).
+- [ ] A reboot brings the node back with no interaction.
+- [ ] A revoked device stops working immediately and does not reconnect.
+- [ ] Your handlers are idempotent — verified by replaying the same event twice.
+- [ ] You have tested what happens when the node is offline for an hour.

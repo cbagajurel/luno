@@ -1,0 +1,144 @@
+import { Callout, Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Backend SDK',
+  description:
+    'The @luno/* packages implement the server half of the protocol: a framework-independent core plus thin adapters for the runtime you already use.',
+  openGraph: { images: '/og?title=Backend%20SDK' }
+}
+
+# Backend SDK
+
+You never have to implement the protocol yourself. The `@luno/*` packages
+provide a framework-independent core that handles pairing, enrolment, device
+management, the connection handshake and messaging — and thin adapters that
+mount it on whatever you already run.
+
+```ts
+import { createLuno, memoryStore } from '@luno/core'
+
+const luno = createLuno({
+  store: memoryStore(),
+  secret: process.env.LUNO_SECRET!
+})
+```
+
+That object is the whole API. An adapter's only job is to hand it HTTP requests
+and sockets.
+
+## Layers
+
+```
+┌────────────────────────────────────────────────────────┐
+│  ADAPTERS   @luno/hono · express · fastify · nestjs ·  │
+│             cloudflare — translate runtime ⇄ core.     │
+│             no business logic.                         │
+└───────────────────────────▲────────────────────────────┘
+                            │ depends on
+┌───────────────────────────┴────────────────────────────┐
+│  APPLICATION   services: pairing · enrolment · devices │
+│                messaging · presence · sessions · audit │
+│  ── declares PORTS (interfaces) it needs ──            │
+├────────────────────────────────────────────────────────┤
+│  DOMAIN   entities, state machines, policy, invariants │
+│  pure. no I/O. no async. fully unit-testable.          │
+└───────────────────────────▲────────────────────────────┘
+                            │ depends on
+┌───────────────────────────┴────────────────────────────┐
+│  PROTOCOL   @luno/protocol — envelope, commands,       │
+│  events, acks, control, QR payload, version negotiation│
+│  zero dependencies. shared with client SDKs.           │
+└────────────────────────────────────────────────────────┘
+
+INFRASTRUCTURE (store-postgres, …) implements ports.
+Depends inward. Nothing depends on it.
+```
+
+Dependencies point inward, always. `@luno/core` imports `@luno/protocol` and
+nothing else. Infrastructure and adapters are injected at composition time by
+you, never imported by the core.
+
+## Packages
+
+| Package | Depends on | Contains |
+| --- | --- | --- |
+| `@luno/protocol` | — | Envelope, command, event, ack and control types; codecs; `DecodeResult`; version negotiation; QR payload parse and build; pairing DTOs; error taxonomy |
+| `@luno/core` | protocol | Domain, application services, port interfaces, `createLuno()`, the fetch router, and `memoryStore()` |
+| `@luno/testing` | protocol, core | A scriptable fake node and the store conformance kit |
+| `@luno/store-postgres` | core | A durable, driver-agnostic `LunoStore` |
+| `@luno/hono` | core | Near-zero glue: Hono is already fetch-native |
+| `@luno/express` | core | `fetch`↔Express bridge plus `ws` upgrade handling |
+| `@luno/fastify` | core | The same for Fastify |
+| `@luno/nestjs` | core | A `LunoModule` wiring the engine through DI |
+| `@luno/cloudflare` | core | Worker entry plus Durable Object session |
+
+<Callout type="info">
+  `@luno/protocol` is its own package because **client SDKs need the protocol
+  types without the server engine.** A dashboard rendering a `device_status`
+  payload wants the envelope types, not pairing policy and storage ports.
+</Callout>
+
+## Why "framework-independent" is the easy half
+
+Not depending on Express is mostly a lint rule. The harder constraint is
+**runtime** independence:
+
+| Assumption | Breaks on | Consequence |
+| --- | --- | --- |
+| `node:crypto` | Workers, Deno (partly) | Hashing and randomness must be a **port** |
+| `Buffer` | Workers, browsers | `Uint8Array` and Web Crypto only |
+| `setInterval` | Request-scoped functions, Workers | Timers must be a **port**, never ambient |
+| In-process `Map` of sockets | Any multi-instance deploy | The session registry must be a **port** |
+| Holding a socket open | Firebase, Appwrite, Vercel functions | See below |
+| `process.env` | Workers (uses bindings) | Config is injected, never read ambiently |
+
+So the rule is not "no Express import". It is: **the core targets the
+intersection of Node 18+, Workers, Deno and Bun** — pure ESM TypeScript, Web
+Crypto, `fetch` types, and no ambient I/O of any kind. That intersection is
+enforced mechanically by lint rules and a CI job that type-checks the core
+against Workers and Deno lib types, not by review discipline.
+
+## Not every platform can hold a socket
+
+The protocol is built around a long-lived, stateful, bidirectional connection.
+Several popular platforms are request-scoped and simply cannot hold one open.
+This is a property of those platforms, not of the code.
+
+| Platform | Can hold a node socket? | How the adapter works |
+| --- | --- | --- |
+| Node (Express/Nest/Fastify/Hono) | Yes | `ws` server in-process; sessions in memory plus pub/sub if multi-instance |
+| Cloudflare Workers | Yes — **Durable Objects** | One DO per device; the DO *is* the session |
+| Deno Deploy / Supabase Edge | Partly | `Deno.upgradeWebSocket` works, but instances are ephemeral |
+| Bun | Yes | Native WS server |
+| Firebase Functions | **No** | Needs Cloud Run for the socket, or the HTTP fallback |
+| Vercel / Next serverless | **No** | HTTP fallback, or a separate socket service |
+
+The architecture accommodates this with two moves: `SessionRegistry` is a port
+with *local* and *routed* shapes, so the core never assumes where the socket
+lives; and an HTTP fallback transport is specified with its protocol surface
+reserved.
+
+<Callout type="warning">
+  The HTTP fallback is **designed, not built**. v1 implements sockets only.
+  `FrameSink` is defined so a long-poll or SSE buffer satisfies it without
+  change, and the additive versioning rules mean the fallback can land later
+  without a redesign — but today, a socketless platform needs a companion
+  service for the socket.
+</Callout>
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Core API" href="/docs/backend-sdk/core" arrow>
+    `createLuno`, the operator API, and the protocol-facing surface.
+  </Cards.Card>
+  <Cards.Card title="Adapters" href="/docs/backend-sdk/adapters" arrow>
+    Hono, Express, Fastify, NestJS and Cloudflare Workers.
+  </Cards.Card>
+  <Cards.Card title="Stores" href="/docs/backend-sdk/stores" arrow>
+    Persistence ports, and why `claim()` must be linearizable.
+  </Cards.Card>
+  <Cards.Card title="Testing" href="/docs/backend-sdk/testing" arrow>
+    The fake node and the conformance kit.
+  </Cards.Card>
+</Cards>

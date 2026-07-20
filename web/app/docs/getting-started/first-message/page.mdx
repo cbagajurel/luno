@@ -1,0 +1,131 @@
+import { Callout, Steps } from 'nextra/components'
+
+export const metadata = {
+  title: 'Your first message',
+  description:
+    'Send an SMS through a paired Luno node and follow it through acceptance, transmission and delivery.',
+  openGraph: { images: '/og?title=Your%20first%20message' }
+}
+
+# Your first message
+
+With a device paired and connected, sending is one call. What makes it worth a
+page of its own is the lifecycle that follows — a message is not a
+fire-and-forget call, and the events it emits are how you build anything
+reliable on top.
+
+## Send
+
+```ts
+const msg = await luno.sms.send({
+  deviceId,
+  to: '+9779800000000',
+  body: 'Hello from Luno',
+  ref: 'order-42'
+})
+
+msg.id // track this through the events below
+```
+
+`ref` is your own correlation id. It is echoed back on every event the message
+produces, so you can join Luno's lifecycle to your domain objects without
+keeping a side table of message ids.
+
+<Callout type="info">
+  If the device is offline, this call still succeeds. The command is queued and
+  dispatched when the node reconnects — see
+  [Reliability](/docs/concepts/reliability).
+</Callout>
+
+## Follow the lifecycle
+
+A single send produces up to three events, in order:
+
+<Steps>
+### `sms_accepted`
+
+The node has written the command to its durable outbox and checked it for
+idempotency. Nothing has touched the radio yet.
+
+```jsonc
+{ "commandId": "cmd_1", "messageId": "msg_1" }
+```
+
+Receiving this means the message will eventually be attempted, even if the
+process dies one millisecond later.
+
+### `sms_sent`
+
+`SmsManager` reported the outcome of transmission, per part.
+
+```jsonc
+{
+  "messageId": "msg_1",
+  "parts": [{ "index": 0, "status": "sent" }]
+}
+```
+
+This means the message left the device. It does **not** mean it arrived.
+
+### `delivery_report`
+
+The carrier confirmed handset delivery. This may arrive seconds later, minutes
+later, or never — plenty of carriers and routes simply do not send reports.
+
+```jsonc
+{ "messageId": "msg_1", "part": 0, "status": "delivered", "at": "…" }
+```
+</Steps>
+
+Wire these up when you create the engine:
+
+```ts
+const luno = createLuno({
+  store,
+  secret: process.env.LUNO_SECRET!,
+  onEvent: {
+    'sms.sent': async msg => console.log('sent', msg.ref),
+    'sms.delivered': async msg => console.log('delivered', msg.ref),
+    'sms.received': async msg => console.log('inbound from', msg.from)
+  }
+})
+```
+
+## Query state directly
+
+Every transition is persisted on both sides, so you can also just ask:
+
+```ts
+const current = await luno.sms.get(msg.id)
+current.status // queued | sending | sent | delivered | undelivered | failed
+```
+
+## Receive
+
+Inbound messages need no configuration beyond the `full` flavor and the
+`RECEIVE_SMS` permission. The node captures the broadcast, reassembles multipart
+messages, persists the result, and emits `sms_received`:
+
+```ts
+onEvent: {
+  'sms.received': async msg => {
+    // msg.from, msg.body, msg.subscriptionId, msg.receivedAt
+  }
+}
+```
+
+<Callout type="warning">
+  Your handler runs after the node has already persisted the message and the
+  server has acked it. If your handler throws, the message is not redelivered by
+  the node — it considers its job done. Treat the handler as the boundary into
+  your own durable system, and make it write before it does anything else.
+</Callout>
+
+## What to read next
+
+- [Sending SMS](/docs/messaging/sending-sms) — multipart, multi-SIM, retry
+  classification
+- [Delivery reports](/docs/messaging/delivery-reports) — why they hang, and how
+  Luno bounds them
+- [Reliability](/docs/concepts/reliability) — what happens across reboots,
+  process death and offline periods

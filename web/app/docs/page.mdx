@@ -1,0 +1,113 @@
+import { Callout, Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Introduction',
+  description:
+    'Luno is an open-source communication agent platform that turns an Android device into a secure, self-hosted communication node.',
+  openGraph: { images: '/og?title=Introduction' }
+}
+
+# Introduction
+
+Luno is an open-source communication agent platform. It turns an ordinary
+Android phone into a secure, self-hosted **communication node** that your own
+backend controls over a versioned, real-time protocol.
+
+The first version focuses on SMS: an Android device runs a long-lived background
+service that sends and receives text messages and reports device health — SIM
+state, signal, battery, delivery status — to any server that speaks the Luno
+protocol.
+
+## Why it exists
+
+Commercial SMS gateways charge per message, hold your message history, and put a
+third party between your application and your carrier. For a great many
+use cases — internal alerting, OTP delivery in markets where local routes are
+expensive, field notifications, two-way support lines — the cheapest and most
+private route is a SIM you already own, in a phone you already control.
+
+What has been missing is the software to make that phone behave like
+infrastructure rather than a handset. That is what Luno is:
+
+- **Self-hosted.** There is no Luno cloud. Your backend is the only server
+  involved, and it is the only place message content ever lands.
+- **Backend-agnostic.** The node prescribes no server technology and hardcodes
+  no endpoints. Firebase, Supabase, Express, Next.js, NestJS, a Go service, a
+  Cloudflare Worker — all work equally, because the node depends only on the
+  [wire protocol](/docs/protocol).
+- **Durable by construction.** Every command is persisted before the radio is
+  touched and every inbound message before it is reported, so a killed process
+  or a dead network loses nothing.
+
+## How it fits together
+
+```
+Backend (any Luno-protocol server)
+        ▲
+        │  WSS (primary) · HTTPS (fallback + enrolment)
+        │  versioned wire protocol
+        ▼
+Android node
+  ├─ Native Kotlin agent — the entire gateway
+  │    connection · queue · telephony · crypto · retries
+  └─ Flutter UI — pairing, dashboard, logs, settings
+        │
+        ▼
+  Android telephony APIs → SIM / radio / carrier
+```
+
+Two boundaries define the whole system, and almost every design decision falls
+out of them:
+
+1. **Node ↔ backend** is the versioned wire protocol. This is the real API and
+   the real extension seam — a future Linux modem node is a different program
+   speaking the same protocol.
+2. **Native ↔ Flutter** is a Pigeon platform channel. Commands and rendered
+   state cross it. Sockets, queues, telephony and retries never do.
+
+<Callout type="info">
+  **Flutter is UI-only.** The gateway is a native Android foreground service.
+  If the Dart process is killed, the gateway keeps running — that is the
+  acceptance test for the boundary, not a nice-to-have.
+</Callout>
+
+## What v1 is, and is not
+
+| | |
+| --- | --- |
+| **Is** | An SMS send/receive agent for Android, a published wire protocol, and server SDKs that implement the backend half |
+| **Is not** | A hosted service, an MMS/USSD/voice gateway, a Linux or Windows modem node, or a replacement for a carrier-grade A2P route |
+
+MMS, USSD and non-Android nodes are anticipated by the design — the
+`Transport` interface and the protocol are both transport-neutral — but they are
+explicitly out of scope for v1. See the [roadmap](/docs/roadmap) for what is
+planned and what is deliberately deferred.
+
+<Callout type="warning">
+  Luno drives a consumer SIM. Carriers apply anti-spam rules to consumer plans,
+  and sending bulk marketing traffic through one is a fast route to a blocked
+  SIM. Luno enforces rate limits and recipient allowlists on the device
+  precisely because this risk is real — read [Security](/docs/security) before
+  you deploy.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Cards.Card
+    title="Getting Started"
+    href="/docs/getting-started"
+    arrow
+  >
+    Install the app, stand up a backend, and pair your first device.
+  </Cards.Card>
+  <Cards.Card title="Architecture" href="/docs/concepts/architecture" arrow>
+    Responsibilities, lifecycles and flows, end to end.
+  </Cards.Card>
+  <Cards.Card title="Protocol" href="/docs/protocol" arrow>
+    The envelope, commands, events and versioning rules.
+  </Cards.Card>
+  <Cards.Card title="Backend SDK" href="/docs/backend-sdk" arrow>
+    Implement the server half in five lines with `@luno/*`.
+  </Cards.Card>
+</Cards>

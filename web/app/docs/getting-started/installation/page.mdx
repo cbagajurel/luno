@@ -1,0 +1,133 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
+export const metadata = {
+  title: 'Installation',
+  description:
+    'Install Luno from Google Play, or build a flavored APK from source without tripping Play Protect or Android restricted settings.',
+  openGraph: { images: '/og?title=Installation' }
+}
+
+# Installation
+
+There are two ways to get Luno onto a device: install the published app from
+Google Play, or build it from source. Play is the right default for anything
+beyond development.
+
+## Install from Google Play
+
+<Callout type="info">
+  **[Get Luno on Google Play](https://play.google.com/store/apps/details?id=com.luno.gateway)**
+</Callout>
+
+A Play install is exempt from both of the Android restrictions that make
+sideloading awkward: it never triggers Play Protect's fraud-protection warning,
+and — more importantly — its SMS permissions are **not** hard-restricted, so
+they can be granted normally on Android 15+.
+
+If you install from Play, you can skip straight to
+[Pairing](/docs/getting-started/pairing). The rest of this page is for building
+from source.
+
+## Build from source
+
+Luno is built with Flutter. There are two build flavors, and choosing between
+them is the only decision you need to make before building.
+
+### Choose a flavor
+
+| Flavor | `RECEIVE_SMS` | Inbound SMS | Installs clean from any source |
+| --- | --- | --- | --- |
+| `full` | declared | yes | no — warns on internet-sideload |
+| `sendOnly` | absent | no | yes |
+
+Pick `full` unless you have a specific reason not to. The warning it triggers is
+a Play Protect heuristic, not a defect, and installing over `adb` avoids it
+completely. `sendOnly` exists for cases where an APK must be distributed through
+a browser or messaging app and inbound capture is genuinely not needed.
+
+<Callout type="warning">
+  "Installs clean" is a narrower promise than it sounds. On Android 15+, both
+  `SEND_SMS` and `RECEIVE_SMS` are hard-restricted for any app not installed
+  from an app store — so a sideloaded `sendOnly` build still cannot *send* until
+  the user allows restricted settings. See [Play
+  Protect](/docs/android/play-protect).
+</Callout>
+
+### Build
+
+<Steps>
+### Get the dependencies
+
+```sh
+flutter pub get
+```
+
+### Build a flavored APK
+
+<Tabs items={['full', 'sendOnly']}>
+  <Tabs.Tab>
+```sh
+flutter build apk --flavor full
+# → build/app/outputs/apk/full/release/app-full-release.apk
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```sh
+flutter build apk --flavor sendOnly
+# → build/app/outputs/apk/sendOnly/release/app-sendOnly-release.apk
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Install over adb
+
+```sh
+adb install -r build/app/outputs/apk/full/release/app-full-release.apk
+```
+
+`adb install` is not an "internet-sideloading source", so Play Protect's
+enhanced fraud protection does not apply to it.
+</Steps>
+
+<Callout type="error">
+  **Always pass `--flavor`, and pass it to the subcommand.** Bare `flutter build
+  apk` does not fail — it builds every variant and leaves a
+  `build/app/outputs/apk/release/app-release.apk` that declares `RECEIVE_SMS`.
+  That is a `full` build under a neutral name, and sideloading it trips Play
+  Protect exactly as if you had asked for `full`. Name the flavor and ship the
+  flavored artifact, so the file says what it is.
+</Callout>
+
+Note the placement: `flutter build apk --flavor full`, not `flutter build
+--flavor full`. The latter is rejected outright with *"Could not find an option
+named --flavor"*.
+
+### Other build targets
+
+```sh
+flutter run --flavor full              # run on a connected device or emulator
+flutter build appbundle --flavor full  # AAB, for Play Store upload
+flutter analyze                        # static analysis
+flutter test                           # Dart unit and widget tests
+```
+
+## First launch
+
+The app must be opened manually once. This is not a nicety — Android does not
+deliver `BOOT_COMPLETED` to an app that has never been launched or that has been
+force-stopped, so without a first launch the node would never auto-start after a
+reboot.
+
+On that first launch you will be walked through:
+
+1. **Permissions** — phone state first, then SMS. See
+   [Permissions](/docs/android/permissions).
+2. **Battery optimisation exemption** — required for the foreground service to
+   survive Doze. See [OEM reliability](/docs/android/oem-reliability).
+3. **Pairing** — [the next step](/docs/getting-started/pairing).
+
+<Callout type="info">
+  Testing SMS send and receive requires a real device or two emulator instances.
+  An emulator can send SMS to another emulator's port, but never to a real SIM
+  or carrier.
+</Callout>

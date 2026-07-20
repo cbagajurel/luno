@@ -1,0 +1,91 @@
+import { Callout, Cards } from 'nextra/components'
+
+export const metadata = {
+  title: 'Security',
+  description:
+    'The Luno threat model: what is protected, how, and the residual risks that are documented rather than claimed away.',
+  openGraph: { images: '/og?title=Security' }
+}
+
+# Security
+
+Luno carries sensitive data — phone numbers and message bodies — through a
+scarce, abuse-prone resource, on a device that may be physically accessible to
+strangers. This section states what is protected, how, and what is not.
+
+## Threat model
+
+| Risk | Mitigation |
+| --- | --- |
+| PII in logs | A single central redaction function; bodies never logged at info level or above |
+| Credentials at rest on a stolen or rooted phone | Keystore-bound credential, unusable off-device; optional mTLS upgrade path; remote `wipe` |
+| Cleartext transport / MITM | WSS and HTTPS enforced, plaintext refused; optional certificate pinning with backup pins |
+| The node as a spam cannon, or a banned SIM | Backend-authoritative rate limits and recipient allowlists, **enforced client-side too** |
+| Message bodies at rest | Outbox and inbox bodies encrypted with a Keystore-wrapped key |
+| Replayed or duplicated commands | Idempotency keys everywhere; dedupe on command and event id |
+| Pairing abuse | Short-lived, single-use codes over HTTPS; only a hash stored server-side |
+
+<Callout type="error">
+  **Residual risk, documented rather than solved:** a rooted device with the app
+  unlocked can access decrypted data in memory. Luno does not claim otherwise.
+  If your threat model includes an attacker with root on the gateway handset,
+  the encryption at rest does not save you.
+</Callout>
+
+## The rate limit is a safety control
+
+Worth calling out separately, because it is easy to mistake for policy
+duplication.
+
+Rate limits and recipient allowlists are pushed by the backend and enforced
+*again* on the device, in `CommandRouter`, before anything is enqueued. This is
+not defence in depth for its own sake — it exists so that a compromised backend,
+or a plain bug in your own code, cannot blast thousands of messages and get the
+SIM blocked or the operator billed.
+
+<Callout type="warning">
+  Do not treat client-side enforcement as redundant with your server-side
+  checks. It is the layer that survives your server being wrong, which is the
+  scenario it was designed for.
+</Callout>
+
+## Transport
+
+Release builds refuse `ws://` and `http://`. Plaintext is permitted only by
+debug builds on a LAN, which exists so that local development against a laptop
+does not require a tunnel.
+
+Certificate pinning is available as a seam — `security/Pinning` plus an optional
+`CertificatePinner` on the WebSocket client — and is off by default. A SHA-256
+SPKI pin can be delivered at pairing time in the QR payload's `p` field, which
+bootstraps pinning without a separate distribution channel.
+
+## Encryption at rest
+
+`security/CryptoBox` seals PII with a Keystore key (`luno_data_key`). Outbox and
+inbox bodies, phone numbers, and event payload bodies are sealed on write and
+opened on read.
+
+Dedup keys stay plaintext deliberately — they must be indexable, and they carry
+no content.
+
+## Redaction
+
+A single function, `logging/Redaction`, is wired as `LunoLogger`'s redactor. All
+phone-number masking happens there.
+
+The reason it is one function rather than a convention is that conventions fail:
+one forgotten call site leaks a phone number into a log aggregator, and log
+aggregators are the least well-protected place that data can land. Full bodies
+exist only in the encrypted tables.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Authentication" href="/docs/security/authentication" arrow>
+    Device credentials, session auth, rotation and revocation.
+  </Cards.Card>
+  <Cards.Card title="Hardening" href="/docs/security/hardening" arrow>
+    Deployment checklist for a production fleet.
+  </Cards.Card>
+</Cards>

@@ -1,0 +1,168 @@
+import { Callout, FileTree } from 'nextra/components'
+
+export const metadata = {
+  title: 'Folder structure',
+  description:
+    'Every directory in the Luno repository and the reason it exists — the Flutter side, the native Android agent, and the server packages.',
+  openGraph: { images: '/og?title=Folder%20structure' }
+}
+
+# Folder structure
+
+This is the target layout. It is grown milestone by milestone rather than
+created all at once, and every folder below earns its place with a reason.
+
+## Repository root
+
+```
+sms_gateway/
+├── plan.md                  Master roadmap
+├── docs/                    Design docs (source of truth for this site)
+├── pigeons/                 Pigeon interface definitions (source of the bridge)
+│   └── luno_api.dart        Single schema: HostApi + FlutterApi + data classes
+├── lib/                     Flutter (UI only)
+├── android/                 Native Android node (the actual agent)
+├── packages/                @luno/* server SDK (TypeScript)
+├── test/                    Dart unit and widget tests
+├── web/                     This documentation site
+└── pubspec.yaml  analysis_options.yaml
+```
+
+**`pigeons/`** holds the Flutter↔native contract in one reviewed, diffable
+place. Pigeon reads these Dart interface definitions and generates type-safe
+Dart and Kotlin; the output is committed under `lib/bridge/generated/` and the
+matching Kotlin package.
+
+<Callout type="warning">
+  Changing a Pigeon `HostApi` requires a full native rebuild and reinstall — hot
+  reload will not pick it up, and the failure mode is a confusing
+  missing-method error at runtime.
+</Callout>
+
+## Flutter — `lib/`
+
+Thin by design. If a folder here starts holding gateway logic, that is a smell.
+
+```
+lib/
+├── main.dart                Entrypoint (ProviderScope + ScreenUtilInit)
+├── app/                     Root widget, routing, theme
+│   ├── luno_app.dart        MaterialApp.router
+│   ├── router.dart          go_router config
+│   └── theme.dart           ThemeData + google_fonts
+├── bridge/                  The ONLY door to native
+│   ├── generated/           Pigeon output (do not hand-edit)
+│   ├── luno_bridge.dart     Thin wrapper over HostApi
+│   └── native_events.dart   EventChannel stream adapters
+├── core/                    Cross-cutting Dart utilities
+├── state/                   Riverpod providers — UI state and stream mirrors
+├── features/                One folder per screen
+│   ├── pairing/             Enrolment flow (QR or code)
+│   ├── dashboard/           Live device, transport and connection status
+│   ├── messages/            Sent/received log (read-only mirror)
+│   ├── logs/                On-device log viewer
+│   └── settings/            SIM defaults, battery helper, about
+└── models/                  freezed + json_serializable data classes
+```
+
+- **`bridge/`** is the single auditable boundary. Features never touch platform
+  channels directly.
+- **`state/`** holds UI state and cached mirrors of native streams so widgets
+  rebuild. It is never the source of truth — native is. If the app is killed,
+  nothing important is lost here.
+- There is deliberately **no `lib/services/`**. A "service" in this architecture
+  is a native concept, and a Dart folder by that name invites exactly the drift
+  the design exists to prevent.
+
+## Native Android — `android/app/src/main/kotlin/com/luno/gateway/`
+
+This is where the real system lives.
+
+```
+├── LunoApplication.kt     App-level init; builds the DI graph
+├── MainActivity.kt        FlutterActivity host; installs Pigeon impls
+│
+├── di/                    Manual dependency graph (no Hilt by default)
+├── bridge/                Flutter↔native boundary (native half)
+│
+├── agent/                 Orchestration and process lifetime
+│   ├── GatewayForegroundService.kt   The 24/7 process; declares FGS type
+│   ├── AgentController.kt            Coordinates backend + transports + queue
+│   ├── ServiceNotification.kt        Persistent ongoing notification
+│   └── ConnectionStateMachine.kt     The connection state machine
+│
+├── transport/            Communication transports (extensibility axis A)
+│   ├── Transport.kt       Interface (send/incoming/state/capabilities)
+│   ├── TransportRegistry.kt
+│   └── sms/
+│       ├── SmsTransport.kt        Implements Transport for SMS
+│       ├── SmsSender.kt           SmsManager send (per subId, multipart)
+│       ├── SmsReceiver.kt         BroadcastReceiver: SMS_RECEIVED
+│       ├── MultipartAssembler.kt  Concatenated-SMS handling
+│       ├── SentReportRouter.kt    sentIntent → outbox
+│       └── DeliveryReportRouter.kt deliveryIntent → outbox
+│
+├── telephony/            Read-only device state
+│   ├── SimInfoManager.kt        SubscriptionManager, multi-SIM
+│   ├── SignalStrengthMonitor.kt TelephonyCallback (31+) + fallback
+│   ├── BatteryMonitor.kt
+│   └── NetworkMonitor.kt        ConnectivityManager.NetworkCallback
+│
+├── backend/              Node↔server (the wire protocol client)
+│   ├── ws/               WebSocketClient · Heartbeat · ReconnectPolicy
+│   ├── rest/             RestClient — enrolment + degraded fallback
+│   ├── protocol/         Envelope · Command · Event · Ack · ProtocolCodec
+│   └── auth/             PairingManager · DeviceCredentialStore · payloads
+│
+├── data/                 Durability (the reliability spine)
+│   ├── db/               Room database, DAOs, entities
+│   └── repository/       Outbox · Inbox · DeviceState · Log repositories
+│
+├── work/                 Safety net when the FGS is killed
+├── receiver/             BootReceiver (BOOT_COMPLETED → restart service)
+├── security/             KeystoreManager · CryptoBox · RateLimiter · Pinning
+├── logging/              LunoLogger · LogSink · Redaction
+├── config/               AgentConfig · RemoteConfig (backend-pushed policy)
+├── model/                Transport-neutral domain models + error taxonomy
+└── util/                 Result · Backoff · Clock · Ids
+```
+
+### Why each folder exists
+
+- **`di/`** — one composition root, so dependencies are explicit and testable.
+  Manual DI keeps the dependency list minimal.
+- **`bridge/`** — isolates all Flutter-facing glue. The agent could run with
+  this folder deleted.
+- **`agent/`** — owns the *process* and orchestration. The service is what
+  Android keeps alive; `AgentController` is the brain it hosts. Separating them
+  means the brain is unit-testable without a running service.
+- **`transport/`** — the abstraction that makes new communication tech cheap.
+  `mms/`, `ussd/` and `voice/` slot in beside `sms/`. Note that `SmsReceiver`
+  lives here, not in `receiver/`: it is a transport detail, not a
+  system-lifecycle concern.
+- **`telephony/`** — read-only sensors describing the *device*, not a *channel*.
+  Reused by every transport.
+- **`backend/`** — split so the protocol is independent of the socket carrying
+  it. You can test the codec with no network and swap transports.
+- **`data/`** — repositories own the state machines; DAOs and entities are pure
+  persistence. Everything persists before it acts.
+- **`work/`** — WorkManager jobs are the safety net for when the always-on
+  service is killed anyway. They are never the primary path.
+- **`security/`, `logging/`, `config/`, `model/`, `util/`** — cross-cutting
+  concerns with their own homes so they are not smeared across features.
+  Security is centralised and auditable; redaction is single-sourced so PII
+  cannot leak; models are transport-neutral so the queue and protocol do not
+  depend on SMS specifics.
+
+## Server SDK — `packages/`
+
+```
+packages/
+├── protocol/        @luno/protocol       zero-dependency wire types + codecs
+├── core/            @luno/core           all business logic; depends only on protocol
+├── testing/         @luno/testing        conformance suite every impl must pass
+├── store-postgres/  @luno/store-postgres durable LunoStore
+├── hono/  express/  fastify/  nestjs/  cloudflare/   thin runtime adapters
+```
+
+Dependencies point inward, always. See [Backend SDK](/docs/backend-sdk).

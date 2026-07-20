@@ -1,0 +1,102 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Envelope',
+  description:
+    'The single envelope every Luno frame shares — fields, semantics, and the idempotency and ordering guarantees they provide.',
+  openGraph: { images: '/og?title=Envelope' }
+}
+
+# Envelope
+
+Every frame — command, event, ack or control — shares one envelope.
+
+```jsonc
+{
+  "v": 1,                       // protocol version (integer, negotiated)
+  "kind": "command",            // command | event | ack | control
+  "id": "uuid",                 // idempotency key, unique per frame
+  "ts": "2026-07-14T09:00:00Z", // sender clock (advisory)
+  "deviceId": "dev_abc123",
+  "type": "send_sms",           // sub-type within kind
+  "seq": 128,                   // per-direction monotonic sequence
+  "payload": { /* type-specific */ }
+}
+```
+
+## Fields
+
+### `v` — protocol version
+
+An integer, negotiated on connect. The backend picks the highest mutually
+supported version. See [Versioning](/docs/protocol/versioning).
+
+### `kind` and `type`
+
+`kind` selects the frame family; `type` selects the specific message within it.
+The pair `(kind, type)` maps to exactly one payload serializer through a single
+registry, which is what makes decoding total rather than a chain of `if`
+statements.
+
+### `id` — the idempotency key
+
+Unique per frame, and the backbone of the whole reliability story. Both sides
+dedupe on it:
+
+- A replayed `send_sms` with a known `id` is recognised and does not re-enqueue.
+- A resent event with a known `id` is acked and discarded by the backend.
+
+<Callout type="info">
+  This is why at-least-once delivery is safe. Luno does not try to achieve
+  exactly-once on the wire — it makes duplicates harmless instead, which is the
+  only approach that survives arbitrary network failure.
+</Callout>
+
+### `ts` — sender clock
+
+Advisory only. **Never trusted for ordering.** A phone's clock can be wrong by
+hours, can jump when the network updates it, and can move backwards. Use `seq`
+for ordering and your own server clock for anything you intend to reason about.
+
+### `deviceId`
+
+Present on every frame because the backend addresses a *fleet*, not a device.
+Idempotency is scoped per device — two nodes may legitimately produce the same
+`ref`, and event ids are only unique within a device's stream.
+
+### `seq` — per-direction monotonic sequence
+
+One counter per direction, incremented per frame. Its job is
+[resync](/docs/protocol/websocket#resync): the node reports the last inbound
+`seq` it acked, and the backend replays from there.
+
+<Callout type="warning">
+  `seq` is monotonic within a session's direction, not globally unique across
+  reconnects. Do not use it as a database key — that is what `id` is for.
+</Callout>
+
+### `payload`
+
+Type-specific, documented per frame in [Commands](/docs/protocol/commands) and
+[Events](/docs/protocol/events).
+
+## Decoding results
+
+Decoding produces one of three outcomes, and the difference is load-bearing:
+
+| Result | Meaning | Behaviour |
+| --- | --- | --- |
+| `Ok` | Known `(kind, type)`, payload parsed | Dispatched normally |
+| `Unsupported` | Well-formed, but this build does not know the type | **Quarantined**, connection continues |
+| `Malformed` | Structurally invalid | Logged as `INTERNAL`, quarantined |
+
+`Unsupported` is the forward-compatibility path. A backend can start emitting a
+new command type without waiting for every node in the fleet to update — old
+nodes shelve what they cannot handle instead of dropping the connection.
+
+## Unknown fields
+
+Unknown fields are **ignored, never rejected**. An older node connected to a
+newer backend simply does not see the fields it was not built for. This rule and
+the additive-only field policy are what let the two sides be deployed
+independently.

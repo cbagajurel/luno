@@ -1,0 +1,109 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Delivery reports',
+  description:
+    'What a delivery report actually proves, why carriers withhold them, and how Luno bounds tracking so a message never hangs forever.',
+  openGraph: { images: '/og?title=Delivery%20reports' }
+}
+
+# Delivery reports
+
+A delivery report is the carrier confirming that a message reached the
+recipient's handset. It is the strongest signal Luno can give you — and it is
+also the least reliable part of the entire system, for reasons that have nothing
+to do with the code.
+
+## What each status actually proves
+
+| Status | Proves | Does **not** prove |
+| --- | --- | --- |
+| `sent` | The message left the device and the radio accepted it | That it reached the network, the recipient, or anyone |
+| `delivered` | The carrier confirmed handset delivery | That a human read it |
+| `undelivered` | The carrier reported failure | Which is why — codes vary wildly by network |
+| `undelivered` (timeout) | Nothing arrived within the timeout window | That the message failed; it may well have been delivered |
+
+<Callout type="warning">
+  The last row is the one that trips people up. A timeout means *no report
+  arrived*, not *the message failed*. Treat it as unknown, not as failure, when
+  deciding whether to resend — resending on timeout is how you send everything
+  twice.
+</Callout>
+
+## How they arrive
+
+`SmsManager` delivers reports as `PendingIntent` broadcasts. Each part of a
+message carries a unique request id embedded in its intent, which is what
+correlates a report back to the exact part that produced it.
+
+```
+deliveryIntent fires → DeliveryReportRouter
+  → outbox_part row updated (durable, per part)
+  → DeliveryTracker rolls up → DELIVERED / UNDELIVERED
+  → event:delivery_report ─────▶ Backend
+```
+
+Per-part rows live in a dedicated `outbox_part` table so that a multipart
+message's partial progress survives process death.
+
+## Why they hang, or never come
+
+Delivery reports are optional at nearly every hop:
+
+- **The carrier may not support them** for the route in question. Many
+  international and least-cost routes simply drop the report.
+- **The recipient's network may not return one**, even when the sender's does.
+- **The handset may be off.** The report arrives when it comes back — which may
+  be days, and by then the message may have expired at the SMSC.
+- **Some OEMs delay `SMS_RECEIVED`-style broadcasts** generally, including these.
+
+This is not a fixable problem. It is a property of the SMS system, and any
+design that treats a delivery report as guaranteed will eventually hang.
+
+## How Luno bounds it
+
+Delivery tracking is **durable and time-bounded**. Each message carries a
+`deliveryTimeout`. When it elapses with no report, the message moves to
+`UNDELIVERED` with an unknown reason and emits its final event.
+
+<Callout type="info">
+  The alternative — leaving the message pending indefinitely — means a
+  dashboard slowly fills with messages in a state that will never resolve, and a
+  queue that never drains. Bounding it is what keeps the outbox a working set
+  rather than an archive.
+</Callout>
+
+## Multipart rollup
+
+A message reaches `DELIVERED` only when **every** part reports delivered. If any
+part reports failure the message takes the worst outcome, and the per-part
+detail is preserved so you can see which part failed.
+
+## Requesting them
+
+Delivery reports are requested per message:
+
+```ts
+await luno.sms.send({
+  deviceId,
+  to: '+9779800000000',
+  body: 'Hello',
+  deliveryReport: true // default
+})
+```
+
+Turning them off is reasonable for high-volume, low-value traffic where you do
+not intend to act on the result — it removes a class of pending state entirely.
+
+## Practical guidance
+
+- **Do not gate business logic on `delivered`.** Gate on `sent`, and treat
+  `delivered` as enrichment. Otherwise a carrier that never reports will stall
+  your workflow for every message.
+- **Do not auto-resend on timeout.** See the warning above.
+- **Do alert on a rising `undelivered` rate.** A sudden change usually means the
+  SIM has been flagged, is out of credit, or has lost service — all of which are
+  worth a human looking.
+- **Measure your own baseline.** What fraction of messages get reports is
+  specific to your SIM, carrier and destinations. Learn it before you set
+  thresholds.

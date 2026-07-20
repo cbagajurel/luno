@@ -1,0 +1,190 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Core API',
+  description:
+    'createLuno, the operator-facing API for pairing, devices and messaging, and the protocol-facing surface adapters call.',
+  openGraph: { images: '/og?title=Core%20API' }
+}
+
+# Core API
+
+`@luno/core` holds all the business logic and depends only on
+`@luno/protocol`. It is designed so that a backend developer never has to read
+the protocol specification.
+
+## Composition
+
+Every dependency is injected; nothing is ambient.
+
+```ts
+import { createLuno } from '@luno/core'
+import { PostgresStore } from '@luno/store-postgres'
+
+const luno = createLuno({
+  store: new PostgresStore(pool),
+  secret: process.env.LUNO_SECRET!,
+  pairing: {
+    expiresIn: '10m',
+    maxEnrollments: 1,
+    invalidateOnUse: true,
+    requireApproval: false
+  },
+  onEvent: {
+    'sms.received': async msg => {
+      /* your business logic */
+    },
+    'device.online': async device => {}
+  }
+})
+```
+
+<Callout type="info">
+  `memoryStore()` ships inside `@luno/core` rather than as a separate package,
+  so `createLuno` works the moment the package is installed. It is fine for
+  development and tests; it loses everything on restart.
+</Callout>
+
+### Pairing options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `expiresIn` | `'10m'` | How long a pairing session stays valid |
+| `maxEnrollments` | `1` | How many devices one session may enrol |
+| `invalidateOnUse` | `true` | Close the session after a successful enrolment |
+| `requireApproval` | `false` | Hold enrolments as `pending` until approved |
+
+These are SDK defaults, not protocol requirements. The node works with any of
+them because [it enforces no pairing policy of its
+own](/docs/getting-started/pairing#the-governing-rule).
+
+## Operator API
+
+The surface a dashboard or your own services call.
+
+### Pairing
+
+```ts
+const session = await luno.pairing.createSession({
+  label: 'Acme',
+  createdBy: user.id
+})
+
+session.code      // plaintext, returned exactly once
+session.qrPayload // luno://pair?v=1&…
+```
+
+<Callout type="warning">
+  Only a hash of the code is stored. If you lose the plaintext, mint a new
+  session — it cannot be recovered.
+</Callout>
+
+### Devices
+
+```ts
+await luno.devices.list({ ownerId })
+await luno.devices.get(deviceId)
+await luno.devices.revoke(deviceId)
+```
+
+### Messaging
+
+```ts
+const msg = await luno.sms.send({
+  deviceId,
+  to: '+9779800000000',
+  body: 'hi',
+  ref: 'order-42'
+})
+
+msg.id // track through sms_accepted → sms_sent → delivery_report
+await luno.sms.get(msg.id)
+```
+
+## Protocol-facing API
+
+What adapters call, and the *only* thing they call.
+
+```ts
+await luno.http.handle(request)                // all REST: /enroll, /enroll/status
+await luno.connections.authorize(credential)   // WSS upgrade check
+const session = await luno.connections.open(device, sink)
+await session.receive(rawFrame)                // drives the state machine
+await session.close()
+```
+
+<Callout type="info">
+  `handle` returns a plain `{ status, headers, body }` rather than a `Response`.
+  Constructing a `Response` requires a global that Express does not have at all
+  and that older Node lacked — returning one would make the adapter collapse
+  work for fetch-native platforms while quietly excluding the others. A fetch
+  adapter converts in one line, and `toFetchHandler(router, makeResponse)` takes
+  the constructor as an argument so the core never reaches for a platform
+  global.
+</Callout>
+
+### `FrameSink`
+
+```ts
+interface FrameSink {
+  send(frame: unknown): Promise<void>
+}
+```
+
+That one interface is the entire transport abstraction. A `ws` socket, a
+Cloudflare Durable Object, an SSE stream and a long-poll buffer all satisfy it
+identically, and the connection and reliability logic is written once against
+it.
+
+## Ports
+
+Narrow and purpose-built, never one god-interface.
+
+**Storage** — `PairingSessionStore`, `DeviceStore`, `MessageStore`,
+`EventLogStore`, `EnrollmentStore`. Each is a handful of methods. See
+[Stores](/docs/backend-sdk/stores).
+
+**Runtime** — `Clock`, `IdGenerator`, `RandomSource`, `Crypto`, `Timers`,
+`Logger`.
+
+**Distribution** — `SessionRegistry`, `PubSub`, `RateLimiter`.
+
+<Callout type="info">
+  Injecting `Clock` and `RandomSource` makes expiry, backoff and code generation
+  deterministic under test. That is worth far more than it costs — testing
+  "does this session expire correctly" without controlling time means either
+  sleeping in tests or not really testing it.
+</Callout>
+
+## Authentication — two axes
+
+The two are deliberately split, and conflating them would be a security
+regression.
+
+**Operator and API-consumer auth** — a human or service calling
+`luno.sms.send`. **Belongs to the adapter.** Firebase Auth, Supabase Auth, JWT,
+OAuth, cookies, API keys: your adapter authenticates and passes an authenticated
+`Principal` into the core. The core does *authorization* — does this principal
+own this device? — never authentication.
+
+**Node credential auth** — a Luno node presenting its credential on the
+handshake. **Belongs to the core.** It is protocol-defined, security-critical,
+and involves constant-time comparison, credential hashing, rotation and
+revocation. Pushing it into every adapter means writing it many times and
+getting it subtly wrong in at least one.
+
+```ts
+const principal = await myAuth(req)              // your job
+await luno.sms.send({ principal, deviceId, … })  // core authorizes
+
+const device = await luno.connections.authorize(bearerToken) // core's job
+```
+
+## Extension
+
+New protocol-level capability — a new command, a new transport like MMS — lands
+in `@luno/protocol` and `@luno/core` once, and every adapter inherits it with no
+code change.
+
+That is also the test for whether a change is in the right place: **if adding a
+feature requires touching more than one adapter, it belongs in the core.**

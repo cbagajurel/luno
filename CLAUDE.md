@@ -30,7 +30,7 @@ only on the versioned wire protocol. How the backend is built is not our concern
 [`docs/milestones.md`](docs/milestones.md) covered the initial build-out (M1–M18)
 and is kept for history; work is no longer gated on its running order.
 
-**Pairing sessions (2026-07-19).** The node is now a pure *pairing client*: it
+**Pairing sessions (2026-07-19).** The node is now a pure _pairing client_: it
 submits a code — typed or scanned — and renders the backend's verdict, enforcing
 no expiry, usage limit, revocation or approval rule of its own, so every
 enrolment policy is backend config rather than an app release. New/changed:
@@ -40,7 +40,7 @@ a policy-driven `PairingError` taxonomy with forward-compatible unknown codes,
 `status: approved|pending|denied`) plus `POST /enroll/status`, and QR pairing
 (versioned `luno://pair` / JSON payload parsed natively; `mobile_scanner` is a
 viewfinder only). See [`docs/pairing.md`](docs/pairing.md) — that file is the
-contract the `@luno/*` server SDKs implement.
+contract the `@luno-oss/*` server SDKs implement.
 
 Done so far:
 
@@ -123,7 +123,7 @@ flutter test                 # run tests
 flutter test test/some_test.dart   # run a single test file
 ```
 
-**Always pass a `--flavor`, and pass it to the *subcommand*** — `flutter build apk
+**Always pass a `--flavor`, and pass it to the _subcommand_** — `flutter build apk
 --flavor full`, not `flutter build --flavor full` (bare `flutter build` rejects the
 option outright: "Could not find an option named --flavor").
 
