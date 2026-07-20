@@ -46,11 +46,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Build first: packages resolve each other's types through dist/*.d.ts,
+      # so typecheck and test both need the dependency graph already built.
+      - run: pnpm build
+
       # A bad release is unrecoverable — npm forbids re-publishing a version.
       # Gate on the full suite before anything reaches the registry.
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
 
       - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:

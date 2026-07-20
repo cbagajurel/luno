@@ -352,9 +352,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Build first: packages resolve each other's types through dist/*.d.ts,
+      # so typecheck and test both need the dependency graph already built.
+      - run: pnpm build
+
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
 
       # The release workflow publishes exactly what has a changeset. A package
       # changed without one ships nothing and the fix is silently missing.
