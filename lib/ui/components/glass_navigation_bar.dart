@@ -25,8 +25,7 @@ class GlassNavItem {
 /// bar's height arrives as the body's bottom padding, so this only adds the
 /// breathing room on top of it.
 extension LunoNavClearance on BuildContext {
-  double get navClearance =>
-      MediaQuery.paddingOf(this).bottom + LunoSpacing.md;
+  double get navClearance => MediaQuery.paddingOf(this).bottom + LunoSpacing.md;
 }
 
 /// A floating navigation bar. The selected destination expands into a tinted

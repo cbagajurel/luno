@@ -22,8 +22,9 @@ defaults:
 env:
   FLUTTER_VERSION: 3.41.4
   JAVA_VERSION: "17"
-  # Ratchet upward; never downward. Current: 51.18%.
-  MIN_LINE_COVERAGE: 50
+  # Hand-written code only — see the coverage step. Ratchet upward; never
+  # downward. Current: 64.72%.
+  MIN_LINE_COVERAGE: 60
 
 jobs:
   static:
@@ -140,8 +141,18 @@ jobs:
         run: |
           set -euo pipefail
           [ -f coverage/lcov.info ] || { echo "::error::No coverage produced."; exit 1; }
-          pct=$(awk -F: '/^LF:/{f+=$2} /^LH:/{h+=$2} END{if(f==0){print 0}else{printf "%.2f", 100*h/f}}' coverage/lcov.info)
-          echo "Line coverage: ${pct}% (floor ${MIN_LINE_COVERAGE}%)"
+
+          # Pigeon bindings are generated, not written: 555 lines (28% of the
+          # tree) that no test should assert on. Counting them measured Pigeon
+          # rather than this codebase and hid the real figure by ~15 points.
+          awk '
+            /^SF:/ { f=$0; sub(/^SF:/,"",f); keep = (f !~ /\.g\.dart$/ && f !~ /\/generated\//) }
+            { if (keep) buf = buf $0 "\n" }
+            /^end_of_record$/ { if (keep) printf "%s", buf; buf="" }
+          ' coverage/lcov.info > coverage/lcov.src.info
+
+          pct=$(awk -F: '/^LF:/{f+=$2} /^LH:/{h+=$2} END{if(f==0){print 0}else{printf "%.2f", 100*h/f}}' coverage/lcov.src.info)
+          echo "Line coverage, hand-written only: ${pct}% (floor ${MIN_LINE_COVERAGE}%)"
           awk -v p="$pct" -v m="$MIN_LINE_COVERAGE" 'BEGIN{exit !(p+0 < m+0)}' \
             && { echo "::error::Coverage ${pct}% is below the ${MIN_LINE_COVERAGE}% floor."; exit 1; } \
             || echo "Coverage floor met."
@@ -204,9 +215,13 @@ jobs:
           fi
           echo "Room schemas are in sync."
 
+      # Scoped to :app. A bare `lint` also lints every Flutter plugin module
+      # unpacked into ~/.pub-cache, so a lint error in someone else's package
+      # (mobile_scanner's UnsafeOptInUsageError) failed this build with nothing
+      # here to fix. Those modules have no lint-baseline.xml of ours either.
       - name: Lint
         working-directory: android
-        run: ./gradlew lint
+        run: ./gradlew :app:lintFullDebug :app:lintSendOnlyDebug
 
       # Release variants exercise R8, manifest merge and shrinking — none of
       # which a debug build touches, and all of which fastlane would otherwise
