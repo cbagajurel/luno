@@ -47,6 +47,30 @@ send/receive, SIM/signal/battery reads, and reboot persistence happen in the
 native Android layer and are exposed to Flutter via Pigeon-generated
 platform channels.
 
+## Backend SDK (`@luno-oss/*`)
+
+The server side of the protocol ships as npm packages, so you do not have to
+implement pairing, the WebSocket session or the event/ack semantics yourself.
+
+| Package                                                                            | Purpose                                             |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [`@luno-oss/core`](https://www.npmjs.com/package/@luno-oss/core)                     | Framework-independent engine                        |
+| [`@luno-oss/protocol`](https://www.npmjs.com/package/@luno-oss/protocol)             | Zero-dependency wire types and codecs               |
+| [`@luno-oss/testing`](https://www.npmjs.com/package/@luno-oss/testing)               | Conformance suites and a scriptable fake node       |
+| [`@luno-oss/hono`](https://www.npmjs.com/package/@luno-oss/hono)                     | Hono adapter (Node, Workers, Deno, Bun)             |
+| [`@luno-oss/express`](https://www.npmjs.com/package/@luno-oss/express)               | Express adapter                                     |
+| [`@luno-oss/fastify`](https://www.npmjs.com/package/@luno-oss/fastify)               | Fastify plugin                                      |
+| [`@luno-oss/nestjs`](https://www.npmjs.com/package/@luno-oss/nestjs)                 | NestJS module                                       |
+| [`@luno-oss/cloudflare`](https://www.npmjs.com/package/@luno-oss/cloudflare)         | Cloudflare Workers adapter                          |
+| [`@luno-oss/store-postgres`](https://www.npmjs.com/package/@luno-oss/store-postgres) | Durable Postgres store                              |
+
+```
+npm install @luno-oss/core @luno-oss/hono hono
+```
+
+Sources live in [`packages/`](packages/); releases are documented in
+[`docs/releasing.md`](docs/releasing.md).
+
 ## Getting started
 
 ```
