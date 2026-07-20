@@ -21,7 +21,7 @@ const session = (overrides: Partial<PairingSessionRecord> = {}): PairingSessionR
 
 /**
  * The contract every `LunoStore` implementation must satisfy. Exported so a
- * future `@luno/store-postgres` or `@luno/store-firestore` can run the identical
+ * future `@luno-oss/store-postgres` or `@luno-oss/store-firestore` can run the identical
  * suite against real infrastructure — the claim that business logic survives a
  * database swap is only worth as much as this suite.
  */

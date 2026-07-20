@@ -1,8 +1,30 @@
 {
-  "name": "@luno/hono",
+  "name": "@luno-oss/hono",
   "version": "0.1.0",
-  "description": "Hono adapter for @luno/core — fetch-native enroll + WebSocket routes that run on Node, Workers, Deno and Bun",
+  "description": "Hono adapter for @luno-oss/core — fetch-native enroll + WebSocket routes that run on Node, Workers, Deno and Bun",
   "license": "Apache-2.0",
+  "author": "Shivahari Gajurel",
+  "homepage": "https://github.com/cbagajurel/luno/tree/master/packages/hono#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cbagajurel/luno.git",
+    "directory": "packages/hono"
+  },
+  "bugs": {
+    "url": "https://github.com/cbagajurel/luno/issues"
+  },
+  "keywords": [
+    "luno",
+    "sms",
+    "sms-gateway",
+    "android",
+    "self-hosted",
+    "hono",
+    "adapter",
+    "workers",
+    "deno",
+    "bun"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -18,6 +40,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
@@ -28,19 +53,19 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "peerDependencies": {
-    "@luno/core": "workspace:*",
+    "@luno-oss/core": "workspace:^",
     "hono": "^4.6.0"
   },
   "dependencies": {
-    "@luno/protocol": "workspace:*"
+    "@luno-oss/protocol": "workspace:^"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.2.17",
     "@hono/node-server": "^1.13.7",
     "@hono/node-ws": "^1.0.4",
-    "@luno/core": "workspace:*",
-    "@luno/store-postgres": "workspace:*",
-    "@luno/testing": "workspace:*",
+    "@luno-oss/core": "workspace:*",
+    "@luno-oss/store-postgres": "workspace:*",
+    "@luno-oss/testing": "workspace:*",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "hono": "^4.6.14",

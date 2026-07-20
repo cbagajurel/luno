@@ -1,6 +1,6 @@
-# @luno/hono
+# @luno-oss/hono
 
-A [Hono](https://hono.dev) adapter for [`@luno/core`](../core). It exposes the
+A [Hono](https://hono.dev) adapter for [`@luno-oss/core`](../core). It exposes the
 node-facing Luno surface — `POST /enroll`, `POST /enroll/status`, and the `WS /ws`
 session socket — as Hono routes. Because Hono is fetch-native, the **same handler
 runs on Node, Cloudflare Workers, Deno and Bun**; only the WebSocket helper differs
@@ -17,8 +17,8 @@ handshake, acks, resync and command dispatch — the adapter never parses a fram
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
-import { createLuno, memoryStore } from '@luno/core';
-import { registerLuno } from '@luno/hono';
+import { createLuno, memoryStore } from '@luno-oss/core';
+import { registerLuno } from '@luno-oss/hono';
 
 const luno = createLuno({ store: memoryStore(), secret: process.env.LUNO_SECRET! });
 
@@ -30,7 +30,7 @@ const server = serve({ fetch: app.fetch, port: 3000 });
 injectWebSocket(server);
 ```
 
-Swap `memoryStore()` for [`@luno/store-postgres`](../store-postgres) and it survives
+Swap `memoryStore()` for [`@luno-oss/store-postgres`](../store-postgres) and it survives
 a restart. Everything else stays the same — the adapter never touches the store.
 
 ## Other runtimes
@@ -60,7 +60,7 @@ app's concern; this adapter only handles the node credential.
 ## Tests
 
 `test/adapter.test.ts` boots the app on a real Node socket, drives it with the
-`@luno/testing` fake node over `ws`, and runs the full pair → handshake → send →
+`@luno-oss/testing` fake node over `ws`, and runs the full pair → handshake → send →
 delivered cycle — once on `memoryStore`, once on the durable Postgres store — plus
 the 401 path.
 

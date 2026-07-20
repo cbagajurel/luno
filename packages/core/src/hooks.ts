@@ -1,4 +1,4 @@
-import type { DeviceStatusEvent, ErrorEvent, HeartbeatEvent, LogEvent } from '@luno/protocol';
+import type { DeviceStatusEvent, ErrorEvent, HeartbeatEvent, LogEvent } from '@luno-oss/protocol';
 import type { DeviceRecord, EnrollmentRecord, MessageRecord } from './ports/store';
 
 export interface LunoEventMap {

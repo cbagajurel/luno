@@ -1,19 +1,19 @@
-import { compact, type JsonObject } from './json';
+import { compact, type JsonObject } from "./json";
 import {
   booleanWithDefault,
   optionalInt,
   optionalString,
   requireString,
   stringArrayWithDefault,
-} from './internal/decode';
+} from "./internal/decode";
 
 export const COMMAND_TYPES = {
-  SEND_SMS: 'send_sms',
-  CANCEL_SMS: 'cancel_sms',
-  GET_STATUS: 'get_status',
-  CONFIG_UPDATE: 'config_update',
-  REVOKE: 'revoke',
-  WIPE: 'wipe',
+  SEND_SMS: "send_sms",
+  CANCEL_SMS: "cancel_sms",
+  GET_STATUS: "get_status",
+  CONFIG_UPDATE: "config_update",
+  REVOKE: "revoke",
+  WIPE: "wipe",
 } as const;
 
 /**
@@ -89,28 +89,35 @@ export function encodeCommand(command: Command): JsonObject {
   }
 }
 
-export function decodeCommand(type: string, payload: JsonObject): Command | null {
+export function decodeCommand(
+  type: string,
+  payload: JsonObject,
+): Command | null {
   switch (type) {
     case COMMAND_TYPES.SEND_SMS:
       return {
         type: COMMAND_TYPES.SEND_SMS,
-        to: requireString(payload, 'to'),
-        body: requireString(payload, 'body'),
-        subscriptionId: optionalInt(payload, 'subscriptionId'),
-        deliveryReport: booleanWithDefault(payload, 'deliveryReport', true),
-        ref: optionalString(payload, 'ref'),
+        to: requireString(payload, "to"),
+        body: requireString(payload, "body"),
+        subscriptionId: optionalInt(payload, "subscriptionId"),
+        deliveryReport: booleanWithDefault(payload, "deliveryReport", true),
+        ref: optionalString(payload, "ref"),
       };
     case COMMAND_TYPES.CANCEL_SMS:
-      return { type: COMMAND_TYPES.CANCEL_SMS, commandId: requireString(payload, 'commandId') };
+      return {
+        type: COMMAND_TYPES.CANCEL_SMS,
+        commandId: requireString(payload, "commandId"),
+      };
     case COMMAND_TYPES.CONFIG_UPDATE:
       return {
         type: COMMAND_TYPES.CONFIG_UPDATE,
-        heartbeatSec: optionalInt(payload, 'heartbeatSec'),
-        rateLimitPerMinute: optionalInt(payload, 'rateLimitPerMinute'),
-        allowlist: payload['allowlist'] === undefined || payload['allowlist'] === null
-          ? undefined
-          : stringArrayWithDefault(payload, 'allowlist', []),
-        credential: optionalString(payload, 'credential'),
+        heartbeatSec: optionalInt(payload, "heartbeatSec"),
+        rateLimitPerMinute: optionalInt(payload, "rateLimitPerMinute"),
+        allowlist:
+          payload["allowlist"] === undefined || payload["allowlist"] === null
+            ? undefined
+            : stringArrayWithDefault(payload, "allowlist", []),
+        credential: optionalString(payload, "credential"),
       };
     case COMMAND_TYPES.GET_STATUS:
       return { type: COMMAND_TYPES.GET_STATUS };

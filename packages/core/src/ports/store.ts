@@ -1,4 +1,4 @@
-import type { DeviceInfo } from '@luno/protocol';
+import type { DeviceInfo } from '@luno-oss/protocol';
 import type { ConnectionPhase, DeviceStatus } from '../domain/device';
 import type { MessageStatus } from '../domain/message';
 
@@ -50,7 +50,7 @@ export interface PairingSessionStore {
    * business policy: how long a session lives and how many devices it admits are
    * decided by the domain at creation and baked into the record.
    *
-   * `@luno/core`'s store conformance suite asserts this under real concurrency.
+   * `@luno-oss/core`'s store conformance suite asserts this under real concurrency.
    */
   claim(input: { sessionId: string; now: number }): Promise<ClaimOutcome>;
 

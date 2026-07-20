@@ -1,7 +1,7 @@
 # Luno — Test Backend
 
 A **reference Luno-protocol server** for demoing the Android node's pairing and
-live connection. It is now a **thin adapter over [`@luno/core`](../packages/core)**:
+live connection. It is now a **thin adapter over [`@luno-oss/core`](../packages/core)**:
 all pairing, enrolment, session-handshake and messaging logic lives in the SDK,
 and this app only translates HTTP and WebSocket to SDK calls. That is the point of
 the port — the same engine runs behind any framework, and this Next.js app is one
@@ -28,14 +28,17 @@ the node (and the SDK) work end-to-end and to give you a dashboard to drive them
 ## Run locally
 
 This app is part of the pnpm workspace, so install from the repo root (it links
-the `@luno/*` packages):
+the `@luno-oss/*` packages):
 
 ```bash
 pnpm install                       # from the repo root, once
 pnpm --filter luno-test-backend dev   # http://localhost:3000
 ```
 
-Open http://localhost:3000 and click **Generate pairing code**.
+Open http://localhost:3000, pick an expiry / seat count / approval rule, and click
+**Generate pairing code**. Scan the QR from the node's pairing screen to connect
+immediately, or type the code by hand. The QR is the SDK-minted `luno://pair`
+payload — the dashboard renders it, it never builds one of its own.
 
 ### Try it without a phone
 
@@ -85,7 +88,7 @@ each boot and everything paired before the restart must re-enrol.
 | --------------- | -------- | ------------------------------------------------------------- |
 | `POST /enroll`  | node     | Pairing: `{pairingCode, deviceInfo}` → `{deviceId, credential, wsUrl}` |
 | `WS /ws`        | node     | `Authorization: Bearer <credential>`; §6 handshake then frames |
-| `POST /api/pairing` | dashboard | mint a short-lived pairing code                           |
+| `POST /api/pairing` | dashboard | mint a pairing code + scannable QR; body sets policy (`expiresInMs`, `maxEnrollments`, `requireApproval`) |
 | `GET /api/stream`   | dashboard | SSE mirror of all devices + the live frame feed          |
 | `POST /api/devices/:id/command` | dashboard | issue `send_sms` / `get_status` / `config_update` / `revoke` / `wipe` |
 

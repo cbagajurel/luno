@@ -1,20 +1,20 @@
-# @luno/core
+# @luno-oss/core
 
 The framework-independent engine that implements the Luno protocol. All of the
 business logic lives here; every platform adapter is a thin translation layer
 over this package (see [`docs/backend-sdk.md`](../../docs/backend-sdk.md)).
 
-It depends on `@luno/protocol` and nothing else. It imports no HTTP framework,
+It depends on `@luno-oss/protocol` and nothing else. It imports no HTTP framework,
 no database driver, and no platform global — everything it needs from the outside
 world arrives through an injected port.
 
 ## Getting started
 
 ```ts
-import { createLuno, memoryStore } from '@luno/core';
+import { createLuno, memoryStore } from '@luno-oss/core';
 
 const luno = createLuno({
-  store: memoryStore(),           // swap for @luno/store-postgres in production
+  store: memoryStore(),           // swap for @luno-oss/store-postgres in production
   secret: process.env.LUNO_SECRET, // keys the pairing-code and credential digests
   pairing: { expiresInMs: 600_000, maxEnrollments: 1 },
 });
@@ -88,7 +88,7 @@ under load, in production, by admitting two devices to a single-use session. The
 exported conformance suite exists to catch exactly that:
 
 ```ts
-import { describeStoreConformance } from '@luno/core/test/store-conformance';
+import { describeStoreConformance } from '@luno-oss/core/test/store-conformance';
 
 describeStoreConformance('my-store', () => myStore());
 ```

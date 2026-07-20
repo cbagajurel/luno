@@ -1,4 +1,4 @@
-import type { ProtocolFrame } from '@luno/protocol';
+import type { ProtocolFrame } from '@luno-oss/protocol';
 import type { DeliveryOutcome, FrameSink, SessionRegistry } from '../ports/sessions';
 
 /**

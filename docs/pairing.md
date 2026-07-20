@@ -1,7 +1,7 @@
 # Luno — pairing sessions
 
 The contract between a Luno node and any backend that enrols it. This is the
-spec the `@luno/*` server SDKs implement; the Android node implements the client
+spec the `@luno-oss/*` server SDKs implement; the Android node implements the client
 half exactly as written here.
 
 ## The governing rule
@@ -30,7 +30,7 @@ Two consequences worth stating explicitly:
 ## Secure defaults
 
 Defaults belong to the SDK, not the protocol — the node works with any of them.
-The recommended defaults for `@luno/*`: one device per session, short expiry,
+The recommended defaults for `@luno-oss/*`: one device per session, short expiry,
 session invalidated after a successful enrolment, no reuse unless explicitly
 configured, and identical rules whether the session is delivered as a QR code or
 a typed code.
@@ -129,7 +129,7 @@ approval never re-submits the pairing code — under a single-use policy a secon
 credential to whoever presents the id, which makes it a bearer secret in
 practice however it is described elsewhere — a sequential or otherwise
 predictable value turns the approval gate into an enrolment bypass. Backends
-should mint it from a CSPRNG with at least 128 bits of entropy. `@luno/core`
+should mint it from a CSPRNG with at least 128 bits of entropy. `@luno-oss/core`
 uses 192.
 
 A node that polls again after `approved` has, by definition, not received the

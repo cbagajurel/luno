@@ -7,12 +7,12 @@ import type {
   InjectionToken,
   OptionalFactoryDependency,
 } from "@nestjs/common";
-import { encodeFrame } from "@luno/protocol";
-import type { DeviceRecord, HttpRequest, Luno } from "@luno/core";
+import { encodeFrame } from "@luno-oss/protocol";
+import type { DeviceRecord, HttpRequest, Luno } from "@luno-oss/core";
 import { WebSocketServer, type WebSocket } from "ws";
 
 /** DI token the module binds the `Luno` instance to; inject it to reach the engine. */
-export const LUNO = Symbol.for("@luno/nestjs:LUNO");
+export const LUNO = Symbol.for("@luno-oss/nestjs:LUNO");
 
 interface RequestLike extends IncomingMessage {
   originalUrl?: string;

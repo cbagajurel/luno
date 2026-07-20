@@ -1,4 +1,4 @@
-import type { DeviceInfo } from '@luno/protocol';
+import type { DeviceInfo } from '@luno-oss/protocol';
 import type {
   ClaimOutcome,
   DevicePatch,
@@ -10,7 +10,7 @@ import type {
   MessagePatch,
   MessageRecord,
   PairingSessionRecord,
-} from '@luno/core';
+} from '@luno-oss/core';
 import type { Queryable } from './sql';
 
 type Row = Record<string, unknown>;
@@ -112,7 +112,7 @@ const TERMINAL_MESSAGE_STATUSES = ['delivered', 'undelivered', 'failed', 'cancel
  * once before use.
  *
  * `claim()` is a single conditional `UPDATE … RETURNING`, the linearizable form the
- * port requires; `@luno/testing`'s conformance suite asserts it admits exactly one
+ * port requires; `@luno-oss/testing`'s conformance suite asserts it admits exactly one
  * device to a single-use session under concurrency.
  */
 export function postgresStore(sql: Queryable): LunoStore {

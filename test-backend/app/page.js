@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 
 function useToast() {
   const [toast, setToast] = useState(null);
@@ -47,7 +48,7 @@ function useNow(active) {
 }
 
 export default function Dashboard() {
-  const [snap, setSnap] = useState({ devices: [], events: [], pairingCodes: [] });
+  const [snap, setSnap] = useState({ devices: [], events: [], pairingCodes: [], enrollments: [] });
   const [connected, setConnected] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [origin, setOrigin] = useState('');
@@ -104,10 +105,26 @@ export default function Dashboard() {
 
   const wsUrl = origin.replace(/^http/, 'ws') + '/ws';
 
-  const genCode = async () => {
-    const r = await fetch('/api/pairing', { method: 'POST' });
+  const genCode = async (options = {}) => {
+    const r = await fetch('/api/pairing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
     const j = await r.json();
-    show(`Pairing code ${j.code} ready`);
+    if (!r.ok) return show(j.error || 'could not mint code', true);
+    show(`Pairing code ${j.code} ready — scan the QR or type it`);
+  };
+
+  const decideEnrollment = async (id, action) => {
+    const r = await fetch(`/api/enrollments/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) show(j.error || `could not ${action}`, true);
+    else show(action === 'approve' ? 'Device approved' : 'Device denied');
   };
 
   const sendCommand = async (type, payload) => {
@@ -140,6 +157,7 @@ export default function Dashboard() {
         <div className="col">
           <ConnectionCard origin={origin} wsUrl={wsUrl} />
           <PairingCard codes={snap.pairingCodes} onGenerate={genCode} />
+          <PendingCard enrollments={snap.enrollments} onDecide={decideEnrollment} />
           <DevicesCard devices={devices} selected={selected} onSelect={setSelectedId} />
         </div>
 
@@ -179,34 +197,160 @@ function ConnectionCard({ origin, wsUrl }) {
   );
 }
 
+const EXPIRY_OPTIONS = [
+  { label: '5 min', ms: 5 * 60 * 1000 },
+  { label: '10 min', ms: 10 * 60 * 1000 },
+  { label: '1 hour', ms: 60 * 60 * 1000 },
+  { label: 'Never', ms: null },
+];
+
+const SEAT_OPTIONS = [
+  { label: '1 device', n: 1 },
+  { label: '5 devices', n: 5 },
+  { label: 'Unlimited', n: null },
+];
+
+// Renders the SDK-minted qrUri (a versioned luno://pair payload) as a scannable
+// image. We encode the exact string @luno-oss/core handed us — the dashboard never
+// builds a pairing payload of its own.
+function QrImage({ uri }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (!uri) {
+      setSrc(null);
+      return undefined;
+    }
+    QRCode.toDataURL(uri, { margin: 1, width: 220, errorCorrectionLevel: 'M' })
+      .then((url) => alive && setSrc(url))
+      .catch(() => alive && setSrc(null));
+    return () => {
+      alive = false;
+    };
+  }, [uri]);
+  if (!src) return null;
+  return <img className="qr" src={src} alt="Scan to pair" width={200} height={200} />;
+}
+
 function PairingCard({ codes, onGenerate }) {
   const active = !!(codes && codes.length > 0);
   const now = useNow(active);
+
+  const [expiryIdx, setExpiryIdx] = useState(1);
+  const [seatIdx, setSeatIdx] = useState(0);
+  const [requireApproval, setRequireApproval] = useState(false);
+
+  const generate = () =>
+    onGenerate({
+      expiresInMs: EXPIRY_OPTIONS[expiryIdx].ms,
+      maxEnrollments: SEAT_OPTIONS[seatIdx].n,
+      requireApproval,
+    });
+
   return (
     <div className="card">
       <h2>Pairing</h2>
+
+      <div className="row">
+        <label className="field" style={{ flex: 1 }}>
+          <span>Expiry</span>
+          <select value={expiryIdx} onChange={(e) => setExpiryIdx(Number(e.target.value))}>
+            {EXPIRY_OPTIONS.map((o, i) => (
+              <option key={o.label} value={i}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field" style={{ flex: 1 }}>
+          <span>Seats</span>
+          <select value={seatIdx} onChange={(e) => setSeatIdx(Number(e.target.value))}>
+            {SEAT_OPTIONS.map((o, i) => (
+              <option key={o.label} value={i}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label
+        className="field"
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}
+      >
+        <input
+          type="checkbox"
+          checked={requireApproval}
+          onChange={(e) => setRequireApproval(e.target.checked)}
+          style={{ width: 'auto' }}
+        />
+        <span style={{ margin: 0 }}>Require approval before the device enrolls</span>
+      </label>
+
       {active ? (
         codes.map((c) => {
-          const remaining = c.expiresAt - now;
+          const remaining = c.expiresAt === null ? null : c.expiresAt - now;
+          const expired = remaining !== null && remaining <= 0;
           return (
-            <div key={c.code}>
+            <div key={c.code} className="pairing-live">
+              {c.qrUri && !expired && (
+                <div className="qr-wrap">
+                  <QrImage uri={c.qrUri} />
+                </div>
+              )}
               <div className="pcode">{c.code}</div>
               <p className="hint">
-                {remaining > 0
-                  ? `Expires in ${fmtCountdown(remaining)} · enter it in the app.`
-                  : 'Expired — generate a new one.'}
+                {expired
+                  ? 'Expired — generate a new one.'
+                  : `Scan the QR or type the code${c.requireApproval ? ' (needs approval)' : ''
+                  } · ${remaining === null ? 'never expires' : `expires in ${fmtCountdown(remaining)}`}.`}
               </p>
             </div>
           );
         })
       ) : (
         <p className="hint" style={{ marginBottom: 10 }}>
-          No active code. Generate one, then type it into the node&apos;s pairing screen.
+          No active code. Generate one, then scan the QR from the node&apos;s pairing screen —
+          or type the code by hand.
         </p>
       )}
-      <button className="primary" onClick={onGenerate} style={{ width: '100%' }}>
+      <button className="primary" onClick={generate} style={{ width: '100%' }}>
         Generate pairing code
       </button>
+    </div>
+  );
+}
+
+// Only shown when a session has requireApproval and a device is waiting. The node
+// sits polling /enroll/status until an operator clicks Approve or Deny here.
+function PendingCard({ enrollments, onDecide }) {
+  const pending = enrollments || [];
+  if (pending.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Awaiting approval ({pending.length})</h2>
+      <div className="col" style={{ gap: 10 }}>
+        {pending.map((e) => (
+          <div key={e.id} className="device">
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="id">{e.info?.manufacturer} {e.info?.model}</span>
+              <span className="badge disconnected">
+                <span className="dot" /> pending
+              </span>
+            </div>
+            <div className="meta">
+              SDK {e.info?.androidSdk} · v{e.info?.appVersion} · requested {ago(e.createdAt)}
+            </div>
+            <div className="row" style={{ marginTop: 10 }}>
+              <button className="primary sm" onClick={() => onDecide(e.id, 'approve')}>
+                Approve
+              </button>
+              <button className="sm danger" onClick={() => onDecide(e.id, 'deny')}>
+                Deny
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

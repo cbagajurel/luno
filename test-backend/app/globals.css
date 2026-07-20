@@ -219,6 +219,25 @@ label.field span {
   font-size: 12px;
 }
 
+.pairing-live {
+  margin-bottom: 6px;
+}
+
+.qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.qr {
+  width: 200px;
+  height: 200px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--accent-dim);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

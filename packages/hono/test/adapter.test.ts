@@ -1,14 +1,14 @@
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { PGlite } from '@electric-sql/pglite';
-import { createLuno, memoryStore, type Luno, type LunoStore } from '@luno/core';
-import { migrate, postgresStore, type Queryable } from '@luno/store-postgres';
+import { createLuno, memoryStore, type Luno, type LunoStore } from '@luno-oss/core';
+import { migrate, postgresStore, type Queryable } from '@luno-oss/store-postgres';
 import {
   FakeNode,
   enrollNode,
   fetchTransport,
   webSocketChannel,
-} from '@luno/testing';
+} from '@luno-oss/testing';
 import { Hono } from 'hono';
 import type { AddressInfo } from 'node:net';
 import WebSocket from 'ws';
@@ -104,7 +104,7 @@ async function pairAndConnect(run: Running): Promise<{ node: FakeNode; deviceId:
   return { node, deviceId: enrolled.deviceId };
 }
 
-describe('@luno/hono adapter over a real socket', () => {
+describe('@luno-oss/hono adapter over a real socket', () => {
   it('runs a full lifecycle: enroll, handshake, send → delivered', async () => {
     const run = await start(memoryStore());
     const { node, deviceId } = await pairAndConnect(run);

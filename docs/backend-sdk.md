@@ -1,14 +1,14 @@
 # Luno — Backend SDK architecture (proposal)
 
-> Status: **approved; Phases 1–5 landed** (2026-07-19). `@luno/protocol` is
+> Status: **approved; Phases 1–5 landed** (2026-07-19). `@luno-oss/protocol` is
 > cross-checked against the node's Kotlin codec over a shared fixture corpus;
-> `@luno/core` implements pairing, enrolment, device management, the connection
-> handshake and messaging behind injected ports; `@luno/testing` ships a
+> `@luno-oss/core` implements pairing, enrolment, device management, the connection
+> handshake and messaging behind injected ports; `@luno-oss/testing` ships a
 > scriptable fake node and the store conformance kit; `test-backend` is a thin
-> adapter over `@luno/core`; `@luno/store-postgres` is a durable, driver-agnostic
+> adapter over `@luno-oss/core`; `@luno-oss/store-postgres` is a durable, driver-agnostic
 > `LunoStore` that passes the conformance suite; and six framework adapters now
-> ride the core unchanged — `@luno/hono`, `@luno/express`, `@luno/fastify`,
-> `@luno/nestjs` and `@luno/cloudflare` (plus the ported Next.js `test-backend`),
+> ride the core unchanged — `@luno-oss/hono`, `@luno-oss/express`, `@luno-oss/fastify`,
+> `@luno-oss/nestjs` and `@luno-oss/cloudflare` (plus the ported Next.js `test-backend`),
 > each gated on a fake-node run over its own transport (a real socket for the Node
 > frameworks, an in-memory `WebSocketPair` for the edge one). The SDK is
 > feature-complete against this proposal; further adapters and stores are additive.
@@ -27,9 +27,9 @@ and reduces every backend platform to a thin adapter:
 
 ```
 packages/
-  protocol/      @luno/protocol   zero-dependency wire types + codecs
-  core/          @luno/core       all business logic; depends only on protocol
-  testing/       @luno/testing    conformance suite every impl must pass
+  protocol/      @luno-oss/protocol   zero-dependency wire types + codecs
+  core/          @luno-oss/core       all business logic; depends only on protocol
+  testing/       @luno-oss/testing    conformance suite every impl must pass
   store-*/       storage adapters (memory, postgres, firestore, d1, …)
   <platform>/    thin runtime adapters (express, hono, firebase, …)
 ```
@@ -73,7 +73,7 @@ enforced mechanically (§11), not by discipline.
 
 ```
       ┌────────────────────────────────────────────────────────┐
-      │  ADAPTERS   @luno/express · firebase · hono · workers   │
+      │  ADAPTERS   @luno-oss/express · firebase · hono · workers   │
       │  translate runtime ⇄ core. no business logic.           │
       └───────────────────────────▲────────────────────────────┘
                                   │ depends on
@@ -87,7 +87,7 @@ enforced mechanically (§11), not by discipline.
       └───────────────────────────▲────────────────────────────┘
                                   │ depends on
       ┌───────────────────────────┴────────────────────────────┐
-      │  PROTOCOL   @luno/protocol — envelope, commands,        │
+      │  PROTOCOL   @luno-oss/protocol — envelope, commands,        │
       │  events, acks, control, QR payload, version negotiation │
       │  zero dependencies. shared with client SDKs.            │
       └────────────────────────────────────────────────────────┘
@@ -96,14 +96,14 @@ enforced mechanically (§11), not by discipline.
       implements ports. depends inward. nothing depends on it.
 ```
 
-Dependencies point inward, always. `@luno/core` imports `@luno/protocol` and
+Dependencies point inward, always. `@luno-oss/core` imports `@luno-oss/protocol` and
 nothing else. Infrastructure and adapters are injected at composition time by
 the application author, never imported by the core.
 
-### Why `@luno/protocol` is its own package
+### Why `@luno-oss/protocol` is its own package
 
 It could live inside core. It shouldn't, for one decisive reason: **client SDKs
-need the protocol types without the server engine.** A `@luno/react` dashboard
+need the protocol types without the server engine.** A `@luno-oss/react` dashboard
 rendering a `device_status` payload, or a future non-Android node, wants the
 envelope types and codecs — not pairing policy, storage ports, or session
 management. Splitting it keeps the client story clean and makes the protocol
@@ -147,7 +147,7 @@ The architecture accommodates this with two moves:
 
 **This is a protocol-level decision and therefore touches the Android node**,
 which is why it is flagged here as an open question (§13) rather than assumed.
-The alternative — shipping `@luno/firebase` that silently only supports
+The alternative — shipping `@luno-oss/firebase` that silently only supports
 outbound-when-connected — would be a worse outcome discovered later.
 
 ---
@@ -156,21 +156,21 @@ outbound-when-connected — would be a worse outcome discovered later.
 
 | Package                  | Depends on     | Contains                                                                                                                                                                                                                                         |
 | ------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@luno/protocol`         | —              | envelope/command/event/ack/control types, codecs, `DecodeResult`, version negotiation, QR payload parse/build, pairing DTOs, error taxonomy                                                                                                      |
-| `@luno/core`             | protocol       | domain + application services + port interfaces + `createLuno()` + fetch router                                                                                                                                                                  |
-| `@luno/testing`          | protocol, core | **Built.** Scriptable fake node (real §6 handshake, over any transport) on the main entry — vitest-free so demos/servers can import it; store conformance on `/store`. Protocol fixtures stayed in `@luno/protocol` next to the codec they check |
-| ~~`@luno/store-memory`~~ | —              | **Folded into `@luno/core` as `memoryStore()`.** A separate package would depend on core while core's own tests depend on it, and that build cycle buys nothing; keeping it inside also means `createLuno` works the moment it is installed      |
-| `@luno/store-postgres`   | core           | Postgres/Supabase (`pg` or `postgres`)                                                                                                                                                                                                           |
-| `@luno/store-firestore`  | core           | Firestore                                                                                                                                                                                                                                        |
-| `@luno/store-d1`         | core           | Cloudflare D1 + KV/DO                                                                                                                                                                                                                            |
-| `@luno/express`          | core           | `fetch`↔express bridge + `ws` upgrade handling                                                                                                                                                                                                   |
-| `@luno/hono`             | core           | near-zero: Hono is already fetch-native                                                                                                                                                                                                          |
-| `@luno/cloudflare`       | core           | Worker entry + Durable Object session                                                                                                                                                                                                            |
-| `@luno/firebase`         | core           | Functions HTTPS + Cloud Run socket variant                                                                                                                                                                                                       |
-| `@luno/nest`             | core           | DI module wrapping the same fetch handler                                                                                                                                                                                                        |
-| `@luno/supabase`         | core           | Edge Function entry                                                                                                                                                                                                                              |
+| `@luno-oss/protocol`         | —              | envelope/command/event/ack/control types, codecs, `DecodeResult`, version negotiation, QR payload parse/build, pairing DTOs, error taxonomy                                                                                                      |
+| `@luno-oss/core`             | protocol       | domain + application services + port interfaces + `createLuno()` + fetch router                                                                                                                                                                  |
+| `@luno-oss/testing`          | protocol, core | **Built.** Scriptable fake node (real §6 handshake, over any transport) on the main entry — vitest-free so demos/servers can import it; store conformance on `/store`. Protocol fixtures stayed in `@luno-oss/protocol` next to the codec they check |
+| ~~`@luno-oss/store-memory`~~ | —              | **Folded into `@luno-oss/core` as `memoryStore()`.** A separate package would depend on core while core's own tests depend on it, and that build cycle buys nothing; keeping it inside also means `createLuno` works the moment it is installed      |
+| `@luno-oss/store-postgres`   | core           | Postgres/Supabase (`pg` or `postgres`)                                                                                                                                                                                                           |
+| `@luno-oss/store-firestore`  | core           | Firestore                                                                                                                                                                                                                                        |
+| `@luno-oss/store-d1`         | core           | Cloudflare D1 + KV/DO                                                                                                                                                                                                                            |
+| `@luno-oss/express`          | core           | `fetch`↔express bridge + `ws` upgrade handling                                                                                                                                                                                                   |
+| `@luno-oss/hono`             | core           | near-zero: Hono is already fetch-native                                                                                                                                                                                                          |
+| `@luno-oss/cloudflare`       | core           | Worker entry + Durable Object session                                                                                                                                                                                                            |
+| `@luno-oss/firebase`         | core           | Functions HTTPS + Cloud Run socket variant                                                                                                                                                                                                       |
+| `@luno-oss/nest`             | core           | DI module wrapping the same fetch handler                                                                                                                                                                                                        |
+| `@luno-oss/supabase`         | core           | Edge Function entry                                                                                                                                                                                                                              |
 
-`@luno/protocol` and `@luno/core` are the deliverables. Everything else is
+`@luno-oss/protocol` and `@luno-oss/core` are the deliverables. Everything else is
 small, and several are near-trivial once the fetch surface exists.
 
 ---
@@ -181,8 +181,8 @@ Designed so a backend developer never reads the protocol spec. Composition is
 explicit — every dependency injected, nothing ambient:
 
 ```ts
-import { createLuno } from "@luno/core";
-import { PostgresStore } from "@luno/store-postgres";
+import { createLuno } from "@luno-oss/core";
+import { PostgresStore } from "@luno-oss/store-postgres";
 
 const luno = createLuno({
   store: new PostgresStore(pool),
@@ -287,7 +287,7 @@ interface PairingSessionStore {
 }
 ```
 
-Every store implementation must pass a concurrency suite in `@luno/testing`
+Every store implementation must pass a concurrency suite in `@luno-oss/testing`
 that hammers `claim()` in parallel and asserts the invariant. That suite is what
 makes "swap the database" a real claim rather than an aspiration.
 
@@ -321,7 +321,7 @@ const device = await luno.connections.authorize(bearerToken); // core's job
 
 ---
 
-## 9. Conformance kit (`@luno/testing`)
+## 9. Conformance kit (`@luno-oss/testing`)
 
 With one core and N adapters and M stores, the thing that actually prevents
 ecosystem drift is an executable contract:
@@ -342,14 +342,14 @@ ecosystem drift is an executable contract:
 ## 10. Extension strategy
 
 New capability that is protocol-level (a new command, a new transport like MMS)
-lands in `@luno/protocol` + `@luno/core` once, and every adapter inherits it
+lands in `@luno-oss/protocol` + `@luno-oss/core` once, and every adapter inherits it
 with no code change. That is the whole point of the split, and the test for
 whether a change is in the right place: **if adding a feature requires touching
 more than one adapter, it belongs in the core.**
 
-Client SDKs (`@luno/react`, `@luno/flutter`, `@luno/go`, …) talk to the
+Client SDKs (`@luno-oss/react`, `@luno-oss/flutter`, `@luno-oss/go`, …) talk to the
 developer's backend, never to a node directly — the backend holds the privileged
-position and all node credentials. They consume `@luno/protocol` for types only.
+position and all node credentials. They consume `@luno-oss/protocol` for types only.
 
 ---
 
@@ -362,7 +362,7 @@ position and all node credentials. They consume `@luno/protocol` for types only.
   type-checks the core against Workers and Deno lib types. The dependency rule
   fails the build rather than relying on review.
 - **Location**: `packages/` per your instruction. Worth noting a future
-  `@luno/flutter` is a _pub_ package, not npm — if that lands we'd want
+  `@luno-oss/flutter` is a _pub_ package, not npm — if that lands we'd want
   `packages/npm/` and `packages/dart/`. Cheap to decide now, annoying later.
 
 ---
@@ -372,16 +372,16 @@ position and all node credentials. They consume `@luno/protocol` for types only.
 Deliberately not seven adapters at once. Each phase ends with something
 provable against the real Android node:
 
-1. ~~**`@luno/protocol`** — types + codecs + QR payload, cross-checked against the
+1. ~~**`@luno-oss/protocol`** — types + codecs + QR payload, cross-checked against the
    Kotlin implementation with shared fixtures.~~ **Done.** 91 TS tests; the node's
    `ProtocolFixturesTest` reads the same `fixtures/frames.json` and asserts the
    same byte-identical round-trip, so the two codecs cannot drift silently.
-2. ~~**`@luno/core`** — domain, ports, pairing/enrolment/session services, the
-   fetch router, `@luno/store-memory`.~~ **Done.** 73 tests, including an
+2. ~~**`@luno-oss/core`** — domain, ports, pairing/enrolment/session services, the
+   fetch router, `@luno-oss/store-memory`.~~ **Done.** 73 tests, including an
    exported store conformance suite that asserts `claim()` linearizability under
    real concurrency, and an end-to-end smoke run (pair → connect → handshake →
    send → delivered) against the built bundles on real Web Crypto.
-3. ~~**`@luno/testing`** + port `test-backend` onto the SDK.~~ **Done.** The fake
+3. ~~**`@luno-oss/testing`** + port `test-backend` onto the SDK.~~ **Done.** The fake
    node drives the real core with no mocks; `test-backend` is now a thin adapter
    (`/enroll` → `luno.http.handle`, `/ws` → `connections.open`, dashboard →
    services). Validated over a genuine loopback socket: pair → handshake → send →
@@ -390,9 +390,9 @@ provable against the real Android node:
    path it exercises is now covered by an automated equivalent.
 4. ~~**One socket adapter** and **one store** proving the abstractions across a
    genuine boundary — Hono (fetch-native, runs almost everywhere) plus Postgres.~~
-   **Done.** `@luno/hono` mounts the enroll routes on `c.req.raw` and bridges the
+   **Done.** `@luno-oss/hono` mounts the enroll routes on `c.req.raw` and bridges the
    `WS /ws` socket to `connections.open`; the same handler runs on Node, Workers,
-   Deno and Bun (only the `upgradeWebSocket` helper differs). `@luno/store-postgres`
+   Deno and Bun (only the `upgradeWebSocket` helper differs). `@luno-oss/store-postgres`
    is a durable `LunoStore` behind a tiny `Queryable` port — one `query(text,
    params)` — so it binds to `pg`, a serverless HTTP driver, or PGlite unchanged;
    `claim()` is the linearizable conditional `UPDATE … RETURNING`, and it passes
@@ -401,10 +401,10 @@ provable against the real Android node:
    loopback socket — pair → handshake → send → delivered — proving an adapter and a
    store swap in across the boundary without touching core.
 5. ~~**Remaining adapters**, each gated on the conformance suite.~~ **Done.**
-   `@luno/express` and `@luno/fastify` prove the **non-fetch-native** path — the
+   `@luno-oss/express` and `@luno-oss/fastify` prove the **non-fetch-native** path — the
    `HttpRequest` shim plus a `ws` bridge on a classic Node server, a seam Hono
-   never touched; `@luno/nestjs` proves DI wiring (the engine resolved through the
-   container via a `LunoModule` + a `LUNO` token); and `@luno/cloudflare` proves
+   never touched; `@luno-oss/nestjs` proves DI wiring (the engine resolved through the
+   container via a `LunoModule` + a `LUNO` token); and `@luno-oss/cloudflare` proves
    the **socketless/edge** §4 path (a `WebSocketPair` bridge, Durable-Object ready).
    Each ships with a fake-node run over its own transport, so a phone pairs against
    any of them the same way. The Node-framework socket bridge (auth-before-upgrade
@@ -414,7 +414,7 @@ provable against the real Android node:
 Phase 3 is the one that matters. Until a real device pairs against the extracted
 core, the abstraction is unvalidated. Phases 4–5 are the proof it generalises: five
 frameworks and a real database, spanning fetch-native, classic-Node and edge
-runtimes — not one of which required a change to `@luno/core`.
+runtimes — not one of which required a change to `@luno-oss/core`.
 
 ---
 
@@ -429,8 +429,8 @@ runtimes — not one of which required a change to `@luno/core`.
    lands later without a redesign — which is the property this deferral rests on.
 2. **Hono proves the design first**, fetch-native, so the same handler then runs
    on Workers, Deno, Bun and Node unchanged.
-3. **`packages/`**, per instruction. If a `@luno/flutter` pub package ever
+3. **`packages/`**, per instruction. If a `@luno-oss/flutter` pub package ever
    lands, revisit the `packages/npm/` + `packages/dart/` split then.
 4. **`test-backend` gets ported onto the SDK**, becoming a thin Next.js adapter
-   over `@luno/core`. The debug dashboard keeps working, and a physical phone
+   over `@luno-oss/core`. The debug dashboard keeps working, and a physical phone
    pairing exactly as it does today is the acceptance test for the extraction.

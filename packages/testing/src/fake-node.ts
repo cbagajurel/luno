@@ -8,7 +8,7 @@ import {
   type Event,
   type FrameMeta,
   type ProtocolFrame,
-} from '@luno/protocol';
+} from '@luno-oss/protocol';
 import type { NodeChannel } from './channel';
 
 export interface FakeNodeOptions {

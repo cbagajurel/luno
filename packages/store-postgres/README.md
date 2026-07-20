@@ -1,4 +1,4 @@
-# @luno/store-postgres
+# @luno-oss/store-postgres
 
 A durable [`LunoStore`](../core/src/ports/store.ts) backed by Postgres. Drop it into
 `createLuno` and every device, pairing session, message and audit event survives a
@@ -11,8 +11,8 @@ module.
 
 ```ts
 import { Pool } from 'pg';
-import { createLuno } from '@luno/core';
-import { postgresStore, migrate } from '@luno/store-postgres';
+import { createLuno } from '@luno-oss/core';
+import { postgresStore, migrate } from '@luno-oss/store-postgres';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 await migrate(pool);                       // once, at deploy or boot
@@ -32,11 +32,11 @@ new protocol fields land as nullable columns, never rewrites.
 The whole "swap the database" promise rests on `claim()` being linearizable: a
 single-use pairing session must admit **exactly one** device even when two enrol at
 the same instant. This store expresses `claim()` as one conditional
-`UPDATE … RETURNING`, and it passes `@luno/core`'s store conformance suite —
+`UPDATE … RETURNING`, and it passes `@luno-oss/core`'s store conformance suite —
 including the test that fires 60 concurrent claims and asserts the limit holds:
 
 ```ts
-import { describeStoreConformance } from '@luno/testing/store';
+import { describeStoreConformance } from '@luno-oss/testing/store';
 describeStoreConformance('postgresStore', () => postgresStore(pool));
 ```
 

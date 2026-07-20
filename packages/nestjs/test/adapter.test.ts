@@ -4,8 +4,8 @@ import type { AddressInfo } from 'node:net';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { INestApplication } from '@nestjs/common';
-import { createLuno, memoryStore, type Luno } from '@luno/core';
-import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno/testing';
+import { createLuno, memoryStore, type Luno } from '@luno-oss/core';
+import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno-oss/testing';
 import WebSocket from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LunoModule, attachLunoWebSocket } from '../src/index';
@@ -78,7 +78,7 @@ async function waitForStatus(run: Running, deviceId: string, id: string, status:
   throw new Error(`message ${id} never reached ${status}`);
 }
 
-describe('@luno/nestjs module over a real socket', () => {
+describe('@luno-oss/nestjs module over a real socket', () => {
   it('resolves the engine via DI, enrolls, then runs send → delivered', async () => {
     const run = await start();
     const { code } = await run.luno.pairing.createSession({ backendUrl: run.baseUrl });

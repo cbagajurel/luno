@@ -8,7 +8,7 @@ import {
   type Event,
   type FrameMeta,
   type ProtocolFrame,
-} from '@luno/protocol';
+} from '@luno-oss/protocol';
 import { auditEvent, type CoreContext } from '../context';
 import type { ConnectionPhase } from '../domain/device';
 import type { FrameSink } from '../ports/sessions';

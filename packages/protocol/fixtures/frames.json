@@ -1,5 +1,5 @@
 {
-  "description": "Golden wire frames shared between @luno/protocol and the node's Kotlin ProtocolCodec. Each envelope is written in kotlinx declaration order with defaults present and nulls omitted, so JSON.stringify(envelope) is the exact canonical wire text. Both implementations must decode every frame and re-encode it byte-identically.",
+  "description": "Golden wire frames shared between @luno-oss/protocol and the node's Kotlin ProtocolCodec. Each envelope is written in kotlinx declaration order with defaults present and nulls omitted, so JSON.stringify(envelope) is the exact canonical wire text. Both implementations must decode every frame and re-encode it byte-identically.",
   "protocolVersion": 1,
   "frames": [
     {

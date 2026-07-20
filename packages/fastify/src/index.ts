@@ -1,5 +1,5 @@
-import { encodeFrame } from "@luno/protocol";
-import type { DeviceRecord, HttpRequest, Luno } from "@luno/core";
+import { encodeFrame } from "@luno-oss/protocol";
+import type { DeviceRecord, HttpRequest, Luno } from "@luno-oss/core";
 import type {
   FastifyInstance,
   FastifyPluginAsync,

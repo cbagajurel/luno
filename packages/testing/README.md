@@ -1,4 +1,4 @@
-# @luno/testing
+# @luno-oss/testing
 
 The conformance kit for Luno backend implementations: a scriptable **fake node**
 that speaks the real wire protocol, and the **store contract** every persistence
@@ -12,10 +12,10 @@ answers commands with the same event flow as the agent — so if your backend
 satisfies it, the phone will behave the same way. Drive it over any transport
 through the `NodeChannel` abstraction.
 
-**In-process, deterministic** — wire it straight to `@luno/core`, no socket:
+**In-process, deterministic** — wire it straight to `@luno-oss/core`, no socket:
 
 ```ts
-import { FakeNode, channelPair, enrollNode } from '@luno/testing';
+import { FakeNode, channelPair, enrollNode } from '@luno-oss/testing';
 
 const node = new FakeNode({ deviceId });
 const { node: nodeSide, backend: backendSide } = channelPair();
@@ -28,7 +28,7 @@ await node.sendInboundSms({ from: '+15550001111', body: 'hi' });
 **Over a real socket** — validate an adapter end to end:
 
 ```ts
-import { FakeNode, webSocketChannel, enrollNode, fetchTransport } from '@luno/testing';
+import { FakeNode, webSocketChannel, enrollNode, fetchTransport } from '@luno-oss/testing';
 
 const { deviceId, credential } = await enrollNode(fetchTransport(baseUrl), pairingCode);
 const ws = new WebSocket(`${wsUrl}`, { headers: { Authorization: `Bearer ${credential}` } });
@@ -49,7 +49,7 @@ can import it (`test-backend/scripts/fake-node.mjs` does exactly this).
 Imported from the `/store` subpath, because it depends on vitest:
 
 ```ts
-import { describeStoreConformance } from '@luno/testing/store';
+import { describeStoreConformance } from '@luno-oss/testing/store';
 
 describeStoreConformance('my-postgres-store', () => new PostgresStore(pool));
 ```

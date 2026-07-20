@@ -1,5 +1,5 @@
-import { encodeFrame } from '@luno/protocol';
-import type { DeviceRecord, Luno, NodeSession } from '@luno/core';
+import { encodeFrame } from '@luno-oss/protocol';
+import type { DeviceRecord, Luno, NodeSession } from '@luno-oss/core';
 
 /**
  * The Cloudflare `WebSocket` surface this adapter touches, declared structurally so

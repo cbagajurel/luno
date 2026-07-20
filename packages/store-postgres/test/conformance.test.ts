@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
-import type { LunoStore } from '@luno/core';
-import { describeStoreConformance } from '@luno/testing/store';
+import type { LunoStore } from '@luno-oss/core';
+import { describeStoreConformance } from '@luno-oss/testing/store';
 import { postgresStore } from '../src/store';
 import { migrate, type Queryable } from '../src/sql';
 

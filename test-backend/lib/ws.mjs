@@ -1,9 +1,9 @@
 import { parse } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { encodeFrame } from '@luno/protocol';
+import { encodeFrame } from '@luno-oss/protocol';
 
 // The device credential rides in `Authorization: Bearer <credential>`, exactly as
-// the node's ConnectionManager sends it. @luno/core validates it (constant-time,
+// the node's ConnectionManager sends it. @luno-oss/core validates it (constant-time,
 // by hash); an unknown credential is a 401, which the node treats as "re-enroll
 // required" and pauses on rather than looping.
 function bearer(req) {

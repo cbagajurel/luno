@@ -1,4 +1,4 @@
-import { commandFrame } from '@luno/protocol';
+import { commandFrame } from '@luno-oss/protocol';
 import { auditEvent, type CoreContext } from '../context';
 import { isPresent } from '../domain/device';
 import { LunoError } from '../domain/errors';

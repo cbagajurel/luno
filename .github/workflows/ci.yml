@@ -333,11 +333,42 @@ jobs:
 
           exit $fail
 
+  packages:
+    name: Backend SDK packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          # `changeset status` diffs against origin/master.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      # The release workflow publishes exactly what has a changeset. A package
+      # changed without one ships nothing and the fix is silently missing.
+      - name: Changed packages must carry a changeset
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin master
+          pnpm changeset status --since=origin/master
+
   ci:
     name: CI
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [static, codegen, dart_test, android, verify_artifacts]
+    needs: [static, codegen, dart_test, android, verify_artifacts, packages]
     if: always()
     steps:
       # `needs` alone treats a skipped job as success, so a job that never ran

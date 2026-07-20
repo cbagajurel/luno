@@ -7,7 +7,7 @@ import {
   type EnrollRequest,
   type Event,
   type ProtocolFrame,
-} from '@luno/protocol';
+} from '@luno-oss/protocol';
 import { createLuno, memoryStore, type LunoConfig, type LunoStore } from '../src';
 import type { FrameSink } from '../src';
 

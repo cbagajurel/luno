@@ -1,14 +1,14 @@
-# @luno/nestjs
+# @luno-oss/nestjs
 
-A [NestJS](https://nestjs.com) module for [`@luno/core`](../core). It wires the
+A [NestJS](https://nestjs.com) module for [`@luno-oss/core`](../core). It wires the
 engine into the DI container and exposes the node-facing surface: `POST /enroll`,
 `POST /enroll/status`, and the `WS /ws` session socket.
 
 ```ts
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { createLuno, memoryStore } from '@luno/core';
-import { LunoModule, attachLunoWebSocket } from '@luno/nestjs';
+import { createLuno, memoryStore } from '@luno-oss/core';
+import { LunoModule, attachLunoWebSocket } from '@luno-oss/nestjs';
 
 const luno = createLuno({ store: memoryStore(), secret: process.env.LUNO_SECRET! });
 
@@ -36,7 +36,7 @@ Nest owns the REST controller and DI.
 ## Tests
 
 `test/adapter.test.ts` bootstraps a real Nest app (engine resolved through DI),
-enrols, drives `WS /ws` with the `@luno/testing` fake node through pair → handshake
+enrols, drives `WS /ws` with the `@luno-oss/testing` fake node through pair → handshake
 → send → delivered, and checks the 401 path.
 
 ```

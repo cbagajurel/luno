@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import type { DeviceInfo } from '@luno/protocol';
+import type { DeviceInfo } from '@luno-oss/protocol';
 import { describe, expect, it } from 'vitest';
 import { postgresStore } from '../src/store';
 import { migrate, type Queryable } from '../src/sql';

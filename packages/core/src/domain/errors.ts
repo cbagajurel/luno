@@ -18,7 +18,7 @@ const HTTP_STATUS: Record<LunoErrorCode, number> = {
 /**
  * Operator-facing failures — the API surface a dashboard or service calls. This
  * is deliberately separate from the node-facing pairing taxonomy in
- * `@luno/protocol`, which is a wire contract rather than an SDK error type.
+ * `@luno-oss/protocol`, which is a wire contract rather than an SDK error type.
  */
 export class LunoError extends Error {
   readonly code: LunoErrorCode;

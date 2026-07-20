@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { randomBytes } from 'node:crypto';
-import { createLuno, memoryStore } from '@luno/core';
+import { createLuno, memoryStore } from '@luno-oss/core';
 
 // The node phase the core tracks (lowercase) → the label the dashboard renders.
 const PHASE_LABEL = {
@@ -52,12 +52,25 @@ function createBackend() {
     connectedAt.set(deviceId, Date.now());
     change();
   });
-  for (const event of ['device.offline', 'device.enrolled', 'device.revoked', 'sms.status', 'sms.received']) {
+  for (const event of [
+    'device.offline',
+    'device.enrolled',
+    'device.revoked',
+    'enrollment.pending',
+    'sms.status',
+    'sms.received',
+  ]) {
     luno.on(event, change);
   }
 
-  function rememberCode(session, code) {
-    codes.set(session.id, { code, expiresAt: session.expiresAt });
+  function rememberCode(session, code, qrUri = null) {
+    codes.set(session.id, {
+      code,
+      qrUri,
+      expiresAt: session.expiresAt,
+      maxEnrollments: session.maxEnrollments,
+      requireApproval: session.requireApproval,
+    });
     change();
   }
 
@@ -90,14 +103,30 @@ function createBackend() {
 
     const pairingCodes = [...codes.values()]
       .filter((c) => c.expiresAt === null || c.expiresAt > now)
-      .map((c) => ({ code: c.code, expiresAt: c.expiresAt ?? now + 600_000 }));
+      .map((c) => ({
+        code: c.code,
+        qrUri: c.qrUri ?? null,
+        expiresAt: c.expiresAt,
+        maxEnrollments: c.maxEnrollments ?? null,
+        requireApproval: c.requireApproval ?? false,
+      }));
 
-    return { devices, events: feed, pairingCodes };
+    const enrollments = (await luno.pairing.listEnrollments())
+      .filter((e) => e.status === 'pending')
+      .map((e) => ({
+        id: e.id,
+        installId: e.installId,
+        info: e.info,
+        createdAt: e.createdAt,
+      }));
+
+    return { devices, events: feed, pairingCodes, enrollments };
   }
 
   return {
     luno,
     rememberCode,
+    refresh: change,
     snapshot,
     subscribe(cb) {
       emitter.on('change', cb);

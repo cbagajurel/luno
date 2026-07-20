@@ -1,4 +1,4 @@
-import { commandFrame, type Event, type ProtocolFrame } from '@luno/protocol';
+import { commandFrame, type Event, type ProtocolFrame } from '@luno-oss/protocol';
 import { auditEvent, type CoreContext } from '../context';
 import { LunoError } from '../domain/errors';
 import { advanceStatus, isCancellable, rollupPartStatuses } from '../domain/message';

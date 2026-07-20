@@ -1,4 +1,4 @@
-import { parsePairingPayload } from '@luno/protocol';
+import { parsePairingPayload } from '@luno-oss/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { deviceInfo, enrollRequest, harness } from './helpers';
 

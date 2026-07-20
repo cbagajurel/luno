@@ -1,8 +1,28 @@
 {
-  "name": "@luno/core",
+  "name": "@luno-oss/core",
   "version": "0.1.0",
   "description": "Framework-independent engine implementing the Luno protocol",
   "license": "Apache-2.0",
+  "author": "Shivahari Gajurel",
+  "homepage": "https://github.com/cbagajurel/luno/tree/master/packages/core#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cbagajurel/luno.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/cbagajurel/luno/issues"
+  },
+  "keywords": [
+    "luno",
+    "sms",
+    "sms-gateway",
+    "android",
+    "self-hosted",
+    "websocket",
+    "protocol",
+    "engine"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -23,13 +43,8 @@
   "files": [
     "dist"
   ],
-  "peerDependencies": {
-    "vitest": "^2.0.0 || ^3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "vitest": {
-      "optional": true
-    }
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=18"
@@ -40,8 +55,16 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
+  "peerDependencies": {
+    "vitest": "^2.0.0 || ^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
   "dependencies": {
-    "@luno/protocol": "workspace:*"
+    "@luno-oss/protocol": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.3.5",

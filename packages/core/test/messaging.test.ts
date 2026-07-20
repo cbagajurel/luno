@@ -1,4 +1,4 @@
-import type { ProtocolFrame } from '@luno/protocol';
+import type { ProtocolFrame } from '@luno-oss/protocol';
 import { describe, expect, it } from 'vitest';
 import { connectedDevice, handshake, harness, nodeEvent, recordingSink } from './helpers';
 

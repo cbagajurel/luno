@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
-import { encodeFrame } from "@luno/protocol";
-import type { DeviceRecord, HttpRequest, Luno } from "@luno/core";
+import { encodeFrame } from "@luno-oss/protocol";
+import type { DeviceRecord, HttpRequest, Luno } from "@luno-oss/core";
 import { WebSocketServer, type WebSocket } from "ws";
 
 /**

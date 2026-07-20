@@ -5,7 +5,7 @@ export default defineConfig({
   outExtension: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.js' }),
   format: ['esm', 'cjs'],
   target: 'es2022',
-  external: ['@luno/core', '@luno/protocol'],
+  external: ['@luno-oss/core', '@luno-oss/protocol'],
   dts: true,
   clean: true,
   sourcemap: true,

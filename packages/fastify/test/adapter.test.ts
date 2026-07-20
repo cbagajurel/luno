@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
-import { createLuno, memoryStore, type Luno } from '@luno/core';
-import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno/testing';
+import { createLuno, memoryStore, type Luno } from '@luno-oss/core';
+import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno-oss/testing';
 import Fastify, { type FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -68,7 +68,7 @@ async function waitForStatus(run: Running, deviceId: string, id: string, status:
   throw new Error(`message ${id} never reached ${status}`);
 }
 
-describe('@luno/fastify adapter over a real socket', () => {
+describe('@luno-oss/fastify adapter over a real socket', () => {
   it('enrolls, then runs send → delivered', async () => {
     const run = await start();
     const { code } = await run.luno.pairing.createSession({ backendUrl: run.baseUrl });

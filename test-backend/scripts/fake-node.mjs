@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// A stand-in for the Android node, built on @luno/testing's FakeNode: it enrolls
+// A stand-in for the Android node, built on @luno-oss/testing's FakeNode: it enrolls
 // with a pairing code, connects over a real WebSocket, runs the exact §6
 // handshake the ConnectionManager runs, heartbeats, and answers commands with the
 // same event flow as the agent. Use it to demo the backend without a phone:
@@ -8,7 +8,7 @@
 //   node scripts/fake-node.mjs http://localhost:3000 ABCD-1234
 //
 import { WebSocket } from 'ws';
-import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno/testing';
+import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno-oss/testing';
 
 const [, , backendArg, pairingCode] = process.argv;
 if (!backendArg || !pairingCode) {

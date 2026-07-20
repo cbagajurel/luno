@@ -1,4 +1,4 @@
-import type { ProtocolFrame } from '@luno/protocol';
+import type { ProtocolFrame } from '@luno-oss/protocol';
 
 /**
  * Where a frame goes. The entire transport abstraction is this one interface: a

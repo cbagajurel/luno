@@ -1,8 +1,29 @@
 {
-  "name": "@luno/protocol",
+  "name": "@luno-oss/protocol",
   "version": "0.1.0",
   "description": "Zero-dependency types and codecs for the Luno wire protocol",
   "license": "Apache-2.0",
+  "author": "Shivahari Gajurel",
+  "homepage": "https://github.com/cbagajurel/luno/tree/master/packages/protocol#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cbagajurel/luno.git",
+    "directory": "packages/protocol"
+  },
+  "bugs": {
+    "url": "https://github.com/cbagajurel/luno/issues"
+  },
+  "keywords": [
+    "luno",
+    "sms",
+    "sms-gateway",
+    "android",
+    "self-hosted",
+    "protocol",
+    "codec",
+    "types",
+    "zero-dependency"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -20,6 +41,9 @@
     "dist",
     "fixtures"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },

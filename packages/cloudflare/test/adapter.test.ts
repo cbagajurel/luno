@@ -1,11 +1,11 @@
-import { createLuno, memoryStore, type Luno } from '@luno/core';
+import { createLuno, memoryStore, type Luno } from '@luno-oss/core';
 import {
   FakeNode,
   channelPair,
   enrollNode,
   type EnrollTransport,
   type NodeChannel,
-} from '@luno/testing';
+} from '@luno-oss/testing';
 import { describe, expect, it } from 'vitest';
 import { bridgeSocket, lunoFetch, type WorkerWebSocket } from '../src/index';
 
@@ -56,7 +56,7 @@ function newLuno(): Luno {
   return createLuno({ store: memoryStore(), secret: SECRET });
 }
 
-describe('@luno/cloudflare fetch handler', () => {
+describe('@luno-oss/cloudflare fetch handler', () => {
   it('enrols through POST /enroll on the fetch-native handler', async () => {
     const luno = newLuno();
     const handler = lunoFetch({ luno });
@@ -82,7 +82,7 @@ describe('@luno/cloudflare fetch handler', () => {
   });
 });
 
-describe('@luno/cloudflare bridgeSocket', () => {
+describe('@luno-oss/cloudflare bridgeSocket', () => {
   it('runs the §6 handshake and send → delivered over a WebSocketPair bridge', async () => {
     const luno = newLuno();
     const handler = lunoFetch({ luno });

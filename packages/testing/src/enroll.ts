@@ -5,7 +5,7 @@ import {
   type EnrollRequest,
   type EnrollResponse,
   type PairingErrorCode,
-} from '@luno/protocol';
+} from '@luno-oss/protocol';
 
 /** `fetch` is declared structurally so this package needs no DOM or Node lib. */
 declare const fetch: (

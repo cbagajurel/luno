@@ -12,6 +12,6 @@ export {
 } from './enroll';
 export type { EnrollResult, EnrollTransport } from './enroll';
 
-// The store conformance suite lives at `@luno/testing/store`, not here: it pulls
+// The store conformance suite lives at `@luno-oss/testing/store`, not here: it pulls
 // in vitest, and this entry must stay importable from a plain demo script or a
 // running server that has no test runner in scope.

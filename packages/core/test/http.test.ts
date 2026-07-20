@@ -1,4 +1,4 @@
-import { classifyEnrollFailure, decodeEnrollResponse } from '@luno/protocol';
+import { classifyEnrollFailure, decodeEnrollResponse } from '@luno-oss/protocol';
 import { describe, expect, it } from 'vitest';
 import type { HttpRequest } from '../src';
 import { toFetchHandler } from '../src';
@@ -33,7 +33,7 @@ describe('POST /enroll', () => {
 
   /**
    * The response is only correct if the node's own classifier reaches the verdict
-   * we intended, so the assertion runs the body back through `@luno/protocol`
+   * we intended, so the assertion runs the body back through `@luno-oss/protocol`
    * rather than checking fields by hand.
    */
   it.each([

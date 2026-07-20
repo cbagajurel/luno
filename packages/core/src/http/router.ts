@@ -6,7 +6,7 @@ import {
   deniedEnrollResponse,
   enrollRejection,
   pendingEnrollResponse,
-} from '@luno/protocol';
+} from '@luno-oss/protocol';
 import type { CoreContext } from '../context';
 import type { PairingService } from '../services/pairing';
 

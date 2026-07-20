@@ -6,7 +6,7 @@ import {
   type EnrollRequest,
   type EnrollStatusRequest,
   type PairingRejectionCode,
-} from '@luno/protocol';
+} from '@luno-oss/protocol';
 import { auditEvent, type CoreContext } from '../context';
 import { LunoError } from '../domain/errors';
 import {

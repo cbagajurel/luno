@@ -1,5 +1,5 @@
-import { createLuno, memoryStore, type Luno } from '@luno/core';
-import { encodeFrame, type ProtocolFrame } from '@luno/protocol';
+import { createLuno, memoryStore, type Luno } from '@luno-oss/core';
+import { encodeFrame, type ProtocolFrame } from '@luno-oss/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import {
   FakeNode,
@@ -10,7 +10,7 @@ import {
 } from '../src';
 
 /**
- * Drives the real @luno/core over an in-memory channel, exactly as an adapter
+ * Drives the real @luno-oss/core over an in-memory channel, exactly as an adapter
  * would over a socket. If the FakeNode can pair, handshake, send and receive
  * against the core with no mocks, it is a faithful stand-in for the phone — which
  * is the whole point of shipping it.

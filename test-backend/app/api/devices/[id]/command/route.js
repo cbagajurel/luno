@@ -1,5 +1,5 @@
 import { getLuno } from '@/lib/luno.mjs';
-import { LunoError } from '@luno/core';
+import { LunoError } from '@luno-oss/core';
 
 export const dynamic = 'force-dynamic';
 

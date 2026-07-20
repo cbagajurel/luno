@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createLuno, memoryStore, type Luno } from '@luno/core';
-import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno/testing';
+import { createLuno, memoryStore, type Luno } from '@luno-oss/core';
+import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno-oss/testing';
 import express from 'express';
 import WebSocket from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -72,7 +72,7 @@ async function waitForStatus(run: Running, deviceId: string, id: string, status:
   throw new Error(`message ${id} never reached ${status}`);
 }
 
-describe('@luno/express adapter over a real socket', () => {
+describe('@luno-oss/express adapter over a real socket', () => {
   it('enrolls through the HttpRequest shim, then runs send → delivered', async () => {
     const run = await start();
     const { code } = await run.luno.pairing.createSession({ backendUrl: run.baseUrl });

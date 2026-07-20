@@ -1,4 +1,4 @@
-# @luno/protocol
+# @luno-oss/protocol
 
 Zero-dependency types and codecs for the Luno wire protocol — the contract
 between a Luno node and any backend that drives it.
@@ -6,7 +6,7 @@ between a Luno node and any backend that drives it.
 This package is the innermost layer of the Luno backend SDK (see
 [`docs/backend-sdk.md`](../../docs/backend-sdk.md)). It contains **no business
 logic and no I/O**: just the frame types, their canonical encoding, the pairing
-payload format, and the enrolment error taxonomy. `@luno/core` builds on it, and
+payload format, and the enrolment error taxonomy. `@luno-oss/core` builds on it, and
 client SDKs can depend on it for types alone without pulling in a server engine.
 
 ## Runtime neutrality
@@ -40,7 +40,7 @@ envelope intact, and structurally broken input comes back as `malformed` with th
 raw text. Both are for the caller to quarantine and carry on (§8.5).
 
 ```ts
-import { decodeFrame, encodeFrame, commandFrame } from '@luno/protocol';
+import { decodeFrame, encodeFrame, commandFrame } from '@luno-oss/protocol';
 
 const result = decodeFrame(raw);
 switch (result.status) {
@@ -63,7 +63,7 @@ Parsing and building both QR forms, plus the enrolment DTOs and the rejection
 taxonomy from [`docs/pairing.md`](../../docs/pairing.md):
 
 ```ts
-import { buildPairingUri, enrollRejection, decodeEnrollRequest } from '@luno/protocol';
+import { buildPairingUri, enrollRejection, decodeEnrollRequest } from '@luno-oss/protocol';
 
 buildPairingUri({ backendUrl, pairingCode, sessionId, label });
 // luno://pair?v=1&u=https%3A%2F%2F…&c=ABCD-1234&s=ses_9f3&l=Acme

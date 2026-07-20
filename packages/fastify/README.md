@@ -1,13 +1,13 @@
-# @luno/fastify
+# @luno-oss/fastify
 
-A [Fastify](https://fastify.dev) plugin for [`@luno/core`](../core). It exposes the
+A [Fastify](https://fastify.dev) plugin for [`@luno-oss/core`](../core). It exposes the
 node-facing surface — `POST /enroll`, `POST /enroll/status`, and the `WS /ws`
 session socket — as one registerable plugin.
 
 ```ts
 import Fastify from 'fastify';
-import { createLuno, memoryStore } from '@luno/core';
-import { lunoFastify } from '@luno/fastify';
+import { createLuno, memoryStore } from '@luno-oss/core';
+import { lunoFastify } from '@luno-oss/fastify';
 
 const luno = createLuno({ store: memoryStore(), secret: process.env.LUNO_SECRET! });
 
@@ -33,7 +33,7 @@ dispatch.
 ## Tests
 
 `test/adapter.test.ts` boots a real Fastify server, enrols, drives `WS /ws` with the
-`@luno/testing` fake node through pair → handshake → send → delivered, and checks
+`@luno-oss/testing` fake node through pair → handshake → send → delivered, and checks
 the 401 path.
 
 ```

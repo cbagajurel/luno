@@ -1,8 +1,29 @@
 {
-  "name": "@luno/nestjs",
+  "name": "@luno-oss/nestjs",
   "version": "0.1.0",
-  "description": "NestJS module for @luno/core — a LunoModule (forRoot/forRootAsync) + enroll controller + node socket",
+  "description": "NestJS module for @luno-oss/core — a LunoModule (forRoot/forRootAsync) + enroll controller + node socket",
   "license": "Apache-2.0",
+  "author": "Shivahari Gajurel",
+  "homepage": "https://github.com/cbagajurel/luno/tree/master/packages/nestjs#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cbagajurel/luno.git",
+    "directory": "packages/nestjs"
+  },
+  "bugs": {
+    "url": "https://github.com/cbagajurel/luno/issues"
+  },
+  "keywords": [
+    "luno",
+    "sms",
+    "sms-gateway",
+    "android",
+    "self-hosted",
+    "nestjs",
+    "module",
+    "adapter",
+    "di"
+  ],
   "type": "module",
   "sideEffects": [
     "./dist/index.js",
@@ -21,6 +42,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
@@ -31,18 +55,18 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "peerDependencies": {
-    "@luno/core": "workspace:*",
+    "@luno-oss/core": "workspace:^",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
     "@nestjs/core": "^10.0.0 || ^11.0.0",
     "reflect-metadata": "^0.2.0"
   },
   "dependencies": {
-    "@luno/protocol": "workspace:*",
+    "@luno-oss/protocol": "workspace:^",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@luno/core": "workspace:*",
-    "@luno/testing": "workspace:*",
+    "@luno-oss/core": "workspace:*",
+    "@luno-oss/testing": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",

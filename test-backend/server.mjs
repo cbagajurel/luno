@@ -43,6 +43,6 @@ server.listen(port, hostname, () => {
   console.log(`  ws   /ws       node connection`);
   console.log(
     `\n  Note: the node requires https/wss. For a phone over LAN, front this with a\n` +
-      `  TLS tunnel (cloudflared/ngrok) or use a debug build that allows cleartext.\n`,
+    `  TLS tunnel (cloudflared/ngrok) or use a debug build that allows cleartext.\n`,
   );
 });

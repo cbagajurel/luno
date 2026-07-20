@@ -28,7 +28,7 @@ function structuredCloneish<T>(value: T): T {
 /**
  * Reference store, and the one the conformance suite is written against. Useful
  * in tests and for a single-process deployment; anything durable wants a real
- * `@luno/store-*`.
+ * `@luno-oss/store-*`.
  */
 export function memoryStore(): LunoStore {
   const sessions = new Map<string, PairingSessionRecord>();

@@ -1,8 +1,8 @@
-import { encodeFrame } from '@luno/protocol';
-import type { Luno } from '@luno/core';
-import type { DeviceRecord, FrameSink, NodeSession } from '@luno/core';
-import { Hono } from 'hono';
-import type { UpgradeWebSocket, WSContext } from 'hono/ws';
+import { encodeFrame } from "@luno-oss/protocol";
+import type { Luno } from "@luno-oss/core";
+import type { DeviceRecord, FrameSink, NodeSession } from "@luno-oss/core";
+import { Hono } from "hono";
+import type { UpgradeWebSocket, WSContext } from "hono/ws";
 
 export interface LunoHonoOptions {
   luno: Luno;
@@ -23,16 +23,17 @@ export interface LunoHonoOptions {
 type Env = { Variables: { lunoDevice: DeviceRecord } };
 
 function bearer(header: string | undefined): string {
-  const match = /^Bearer\s+(.+)$/i.exec(header ?? '');
-  return match?.[1]?.trim() ?? '';
+  const match = /^Bearer\s+(.+)$/i.exec(header ?? "");
+  return match?.[1]?.trim() ?? "";
 }
 
 // A frame arrives as text on every runtime, but a socket may hand it back as bytes;
 // decode defensively so a binary-framing client still parses.
 function frameText(data: unknown): string {
-  if (typeof data === 'string') return data;
+  if (typeof data === "string") return data;
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
-  if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data as Uint8Array);
+  if (ArrayBuffer.isView(data))
+    return new TextDecoder().decode(data as Uint8Array);
   return String(data);
 }
 
@@ -61,15 +62,18 @@ function socketSink(ws: WSContext): FrameSink {
  */
 export function lunoHono(options: LunoHonoOptions): Hono<Env> {
   const { luno, upgradeWebSocket } = options;
-  const enrollPath = options.paths?.enroll ?? '/enroll';
-  const enrollStatusPath = options.paths?.enrollStatus ?? '/enroll/status';
-  const wsPath = options.paths?.ws ?? '/ws';
+  const enrollPath = options.paths?.enroll ?? "/enroll";
+  const enrollStatusPath = options.paths?.enrollStatus ?? "/enroll/status";
+  const wsPath = options.paths?.ws ?? "/ws";
 
   const app = new Hono<Env>();
 
   const handleEnroll = async (raw: Request): Promise<Response> => {
     const result = await luno.http.handle(raw);
-    return new Response(result.body, { status: result.status, headers: result.headers });
+    return new Response(result.body, {
+      status: result.status,
+      headers: result.headers,
+    });
   };
 
   app.post(enrollPath, (c) => handleEnroll(c.req.raw));
@@ -81,15 +85,18 @@ export function lunoHono(options: LunoHonoOptions): Hono<Env> {
     // which the node treats as "re-enroll required" and pauses on, rather than a
     // post-upgrade close it would reconnect through.
     async (c, next) => {
-      const device = await luno.connections.authorize(bearer(c.req.header('authorization')));
-      if (!device) return c.text('unauthorized', 401);
-      c.set('lunoDevice', device);
+      const device = await luno.connections.authorize(
+        bearer(c.req.header("authorization")),
+      );
+      if (!device) return c.text("unauthorized", 401);
+      c.set("lunoDevice", device);
       await next();
     },
     upgradeWebSocket((c) => {
-      const device = c.get('lunoDevice');
+      const device = c.get("lunoDevice");
       let sessionPromise: Promise<NodeSession> | null = null;
-      const open = (ws: WSContext) => (sessionPromise ??= luno.connections.open(device, socketSink(ws)));
+      const open = (ws: WSContext) =>
+        (sessionPromise ??= luno.connections.open(device, socketSink(ws)));
 
       return {
         onOpen: (_event, ws) => {
@@ -113,6 +120,10 @@ export function lunoHono(options: LunoHonoOptions): Hono<Env> {
 }
 
 /** Mounts {@link lunoHono} onto an existing app, under `basePath` (default `/`). */
-export function registerLuno(app: Hono, options: LunoHonoOptions, basePath = '/'): void {
+export function registerLuno(
+  app: Hono,
+  options: LunoHonoOptions,
+  basePath = "/",
+): void {
   app.route(basePath, lunoHono(options));
 }
