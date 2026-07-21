@@ -1,0 +1,6 @@
+First public build of the Luno node.
+
+• Pair with your own backend by QR code or pairing code
+• Send and receive SMS, including multipart messages
+• Delivery receipts, per-SIM signal, battery and network reporting
+• Durable outbox that survives reboots and network loss

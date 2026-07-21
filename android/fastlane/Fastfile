@@ -1,0 +1,138 @@
+default_platform(:android)
+
+REPO_ROOT = File.expand_path("../..", __dir__)
+
+# Play distributes the `full` flavor only. Both flavors share the applicationId
+# com.luno.gateway, so only one can occupy the listing — and it has to be the
+# one that works: a Play install is exempt from Android's restricted-settings
+# block, which is the whole reason `sendOnly` exists. `sendOnly` ships through
+# GitHub Releases for sideloaders (see docs/play-protect.md).
+PLAY_FLAVOR = "full"
+SIDELOAD_FLAVOR = "sendOnly"
+
+def pubspec_version_name
+  raw = File.read(File.join(REPO_ROOT, "pubspec.yaml"))[/^version:\s*(\S+)/, 1]
+  UI.user_error!("pubspec.yaml has no `version:` line") if raw.nil?
+  raw.split("+").first
+end
+
+# Play rejects a versionCode it has already seen, on any track. Asking Play what
+# it already has is the only bookkeeping that cannot drift — pubspec's `+1` is
+# not maintained per release and a run-number would reset if the repo moved.
+def next_build_number
+  override = ENV["LUNO_BUILD_NUMBER"].to_s
+  return override.to_i unless override.empty?
+
+  codes = %w[internal alpha beta production].flat_map do |track|
+    begin
+      google_play_track_version_codes(track: track)
+    rescue StandardError
+      [] # Track does not exist yet — expected before the first upload.
+    end
+  end
+  (codes.map(&:to_i).max || 0) + 1
+end
+
+def require_release_signing!
+  return if File.exist?(File.join(REPO_ROOT, "android", "key.properties"))
+  return unless ENV["LUNO_KEYSTORE_PATH"].to_s.empty?
+
+  UI.user_error!(
+    "No release signing configured. Gradle would fall back to the debug key " \
+    "and Play would reject the upload. Run tool/generate_upload_keystore.sh, " \
+    "or set LUNO_KEYSTORE_PATH / LUNO_KEYSTORE_PASSWORD / LUNO_KEY_ALIAS / " \
+    "LUNO_KEY_PASSWORD. See docs/publishing.md."
+  )
+end
+
+def flutter_build(target, flavor, build_number)
+  Dir.chdir(REPO_ROOT) do
+    sh(
+      "flutter", "build", target,
+      "--release",
+      "--flavor", flavor,
+      "--build-name", pubspec_version_name,
+      "--build-number", build_number.to_s
+    )
+  end
+end
+
+def play_bundle_path
+  File.join(REPO_ROOT, "build/app/outputs/bundle/#{PLAY_FLAVOR}Release/app-#{PLAY_FLAVOR}-release.aab")
+end
+
+platform :android do
+  desc "Build the Play AAB and dry-run the upload. Verifies signing, credentials"
+  desc "and store metadata without publishing anything."
+  lane :validate do
+    require_release_signing!
+    build_number = next_build_number
+    flutter_build("appbundle", PLAY_FLAVOR, build_number)
+
+    upload_to_play_store(
+      track: "internal",
+      aab: play_bundle_path,
+      validate_only: true,
+      release_status: "draft"
+    )
+    UI.success("Validated version #{pubspec_version_name} (#{build_number}). Nothing was published.")
+  end
+
+  desc "Build and upload to the internal test track. This is what a tag push runs."
+  lane :internal do
+    require_release_signing!
+    build_number = next_build_number
+    flutter_build("appbundle", PLAY_FLAVOR, build_number)
+
+    upload_to_play_store(
+      track: "internal",
+      aab: play_bundle_path,
+      release_status: "completed",
+      # Metadata is promoted deliberately via `fastlane metadata`, so a code
+      # release never silently rewrites the public listing.
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+    UI.success("Uploaded #{pubspec_version_name} (#{build_number}) to the internal track.")
+  end
+
+  desc "Promote an existing build between tracks. No rebuild, no re-upload."
+  desc "Example: fastlane promote from:internal to:production rollout:0.1"
+  lane :promote do |options|
+    from = options[:from] || "internal"
+    to = options[:to] || "production"
+    rollout = options[:rollout] || "0.1"
+
+    upload_to_play_store(
+      track: from,
+      track_promote_to: to,
+      track_promote_release_status: "inProgress",
+      rollout: rollout,
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+    UI.success("Promoted #{from} -> #{to} at #{(rollout.to_f * 100).round}% rollout.")
+  end
+
+  desc "Push the store listing, icon, feature graphic and screenshots. No binary."
+  lane :metadata do
+    upload_to_play_store(
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_changelogs: true
+    )
+  end
+
+  desc "Build the sideloadable sendOnly APK for GitHub Releases."
+  lane :sideload do
+    require_release_signing!
+    build_number = ENV["LUNO_BUILD_NUMBER"].to_s.empty? ? 1 : ENV["LUNO_BUILD_NUMBER"].to_i
+    flutter_build("apk", SIDELOAD_FLAVOR, build_number)
+    UI.success("build/app/outputs/apk/#{SIDELOAD_FLAVOR}Release/app-#{SIDELOAD_FLAVOR}-release.apk")
+  end
+end

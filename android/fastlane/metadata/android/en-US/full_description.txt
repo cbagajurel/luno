@@ -1,0 +1,32 @@
+Luno turns an Android phone into a communication node you own outright. Pair it with a server you run, and that server can send and receive SMS through the phone's own SIM — no third-party SMS provider, no per-message pricing, no message content leaving infrastructure you control.
+
+Luno is open source under Apache-2.0. The app talks only to the backend you point it at during pairing; there is no Luno-operated service, no account to create, and no telemetry.
+
+WHAT IT DOES
+
+• Sends SMS on command from your backend, including multipart (long) messages
+• Captures incoming SMS and forwards them to your backend
+• Reports delivery receipts, so you know what actually arrived
+• Streams device health: SIM state, per-SIM signal strength, battery and network
+• Runs as a persistent foreground service and restarts itself after reboot
+• Queues durably — messages survive process death, reconnects and flaky networks
+
+HOW IT WORKS
+
+You pair the phone once by scanning a QR code or entering a code issued by your backend. From then on the app maintains a secure WebSocket connection to that backend and acts on the commands it receives. Every credential is bound to the device's hardware-backed keystore, and message bodies and phone numbers are encrypted at rest.
+
+WHY THE SMS PERMISSIONS
+
+Luno's core and only purpose is relaying SMS on behalf of the device's owner. SEND_SMS is used to send the messages your own backend asks it to send. RECEIVE_SMS is used to capture inbound messages and forward them to that same backend. Message content is never shared with any third party, never used for advertising, and never sent anywhere other than the endpoint you configured yourself.
+
+WHO IT IS FOR
+
+Developers and small teams who need programmable SMS for OTPs, alerts and notifications, and who would rather use a phone and a SIM they already pay for than route it through a commercial gateway. Self-hosters who want message content to stay on their own infrastructure. Anyone operating in a market where local SMS APIs are expensive or unavailable.
+
+REQUIREMENTS
+
+• Android 8.0 or newer
+• An active SIM with an SMS plan
+• A server running the Luno protocol — official SDKs are published for Node.js, with adapters for Express, Fastify, Hono, NestJS, Next.js, Cloudflare Workers and Firebase
+
+Documentation, protocol specification and source: https://oss.nexneotech.com/luno

@@ -1,0 +1,5 @@
+package_name("com.luno.gateway")
+
+# The service-account credential is passed through the environment rather than
+# named here: SUPPLY_JSON_KEY (a path) or SUPPLY_JSON_KEY_DATA (the raw JSON).
+# See .env.example and docs/publishing.md.
