@@ -17,6 +17,9 @@ Future<bool> showLunoConfirm({
 }) async {
   final result = await showDialog<bool>(
     context: context,
+    // Same reason as showLunoSheet: the branch navigator is inside the shell
+    // Scaffold's body, so its barrier stops short of the floating nav bar.
+    useRootNavigator: true,
     barrierColor: Colors.black.withValues(alpha: 0.5),
     builder: (context) => _LunoDialog(
       title: title,

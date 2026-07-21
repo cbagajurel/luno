@@ -15,6 +15,10 @@ Future<T?> showLunoSheet<T>({
 }) {
   return showModalBottomSheet<T>(
     context: context,
+    // Screens live inside a StatefulShellRoute branch navigator, which sits in the
+    // shell Scaffold's *body* — a sheet pushed there paints under the floating nav
+    // bar, barrier and all. The root navigator is above the whole shell.
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
