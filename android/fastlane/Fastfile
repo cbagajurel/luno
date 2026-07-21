@@ -10,6 +10,36 @@ REPO_ROOT = File.expand_path("../..", __dir__)
 PLAY_FLAVOR = "full"
 SIDELOAD_FLAVOR = "sendOnly"
 
+require "json"
+
+# Without an explicit key, googleauth walks its default credential chain and
+# picks up gcloud's application-default credentials. When those are stale the
+# failure surfaces as `invalid_grant: Bad Request` from deep inside Signet,
+# which says nothing about the real problem — that no Play credential was set.
+def require_play_credentials!
+  return unless ENV["SUPPLY_JSON_KEY_DATA"].to_s.empty?
+
+  key = ENV["SUPPLY_JSON_KEY"].to_s
+  if key.empty?
+    UI.user_error!(
+      "No Play credential configured. Set SUPPLY_JSON_KEY to the service-account " \
+      "JSON path before running this lane:\n\n" \
+      "  set -a && source .env && set +a\n\n" \
+      "See docs/publishing.md."
+    )
+  end
+  UI.user_error!("SUPPLY_JSON_KEY points at #{key}, which does not exist.") unless File.exist?(key)
+
+  type = begin
+    JSON.parse(File.read(key))["type"]
+  rescue StandardError
+    nil
+  end
+  return if type == "service_account"
+
+  UI.user_error!("#{key} is not a service-account key (type: #{type.inspect}).")
+end
+
 def pubspec_version_name
   raw = File.read(File.join(REPO_ROOT, "pubspec.yaml"))[/^version:\s*(\S+)/, 1]
   UI.user_error!("pubspec.yaml has no `version:` line") if raw.nil?
@@ -26,8 +56,14 @@ def next_build_number
   codes = %w[internal alpha beta production].flat_map do |track|
     begin
       google_play_track_version_codes(track: track)
-    rescue StandardError
-      [] # Track does not exist yet — expected before the first upload.
+    rescue StandardError => e
+      # An auth or transport failure must never be mistaken for an empty track:
+      # swallowing it yields build number 1, which Play has already seen, and the
+      # upload dies later with a far more confusing error. Only the "no releases
+      # yet" case is benign — supply raises NoMethodError there, because it calls
+      # .flat_map on a nil releases list before its own `|| []` fallback.
+      raise if e.class.name =~ /Authorization|Signet|Timeout|Errno/
+      [] # Track has no releases yet — expected before the first upload.
     end
   end
   (codes.map(&:to_i).max || 0) + 1
@@ -65,6 +101,7 @@ platform :android do
   desc "Build the Play AAB and dry-run the upload. Verifies signing, credentials"
   desc "and store metadata without publishing anything."
   lane :validate do
+    require_play_credentials!
     require_release_signing!
     build_number = next_build_number
     flutter_build("appbundle", PLAY_FLAVOR, build_number)
@@ -80,6 +117,7 @@ platform :android do
 
   desc "Build and upload to the internal test track. This is what a tag push runs."
   lane :internal do
+    require_play_credentials!
     require_release_signing!
     build_number = next_build_number
     flutter_build("appbundle", PLAY_FLAVOR, build_number)
@@ -100,6 +138,7 @@ platform :android do
   desc "Promote an existing build between tracks. No rebuild, no re-upload."
   desc "Example: fastlane promote from:internal to:production rollout:0.1"
   lane :promote do |options|
+    require_play_credentials!
     from = options[:from] || "internal"
     to = options[:to] || "production"
     rollout = options[:rollout] || "0.1"
@@ -121,6 +160,7 @@ platform :android do
 
   desc "Push the store listing, icon, feature graphic and screenshots. No binary."
   lane :metadata do
+    require_play_credentials!
     upload_to_play_store(
       skip_upload_aab: true,
       skip_upload_apk: true,
