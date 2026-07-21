@@ -162,6 +162,12 @@ platform :android do
   lane :metadata do
     require_play_credentials!
     upload_to_play_store(
+      # The listing itself is global, not per-track, but supply still resolves a
+      # track to attach the upload to and defaults to production. On an app that
+      # has never shipped to production that lookup hits a nil release list and
+      # dies with `undefined method 'size' for nil`. Point it at a track that
+      # actually has a release.
+      track: "internal",
       skip_upload_aab: true,
       skip_upload_apk: true,
       skip_upload_changelogs: true
