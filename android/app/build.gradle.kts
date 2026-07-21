@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -6,6 +8,20 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Signing material comes from android/key.properties locally and from the
+// environment in CI. Absent both, release builds fall back to the debug key so
+// `flutter run --release` and the CI build matrix keep working — but such an
+// artifact is not uploadable, which `fastlane validate` is there to catch.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun signingValue(property: String, variable: String): String? =
+    keystoreProperties.getProperty(property) ?: System.getenv(variable)
+
+val releaseStoreFile = signingValue("storeFile", "LUNO_KEYSTORE_PATH")
 
 android {
     namespace = "com.luno.gateway"
@@ -74,11 +90,21 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = signingValue("storePassword", "LUNO_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "LUNO_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "LUNO_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 }

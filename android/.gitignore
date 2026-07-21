@@ -11,3 +11,11 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# The base64 of a keystore is the keystore. `**/*.jks` does not match it.
+**/*.jks.base64
+
+# fastlane run artifacts. Metadata and store graphics under fastlane/metadata/
+# are tracked on purpose — these are per-run output.
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
