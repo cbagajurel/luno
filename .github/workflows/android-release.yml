@@ -1,0 +1,162 @@
+name: Android Release
+
+# Tags shaped `v1.2.3`. The npm packages release through changesets, which tags
+# per package (`@luno-oss/core@1.2.3`), so the two schemes cannot collide.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      validate_only:
+        description: "Dry-run: build and check the upload without publishing"
+        type: boolean
+        default: true
+
+# A half-finished upload is worse than a late one, and a burned versionCode
+# cannot be reused.
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FLUTTER_VERSION: 3.41.4
+  JAVA_VERSION: "17"
+  FASTLANE_VERSION: 2.232.1
+
+jobs:
+  publish:
+    name: Build & upload to Play
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Named after a secret rather than the environment's purpose, because GitHub
+    # offers no way to rename an environment once created. It holds all five
+    # PLAY_* secrets; the name is cosmetic. Recreating it as `play-store` would
+    # mean re-entering every secret by hand.
+    environment: PLAY_KEYSTORE_BASE64
+    permissions:
+      contents: write # create the GitHub Release carrying the sendOnly APK
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # A tag that disagrees with pubspec produces a store listing labelled with
+      # a version nothing in the repo carries. Cheapest possible guard.
+      - name: Tag must match pubspec version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          pubspec=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml | tr -d ' ')
+          if [ "$tag" != "$pubspec" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version $tag but pubspec.yaml says $pubspec."
+            exit 1
+          fi
+          echo "Releasing $pubspec."
+
+      - run: flutter pub get --enforce-lockfile
+
+      # Play rejects nothing for a failing test, so this is the last gate that
+      # exists. The full Kotlin/lint matrix already ran on master via ci.yml.
+      - name: Test
+        run: flutter test --reporter=compact
+
+      - name: Install fastlane
+        run: gem install fastlane -v "$FASTLANE_VERSION" --no-document
+
+      # Both files are written outside the workspace so a later `git status` or
+      # an artifact upload can never pick them up.
+      - name: Materialise signing key and Play credentials
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          # Passed through the environment, never interpolated into the script:
+          # a password containing shell metacharacters would otherwise break the
+          # command, or worse.
+          KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 SERVICE_ACCOUNT_JSON KEYSTORE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is empty. See docs/publishing.md."
+              exit 1
+            fi
+          done
+          install -d -m 700 "$RUNNER_TEMP/signing"
+          base64 -d <<<"$KEYSTORE_BASE64" > "$RUNNER_TEMP/signing/upload.jks"
+          printf '%s' "$SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/signing/play.json"
+          chmod 600 "$RUNNER_TEMP/signing"/*
+          # Fail loudly here rather than letting Gradle silently fall back to
+          # the debug key and Play reject the result twenty minutes later.
+          keytool -list -keystore "$RUNNER_TEMP/signing/upload.jks" \
+            -storepass "$KEYSTORE_PASSWORD" >/dev/null
+          echo "Signing material ready."
+
+      - name: Upload to Play
+        working-directory: android
+        env:
+          SUPPLY_JSON_KEY: ${{ runner.temp }}/signing/play.json
+          LUNO_KEYSTORE_PATH: ${{ runner.temp }}/signing/upload.jks
+          LUNO_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+          LUNO_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+          LUNO_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.validate_only }}" = "true" ]; then
+            fastlane validate
+          else
+            fastlane internal
+          fi
+
+      # The sideload artifact. sendOnly shares an applicationId with full, so it
+      # cannot also live on Play — GitHub Releases is its distribution channel.
+      - name: Build the sendOnly APK
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: android
+        env:
+          LUNO_KEYSTORE_PATH: ${{ runner.temp }}/signing/upload.jks
+          LUNO_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+          LUNO_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+          LUNO_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+        run: fastlane sideload
+
+      - name: Publish the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && inputs.validate_only != true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/apk/sendOnlyRelease/app-sendOnly-release.apk
+          [ -f "$apk" ] || { echo "::error::$apk was not produced."; exit 1; }
+          gh release create "$GITHUB_REF_NAME" "$apk#Luno ${GITHUB_REF_NAME} (sendOnly APK)" \
+            --title "Luno $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "
+          The \`full\` build is on the Play internal track. This APK is the
+          \`sendOnly\` flavour for sideloading — it omits RECEIVE_SMS so it
+          installs without a Play Protect warning, and cannot receive SMS.
+          Sideloaded builds still need restricted settings allowed before
+          Android will grant SEND_SMS: https://oss.nexneotech.com/luno/docs/android/play-protect
+          "
+
+      - name: Scrub credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/signing"
