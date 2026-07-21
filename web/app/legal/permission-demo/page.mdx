@@ -1,0 +1,89 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Permission demonstration',
+  description:
+    'Video and written explanation of how the Luno Android app uses its SMS and foreground-service permissions, for Google Play review.',
+  openGraph: { images: '/og?title=Permission%20Demonstration' }
+}
+
+# Permission demonstration
+
+<Callout type="info">
+  This page exists for Google Play policy review. It shows how the Luno Android
+  app (`com.luno.gateway`) uses the permissions it declares.
+</Callout>
+
+## What the app does
+
+Luno turns an Android phone into an SMS gateway for **a server the device's
+owner runs themselves**. The owner pairs the phone with their own backend URL
+once. From then on:
+
+- the backend can ask the phone to **send** an SMS from its own SIM, and
+- SMS **received** by that SIM are forwarded back to the same backend.
+
+There is no Luno-operated service. Message content travels only between the
+phone and the endpoint the user configured. Nex NeoTech receives nothing.
+
+## The recording
+
+<video
+  controls
+  playsInline
+  preload="metadata"
+  width="360"
+  style={{ maxWidth: '100%', borderRadius: '12px', margin: '1.5rem 0' }}
+  src="/luno/demo/luno-remote-messaging.mp4"
+>
+  Your browser cannot play this video.
+  <a href="/luno/demo/luno-remote-messaging.mp4">Download it instead.</a>
+</video>
+
+Inbound SMS arriving on the device's SIM (Ncell, slot 1) are captured by the
+node and listed under **Received**, ready to be forwarded to the paired backend.
+Recipient numbers are blurred because the recording used a real handset.
+
+## Permissions, and why each is needed
+
+### `SEND_SMS`
+
+Sends the messages the user's own backend asks the device to send. This is the
+app's core purpose, not a secondary feature.
+
+### `RECEIVE_SMS`
+
+Captures inbound SMS so they can be forwarded to that same backend — the return
+half of the same gateway. Omitted entirely from the `sendOnly` build variant.
+
+Message content is never used for advertising, never sold, and never sent to any
+party other than the backend the user entered at pairing.
+
+### `FOREGROUND_SERVICE_REMOTE_MESSAGING`
+
+The node keeps a persistent connection to the user's backend so it can act the
+moment a message arrives in either direction. Android's `remoteMessaging`
+foreground-service type is defined as *transferring text messages from one
+device to another*, which is precisely this: messages move between the phone and
+the owner's server.
+
+The work cannot be deferred or batched. An inbound SMS, or a send command from
+the backend, arrives at an unpredictable moment and is only useful if handled
+immediately — a paused or restarted service means a missed or late message. A
+persistent notification shows connection and agent state the whole time the
+service runs, so the task is visible to the user while they are not in the app.
+
+## Reviewing the app yourself
+
+Luno is inert until paired: it does nothing until the user supplies a backend
+URL and pairing code, so the app cannot be exercised without a server that
+speaks its protocol. The recording above is provided for that reason.
+
+The complete source, including the wire protocol and the foreground service, is
+public at [github.com/cbagajurel/luno](https://github.com/cbagajurel/luno).
+
+## Related
+
+- [Privacy Policy](/legal/privacy)
+- [Terms of Service](/legal/terms) — including the prohibition on bulk and unsolicited messaging
+- [Data & account deletion](/legal/data-deletion)

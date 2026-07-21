@@ -86,7 +86,8 @@ export default {
     items: {
       privacy: 'Privacy Policy',
       terms: 'Terms of Service',
-      'data-deletion': 'Data & account deletion'
+      'data-deletion': 'Data & account deletion',
+      'permission-demo': 'Permission demonstration'
     }
   },
   docs: {
