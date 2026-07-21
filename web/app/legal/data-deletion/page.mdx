@@ -1,0 +1,86 @@
+import { Callout, Steps } from 'nextra/components'
+
+export const metadata = {
+  title: 'Data & account deletion',
+  description:
+    'How to delete data held by the Luno Android app, and why there is no Luno-operated account to delete.',
+  openGraph: { images: '/og?title=Data%20Deletion' }
+}
+
+# Data & account deletion
+
+<Callout type="info">
+  Luno has no accounts and no servers. There is no Luno-operated database
+  holding your data, so there is nothing for us to delete on your behalf — but
+  there *is* data on your phone and on your own backend, and this page explains
+  how to remove both.
+</Callout>
+
+## There is no Luno account
+
+Luno is an open-source app that connects a phone to **a backend you run
+yourself**. Installing it creates no account. Nex NeoTech operates no service
+that Luno talks to, receives no message content, and stores no personal data
+about you or the people you exchange messages with.
+
+The app communicates with exactly one endpoint: the backend URL you supply
+during pairing. Where that data goes, how long it is retained, and who can read
+it are decisions made by whoever operates that backend — which, for a
+self-hosted deployment, is you.
+
+## What the app stores on your device
+
+| Data | Where it lives | Why |
+| --- | --- | --- |
+| Outbound and inbound message bodies and phone numbers | Encrypted local database | The durable queue that survives reboots and network loss |
+| Pairing credential | Android hardware-backed keystore | Authenticates the device to your backend |
+| Device telemetry — SIM, signal, battery, network | In memory, forwarded to your backend | Fleet health reporting |
+| Diagnostic logs | In-memory ring buffer, phone numbers masked | The in-app log viewer |
+
+Message bodies and phone numbers are encrypted at rest with a key bound to the
+device's keystore. Nothing is written to shared or external storage, and nothing
+is readable by other apps.
+
+## Deleting the data on your device
+
+<Steps>
+
+### Unpair from inside the app
+
+Open **Settings → Unpair this device**. This performs a full node reset: it
+deletes the pairing credential, clears the outbox and inbox, drops any cached
+policy, disconnects from the backend, and cancels background work.
+
+### Or uninstall
+
+Uninstalling Luno removes its entire private storage directory, including the
+encrypted database and the keystore key. Android does this itself; no residue
+is left behind.
+
+</Steps>
+
+Either route is complete and irreversible. A backend operator can also trigger
+the same reset remotely by issuing a `revoke` or `wipe` command to the device.
+
+## Deleting the data on your backend
+
+Anything your backend recorded — message history, device registrations, delivery
+receipts — lives under your control and is outside the app's reach. Delete it
+using whatever tooling that deployment provides.
+
+If you are a **user of someone else's** Luno deployment rather than its
+operator, direct your deletion request to the organisation running it. They are
+the data controller; the Luno project is not.
+
+## Requests about the app itself
+
+The app collects nothing centrally, so there is no request we can action on your
+data. For anything else — a security report, a privacy question, or a
+clarification about this page — write to
+[support@nexneotech.com](mailto:support@nexneotech.com).
+
+## Related
+
+- [Privacy Policy](https://www.nexneotech.com/privacy)
+- [Terms of Service](https://www.nexneotech.com/terms)
+- [Security model](/docs/security) — how credentials and data at rest are protected

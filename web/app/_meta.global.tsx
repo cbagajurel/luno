@@ -77,6 +77,16 @@ export default {
     type: 'page',
     display: 'hidden'
   },
+  // Linked from the footer and from the Play listing's data-deletion field,
+  // not from the navbar.
+  legal: {
+    type: 'page',
+    title: 'Legal',
+    display: 'hidden',
+    items: {
+      'data-deletion': 'Data & account deletion'
+    }
+  },
   docs: {
     type: 'page',
     title: 'Documentation',

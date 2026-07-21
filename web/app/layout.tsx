@@ -4,7 +4,12 @@ import {
 } from "@components/command-palette";
 import { LunoLogo } from "@components/luno-logo";
 import { PlayStoreButton } from "@components/play-store-button";
-import { GITHUB_URL } from "@components/site";
+import {
+  DATA_DELETION_URL,
+  GITHUB_URL,
+  PRIVACY_URL,
+  TERMS_URL,
+} from "@components/site";
 import type { Metadata } from "next";
 import { Footer, Layout, Navbar } from "nextra-theme-docs";
 import { Head } from "nextra/components";
@@ -59,6 +64,15 @@ const navbar = (
 const footer = (
   <Footer className="flex-col items-center md:items-start">
     <p className="text-xs">Luno is open source, licensed under Apache-2.0.</p>
+    <nav className="mt-2 flex gap-4 text-xs">
+      <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
+        Privacy
+      </a>
+      <a href={TERMS_URL} target="_blank" rel="noreferrer">
+        Terms
+      </a>
+      <a href={DATA_DELETION_URL}>Data deletion</a>
+    </nav>
     <p className="mt-2 text-xs">
       © {new Date().getFullYear()} The Luno Project.
     </p>
