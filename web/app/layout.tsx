@@ -65,12 +65,8 @@ const footer = (
   <Footer className="flex-col items-center md:items-start">
     <p className="text-xs">Luno is open source, licensed under Apache-2.0.</p>
     <nav className="mt-2 flex gap-4 text-xs">
-      <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
-        Privacy
-      </a>
-      <a href={TERMS_URL} target="_blank" rel="noreferrer">
-        Terms
-      </a>
+      <a href={PRIVACY_URL}>Privacy</a>
+      <a href={TERMS_URL}>Terms</a>
       <a href={DATA_DELETION_URL}>Data deletion</a>
     </nav>
     <p className="mt-2 text-xs">

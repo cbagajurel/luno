@@ -1,0 +1,117 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Privacy Policy',
+  description:
+    'How the Luno Android app handles data. It collects nothing centrally: everything stays on your device or goes to the backend you configure.',
+  openGraph: { images: '/og?title=Privacy%20Policy' }
+}
+
+# Privacy Policy
+
+**Effective 21 July 2026.** Applies to the Luno Android application
+(`com.luno.gateway`), published by Nex NeoTech.
+
+<Callout type="info">
+  **The short version.** Luno collects no data about you. There is no Luno
+  server, no account, no analytics and no advertising. Your messages go from
+  your phone to the backend *you* configured, and nowhere else.
+</Callout>
+
+## What Luno is
+
+Luno turns an Android phone into an SMS gateway that a server of your choosing
+controls. During pairing you supply a backend URL. From then on the app talks to
+that endpoint and no other.
+
+Nex NeoTech does not operate a service that Luno connects to. We receive no
+message content, no phone numbers, no device identifiers, and no usage data. We
+cannot, because the app never contacts us.
+
+## Data we collect
+
+**None.** We operate no servers that the app communicates with, and the app
+contains no analytics, advertising, tracking or crash-reporting components.
+
+The application's full dependency list is public in the
+[source repository](https://github.com/cbagajurel/luno); it consists solely of
+Android platform libraries, an HTTP client, a local database, and UI libraries.
+
+## Data stored on your device
+
+Luno stores the following in its private application storage, readable by no
+other app:
+
+| Data | Purpose | Protection |
+| --- | --- | --- |
+| Outbound and inbound SMS content and phone numbers | The durable queue that survives reboots and network loss | Encrypted at rest with a hardware-backed Android Keystore key |
+| Pairing credential for your backend | Authenticating the device to your server | Bound to the Android Keystore |
+| Device telemetry — SIM state, signal strength, battery, network type | Fleet health reporting to your backend | Held in memory |
+| Diagnostic logs | The in-app log viewer | In-memory ring buffer; phone numbers are masked |
+
+Nothing is written to shared or external storage. Deduplication keys are stored
+unencrypted so the queue can detect repeats without decrypting message bodies.
+
+## Data sent to your backend
+
+The app transmits to the endpoint you configure, and only to that endpoint:
+
+- SMS message content and recipient or sender phone numbers
+- Delivery receipts and send status
+- Device status: SIM slots and carrier names, per-SIM signal strength, battery
+  level and charging state, network connectivity
+
+**How that data is then handled is determined by whoever operates that backend.**
+For a self-hosted deployment, that is you. If you use a Luno node belonging to
+an organisation, that organisation is the data controller and its privacy policy
+governs — not this one.
+
+Connections use TLS where your backend provides it. The app supports plaintext
+connections for local-network deployments; if you configure a plaintext
+endpoint, traffic to it is not encrypted in transit.
+
+## Permissions
+
+| Permission | Why |
+| --- | --- |
+| `SEND_SMS` | Sending the messages your backend asks the device to send |
+| `RECEIVE_SMS` | Capturing inbound SMS to forward to your backend. Absent from the `sendOnly` build |
+| `READ_PHONE_STATE` | Reading SIM slots, carrier and signal strength for status reporting |
+| `CAMERA` | Scanning a pairing QR code. Used only on the pairing screen; no image is stored or transmitted |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | Connecting to your backend and reporting connectivity |
+| `FOREGROUND_SERVICE`, `POST_NOTIFICATIONS`, `WAKE_LOCK` | Keeping the gateway running with the persistent notification Android requires |
+| `RECEIVE_BOOT_COMPLETED` | Restarting the gateway after a reboot so a paired node recovers unattended |
+
+Message content is used solely to relay messages on the device owner's behalf.
+It is never used for advertising, never sold, and never shared with any third
+party.
+
+## Children
+
+Luno is a developer and operations tool. It is not directed at children and has
+no content intended for them.
+
+## Retention and deletion
+
+Data on the device persists until you remove it. **Settings → Unpair node**
+clears the stored credential, the message queues and any cached policy, then
+disconnects. Uninstalling the app removes its private storage entirely.
+
+Full detail, including data held by your backend, is on the
+[Data & account deletion](/legal/data-deletion) page.
+
+## Changes
+
+Material changes will be published here with a revised effective date. Because
+the app has no telemetry, we cannot notify you in-app; the current version is
+always at this URL.
+
+## Contact
+
+[support@nexneotech.com](mailto:support@nexneotech.com)
+
+## Related
+
+- [Terms of Service](/legal/terms)
+- [Data & account deletion](/legal/data-deletion)
+- [Security model](/docs/security)

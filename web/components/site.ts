@@ -10,8 +10,9 @@ export const PLAY_STORE_URL =
 /**
  * Play Console requires a reachable privacy policy, and a data-deletion URL on
  * the Data safety form. These are the values entered there — changing one means
- * updating the listing too.
+ * updating the listing too. They are basePath-prefixed because the Play Console
+ * fields need absolute paths, not router-relative ones.
  */
-export const PRIVACY_URL = "https://www.nexneotech.com/privacy";
-export const TERMS_URL = "https://www.nexneotech.com/terms";
+export const PRIVACY_URL = "/luno/legal/privacy";
+export const TERMS_URL = "/luno/legal/terms";
 export const DATA_DELETION_URL = "/luno/legal/data-deletion";

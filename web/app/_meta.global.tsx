@@ -84,6 +84,8 @@ export default {
     title: 'Legal',
     display: 'hidden',
     items: {
+      privacy: 'Privacy Policy',
+      terms: 'Terms of Service',
       'data-deletion': 'Data & account deletion'
     }
   },

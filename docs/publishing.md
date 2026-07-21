@@ -68,8 +68,9 @@ At [play.google.com/console](https://play.google.com/console):
 1. **Create app** — name "Luno", English (US), App, Free.
 2. **Release → Setup → App signing** — accept **Play App Signing**. Google holds
    the real signing key; your upload key only authenticates uploads.
-3. Complete **App content**: privacy policy `https://www.nexneotech.com/privacy`,
-   ads declaration, content rating questionnaire, target audience, data safety.
+3. Complete **App content**: ads declaration, content rating questionnaire,
+   target audience, and data safety. The privacy policy URL is
+   `https://oss.nexneotech.com/luno/legal/privacy`.
 4. In **Data safety**, set the account-deletion URL to
    `https://oss.nexneotech.com/luno/legal/data-deletion`.
 5. **App content → Sensitive app permissions** — complete the Call log & SMS
