@@ -92,9 +92,9 @@ const CommandPaletteContext = createContext<(() => void) | null>(null);
 // its state, and its ⌘K listener must stay singletons here — otherwise both
 // instances open on ⌘K and closing one leaves the other stacked on top.
 export const CommandPaletteProvider: FC<{
-  pages: DocPage[];
   children: ReactNode;
-}> = ({ pages, children }) => {
+}> = ({ children }) => {
+  const [pages, setPages] = useState<DocPage[]>([]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PagefindResult[]>([]);
@@ -113,6 +113,25 @@ export const CommandPaletteProvider: FC<{
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // Fetched on first open rather than passed down from the layout, so the page
+  // list stays out of every route's RSC payload. See app/doc-pages/route.ts.
+  useEffect(() => {
+    if (!open || pages.length) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(addBasePath("/doc-pages"));
+        const data: DocPage[] = await response.json();
+        if (!cancelled) setPages(data);
+      } catch {
+        /* jump-to-page degrades to content search */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, pages.length]);
 
   useEffect(() => {
     const value = deferredQuery.trim();

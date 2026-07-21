@@ -2,7 +2,6 @@ import {
   CommandPaletteProvider,
   CommandPaletteTrigger,
 } from "@components/command-palette";
-import { getDocPages } from "@components/get-doc-pages";
 import { LunoLogo } from "@components/luno-logo";
 import { PlayStoreButton } from "@components/play-store-button";
 import { GITHUB_URL } from "@components/site";
@@ -67,12 +66,12 @@ const footer = (
 );
 
 const RootLayout: FC<{ children: ReactNode }> = async ({ children }) => {
-  const [pageMap, docPages] = await Promise.all([getPageMap(), getDocPages()]);
+  const pageMap = await getPageMap();
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <Head />
       <body>
-        <CommandPaletteProvider pages={docPages}>
+        <CommandPaletteProvider>
           <Layout
             navbar={navbar}
             pageMap={pageMap}
