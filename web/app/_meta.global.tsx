@@ -2,6 +2,7 @@ import type { MetaRecord } from 'nextra'
 
 const GETTING_STARTED: MetaRecord = {
   index: 'Overview',
+  quickstart: '',
   installation: '',
   pairing: '',
   'first-message': ''
@@ -39,10 +40,22 @@ const PROTOCOL: MetaRecord = {
   versioning: ''
 }
 
-const BACKEND_SDK: MetaRecord = {
+const ADAPTERS = {
+  index: 'Overview',
+  hono: 'Hono',
+  express: 'Express',
+  fastify: 'Fastify',
+  nestjs: 'NestJS',
+  cloudflare: 'Cloudflare Workers',
+  nextjs: 'Next.js',
+  firebase: 'Firebase',
+  custom: 'Writing your own'
+}
+
+const BACKEND_SDK = {
   index: 'Overview',
   core: '',
-  adapters: '',
+  adapters: { title: 'Adapters', items: ADAPTERS },
   stores: '',
   testing: ''
 }
@@ -54,6 +67,7 @@ const SECURITY: MetaRecord = {
 }
 
 const OPERATIONS: MetaRecord = {
+  index: 'Overview',
   'device-management': '',
   troubleshooting: ''
 }

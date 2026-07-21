@@ -1,0 +1,60 @@
+import { Cards, Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Operations',
+  description:
+    'Running Luno nodes in production: fleet management, revocation, health signals, and diagnosing the failures that only appear on real hardware.',
+  openGraph: { images: '/og?title=Operations' }
+}
+
+# Operations
+
+Getting one phone to send one message is the easy part. Keeping a fleet of
+handsets alive for months — through reboots, OEM battery managers, carrier
+throttling and SIM expiry — is the part that needs operational habits.
+
+## What actually goes wrong
+
+In rough order of how often it bites, the failures are not the ones the code
+worries about:
+
+| Symptom | Usual cause |
+| --- | --- |
+| Device silently stops sending after hours or days | OEM battery management killed the foreground service |
+| Messages stick at `sent`, never `delivered` | The carrier route returns no delivery report; this is normal |
+| Device shows offline but the phone looks fine | Wi-Fi captive portal, or a network that validates but does not route |
+| Sends start failing in bulk | Carrier anti-spam throttling on a consumer plan |
+| Device cannot reconnect after working fine | Credential revoked, or `secret` rotated on the server |
+
+Only the last of those is a Luno bug surface. The rest are properties of running
+on consumer hardware and a consumer SIM, and the docs below are mostly about
+recognising them quickly.
+
+<Callout type="warning">
+  A node that has been killed by the OS is not detectable from the server side
+  as anything other than "offline". Treat sustained offline time as an alert,
+  not a curiosity — the [watchdog](/docs/concepts/reliability) revives the agent
+  in most cases, but not all OEMs allow it.
+</Callout>
+
+## Health signals worth alerting on
+
+The node reports these continuously; your backend decides which matter.
+
+- **Presence.** Missing heartbeats past `presenceTimeoutMs` marks a device
+  offline. This is the single most useful alert.
+- **Battery.** A device that is not charging is a device that will stop.
+- **Signal.** Sustained low signal predicts send failures before they happen.
+- **Queue depth.** A growing outbox means sends are being accepted faster than
+  the radio drains them.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Device management" href="/docs/operations/device-management" arrow>
+    Enrolling, monitoring, configuring and revoking devices across a fleet.
+  </Cards.Card>
+  <Cards.Card title="Troubleshooting" href="/docs/operations/troubleshooting" arrow>
+    Symptom-first diagnosis, and the logs that tell you which layer failed.
+  </Cards.Card>
+</Cards>

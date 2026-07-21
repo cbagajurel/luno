@@ -70,7 +70,7 @@ reaches the UI intact with its message, rather than being flattened into
 ## Keeping two implementations honest
 
 The protocol has two implementations — Kotlin in the node, TypeScript in
-[`@luno/protocol`](/docs/backend-sdk) — and they are cross-checked against a
+[`@luno-oss/protocol`](/docs/backend-sdk) — and they are cross-checked against a
 shared fixture corpus. The same `fixtures/frames.json` is read by the node's
 `ProtocolFixturesTest` and by the TypeScript suite, both asserting byte-identical
 round-trips.

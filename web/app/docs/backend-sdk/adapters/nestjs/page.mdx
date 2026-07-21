@@ -1,0 +1,115 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'NestJS',
+  description:
+    'Wire the Luno engine into a Nest container with LunoModule and the LUNO injection token.',
+  openGraph: { images: '/og?title=NestJS' }
+}
+
+# NestJS
+
+The NestJS adapter wires the engine through DI with a `LunoModule` and a `LUNO`
+injection token, so the engine composes with the rest of your container instead
+of sitting beside it.
+
+## Install
+
+```sh
+npm install @luno-oss/core @luno-oss/nestjs
+```
+
+## Register the module
+
+`forRoot` binds an engine you built:
+
+```ts
+import { Module } from '@nestjs/common'
+import { LunoModule } from '@luno-oss/nestjs'
+import { createLuno, memoryStore } from '@luno-oss/core'
+
+@Module({
+  imports: [
+    LunoModule.forRoot({
+      luno: createLuno({
+        store: memoryStore(),
+        secret: process.env.LUNO_SECRET!
+      })
+    })
+  ]
+})
+export class AppModule {}
+```
+
+`forRootAsync` builds one from a factory, so it can inject `ConfigService`:
+
+```ts
+LunoModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) =>
+    createLuno({
+      store: postgresStore(pool),
+      secret: config.getOrThrow('LUNO_SECRET')
+    })
+})
+```
+
+Either way the enrol controller is registered and `LUNO` is exported for your
+own providers.
+
+## Attach the socket
+
+The socket goes onto Nest's underlying HTTP server, separately from the module:
+
+```ts
+import { NestFactory } from '@nestjs/core'
+import { LUNO, attachLunoWebSocket, type Luno } from '@luno-oss/nestjs'
+
+const app = await NestFactory.create(AppModule)
+attachLunoWebSocket(app.getHttpServer(), app.get<Luno>(LUNO))
+await app.listen(3000)
+```
+
+<Callout type="info">
+  This is deliberately not a `@WebSocketGateway`. The Luno protocol is raw
+  frames, not the socket.io event shape a gateway imposes — bridging the raw
+  server is both simpler and correct here.
+</Callout>
+
+## Inject the engine
+
+```ts
+import { Inject, Injectable } from '@nestjs/common'
+import { LUNO, type Luno } from '@luno-oss/nestjs'
+
+@Injectable()
+export class AlertService {
+  constructor(@Inject(LUNO) private readonly luno: Luno) {}
+
+  notify(deviceId: string, to: string) {
+    return this.luno.sms.send({ deviceId, to, body: 'Alert' })
+  }
+}
+```
+
+<Callout type="warning">
+  Guard your own controllers. The module exposes only the node-facing enrol
+  routes; anything that reaches `luno.sms.send` is yours to authenticate. See
+  [the two axes](/docs/backend-sdk/core#authentication--two-axes).
+</Callout>
+
+## API
+
+| Export | Purpose |
+| --- | --- |
+| `LunoModule.forRoot({ luno })` | Registers the engine and enrol controller |
+| `LunoModule.forRootAsync({ useFactory, inject?, imports? })` | The same, built from a factory |
+| `LUNO` | The injection token for `Luno` |
+| `attachLunoWebSocket(server, luno, options?)` | Attaches `WS /ws` |
+
+## Next
+
+- [Express](/docs/backend-sdk/adapters/express) — the same socket bridge, unwrapped
+- [Core API](/docs/backend-sdk/core) — what you get on the injected engine
+- [Testing](/docs/backend-sdk/testing) — run a fake node against it

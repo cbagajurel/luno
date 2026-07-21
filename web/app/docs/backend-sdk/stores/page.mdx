@@ -17,21 +17,21 @@ rather than an aspiration.
 
 | Store | Package | Use |
 | --- | --- | --- |
-| `memoryStore()` | `@luno/core` | Development and tests. Loses everything on restart |
-| `PostgresStore` | `@luno/store-postgres` | Production. Driver-agnostic |
+| `memoryStore()` | `@luno-oss/core` | Development and tests. Loses everything on restart |
+| `postgresStore` | `@luno-oss/store-postgres` | Production. Driver-agnostic |
 
 ```ts
-import { createLuno } from '@luno/core'
-import { PostgresStore } from '@luno/store-postgres'
+import { createLuno } from '@luno-oss/core'
+import { postgresStore } from '@luno-oss/store-postgres'
 
 const luno = createLuno({
-  store: new PostgresStore(pool),
+  store: postgresStore(pool),
   secret: process.env.LUNO_SECRET!
 })
 ```
 
 <Callout type="info">
-  `memoryStore()` lives inside `@luno/core` rather than in its own package. A
+  `memoryStore()` lives inside `@luno-oss/core` rather than in its own package. A
   separate package would depend on core while core's own tests depend on it, and
   that build cycle buys nothing — keeping it inside also means `createLuno`
   works the moment the package is installed.
@@ -87,27 +87,27 @@ interface PairingSessionStore {
 }
 ```
 
-In `@luno/store-postgres`, `claim()` is a single conditional
+In `@luno-oss/store-postgres`, `claim()` is a single conditional
 `UPDATE … WHERE remaining > 0 … RETURNING`, which Postgres makes linearizable
 without an explicit transaction.
 
 ## Conformance
 
 Every store implementation must pass the suite exported from
-`@luno/testing/store`, which includes a concurrency test that hammers `claim()`
+`@luno-oss/testing/store`, which includes a concurrency test that hammers `claim()`
 in parallel and asserts the invariant holds.
 
 ```ts
 import { describe } from 'vitest'
-import { storeConformance } from '@luno/testing/store'
-import { PostgresStore } from '@luno/store-postgres'
+import { describeStoreConformance } from '@luno-oss/testing/store'
+import { postgresStore } from '@luno-oss/store-postgres'
 
-describe('PostgresStore', () => {
-  storeConformance(() => new PostgresStore(testPool))
+describe('postgresStore', () => {
+  describeStoreConformance(() => postgresStore(testPool))
 })
 ```
 
-`@luno/store-postgres` passes it — including a 60-way concurrent-claim test —
+`@luno-oss/store-postgres` passes it — including a 60-way concurrent-claim test —
 against real Postgres semantics via PGlite.
 
 <Callout type="info">
@@ -121,7 +121,7 @@ against real Postgres semantics via PGlite.
 1. Implement the storage ports.
 2. Make `claim()` linearizable using whatever primitive your database offers —
    a transaction, a conditional update, or a compare-and-swap loop.
-3. Run `storeConformance` against it.
+3. Run `describeStoreConformance` against it.
 4. Run the [fake node](/docs/backend-sdk/testing) end to end through an adapter
    with your store behind it.
 

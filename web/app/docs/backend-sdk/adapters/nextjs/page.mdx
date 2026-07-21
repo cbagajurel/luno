@@ -1,0 +1,187 @@
+import { Callout, Steps } from "nextra/components";
+
+export const metadata = {
+  title: "Next.js",
+  description:
+    "Run Luno on Next.js with no adapter at all — route handlers talk to the core directly, and a custom server carries the session socket.",
+  openGraph: { images: "/og?title=Next.js" },
+};
+
+# Next.js
+
+There is no `@luno-oss/nextjs` package, and there does not need to be. A Next.js
+route handler receives a real `Request`, and `luno.http.handle` accepts a
+structural `{ method, url, json() }` — so a `Request` satisfies it directly. The
+entire enrolment surface is two files and no glue.
+
+<Callout type="info">
+  This is the test of whether the core's boundaries are right. A runtime that
+  hands you web-standard objects should need no adapter, and Next.js is that
+  runtime.
+</Callout>
+
+## Enrolment
+
+<Steps>
+### Create the engine once
+
+Next.js reloads modules in development, so hold the engine on `globalThis` or
+you will mint a new one — and a new in-memory store — on every edit.
+
+```ts filename="lib/luno.ts"
+import { createLuno, memoryStore } from "@luno-oss/core";
+
+const globalForLuno = globalThis as unknown as {
+  luno?: ReturnType<typeof createLuno>;
+};
+
+export const luno =
+  globalForLuno.luno ??
+  createLuno({
+    store: memoryStore(), // postgresStore(pool) in production
+    secret: process.env.LUNO_SECRET!,
+    wsUrl: process.env.LUNO_WS_URL, // where the node should open its socket
+  });
+
+if (process.env.NODE_ENV !== "production") globalForLuno.luno = luno;
+```
+
+### Route the two enrolment endpoints
+
+One catch-all handles both, because the core routes on the path itself:
+
+```ts filename="app/api/luno/[...luno]/route.ts"
+import { luno } from "@/lib/luno";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request) {
+  const result = await luno.http.handle(request);
+  return new Response(result.body, {
+    status: result.status,
+    headers: result.headers,
+  });
+}
+```
+
+That serves `POST /api/luno/enroll` and `POST /api/luno/enroll/status`. Anything
+else under the prefix returns a `404` from the core, so the catch-all is safe.
+
+### Point the node at the prefix
+
+Pair with `backendUrl` set to the mount point, not the site root:
+
+```ts
+await luno.pairing.createSession({
+  label: "Warehouse phone 1",
+  backendUrl: "https://app.example.com/api/luno",
+});
+```
+
+</Steps>
+
+<Callout type="warning">
+  Set `runtime = 'nodejs'`. The engine's defaults use Web Crypto and work on the
+  edge runtime, but your **store** usually will not — most database drivers are
+  Node-only.
+</Callout>
+
+## Server actions and your own routes
+
+The operator API is just method calls, so it works anywhere on the server:
+
+```ts filename="app/actions.ts"
+"use server";
+import { luno } from "@/lib/luno";
+import { auth } from "@/lib/auth";
+
+export async function sendSms(deviceId: string, to: string, body: string) {
+  const user = await auth();
+  if (!user || !(await userOwnsDevice(user.id, deviceId)))
+    throw new Error("forbidden");
+
+  const message = await luno.sms.send({ deviceId, to, body });
+  return { id: message.id, status: message.status };
+}
+```
+
+<Callout type="error">
+  A server action is a public HTTP endpoint. `luno.sms.send` sends to whoever
+  reaches it, so authenticate and authorize inside the action — see [the two
+  axes](/docs/backend-sdk/core#authentication--two-axes).
+</Callout>
+
+## The session socket
+
+This is the part that depends on how you deploy, because Next.js route handlers
+cannot upgrade a WebSocket.
+
+### Self-hosted, with a custom server
+
+Run Next behind your own `http.Server` and attach the socket to it. The bridge
+in `@luno-oss/express` is plain `node:http` + `ws` and does not depend on
+Express, so it works here unchanged:
+
+```ts filename="server.ts"
+import { createServer } from "node:http";
+import next from "next";
+import { attachLunoWebSocket } from "@luno-oss/express";
+import { luno } from "./lib/luno";
+
+const app = next({ dev: process.env.NODE_ENV !== "production" });
+const handle = app.getRequestHandler();
+
+await app.prepare();
+
+const server = createServer((req, res) => handle(req, res));
+
+attachLunoWebSocket(server, luno, {
+  path: "/ws",
+  // Next's dev HMR uses its own upgrade; hand it back rather than dropping it.
+  onOtherUpgrade: (req, socket, head) =>
+    app.getUpgradeHandler()(req, socket, head),
+});
+
+server.listen(3000);
+```
+
+```sh
+node --experimental-strip-types server.ts
+```
+
+This is a complete node backend: enrolment through route handlers, session
+socket through the custom server, one shared engine between them.
+
+<Callout type="warning">
+  `onOtherUpgrade` is not optional in development. `attachLunoWebSocket` owns
+  the server's `upgrade` event, so without it Next's HMR socket is dropped and
+  fast refresh stops working.
+</Callout>
+
+### On Vercel
+
+Vercel functions are request-scoped and cannot hold a socket open. Enrolment
+works exactly as above; the socket needs somewhere that stays alive. Two shapes
+work, and both leave your Next.js code unchanged:
+
+| Approach                      | How it looks                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Companion socket service**  | A small [Hono](/docs/backend-sdk/adapters/hono) or [Express](/docs/backend-sdk/adapters/express) process on Fly, Railway, Render or Cloud Run. Point `wsUrl` at it, and share the database through the store. |
+| **Cloudflare Durable Object** | A [Workers](/docs/backend-sdk/adapters/cloudflare) deployment holding one DO per device, with Next.js talking to the same store.                                                                              |
+
+The engines must share a **store**, since that is where devices, credentials and
+messages live. Two `createLuno` instances over one Postgres behave as one system.
+
+<Callout type="info">
+  Sending from Vercel while the socket lives elsewhere works without any extra
+  wiring: `luno.sms.send` persists the command first, and the process holding
+  the socket dispatches it. That is the same path an offline device takes, so it
+  is already the well-tested one.
+</Callout>
+
+## Next
+
+- [Express](/docs/backend-sdk/adapters/express) — the socket bridge in detail
+- [Firebase](/docs/backend-sdk/adapters/firebase) — the same split, on Google's platform
+- [Stores](/docs/backend-sdk/stores) — what two processes must share

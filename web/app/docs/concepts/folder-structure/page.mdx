@@ -22,7 +22,7 @@ sms_gateway/
 │   └── luno_api.dart        Single schema: HostApi + FlutterApi + data classes
 ├── lib/                     Flutter (UI only)
 ├── android/                 Native Android node (the actual agent)
-├── packages/                @luno/* server SDK (TypeScript)
+├── packages/                @luno-oss/* server SDK (TypeScript)
 ├── test/                    Dart unit and widget tests
 ├── web/                     This documentation site
 └── pubspec.yaml  analysis_options.yaml
@@ -158,10 +158,10 @@ This is where the real system lives.
 
 ```
 packages/
-├── protocol/        @luno/protocol       zero-dependency wire types + codecs
-├── core/            @luno/core           all business logic; depends only on protocol
-├── testing/         @luno/testing        conformance suite every impl must pass
-├── store-postgres/  @luno/store-postgres durable LunoStore
+├── protocol/        @luno-oss/protocol       zero-dependency wire types + codecs
+├── core/            @luno-oss/core           all business logic; depends only on protocol
+├── testing/         @luno-oss/testing        conformance suite every impl must pass
+├── store-postgres/  @luno-oss/store-postgres durable LunoStore
 ├── hono/  express/  fastify/  nestjs/  cloudflare/   thin runtime adapters
 ```
 

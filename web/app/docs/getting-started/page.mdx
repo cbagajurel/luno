@@ -13,6 +13,12 @@ This section takes you from nothing to a phone that sends a message on command
 from your own server. It is four steps, and the whole path is meant to take
 under an hour.
 
+<Callout type="info">
+  In a hurry? The [Quickstart](/docs/getting-started/quickstart) is the whole
+  path compressed into one runnable file — install, pair, send, receive — with
+  the reasoning stripped out. The pages below are the same ground, explained.
+</Callout>
+
 ## What you need
 
 - **An Android device**, API 26 (Android 8.0) or newer, with an active SIM and a
@@ -24,8 +30,8 @@ under an hour.
   sideloading has real consequences on Android 15+, see [Play
   Protect](/docs/android/play-protect).
 - **A server that speaks the Luno protocol.** The fastest route is the
-  [`@luno/*` SDK](/docs/backend-sdk), which implements the server half for you
-  and runs on Node, Bun, Deno or Cloudflare Workers.
+  [`@luno-oss/*` SDK](/docs/backend-sdk), which implements the server half for
+  you and runs on Node, Bun, Deno or Cloudflare Workers.
 - **HTTPS.** The node refuses plaintext transport. For local development a
   tunnel (`cloudflared`, `ngrok`, `tailscale funnel`) is the usual answer;
   `http://` is permitted only by debug builds on a LAN.

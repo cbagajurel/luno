@@ -1,0 +1,115 @@
+import { Callout, Tabs } from 'nextra/components'
+
+export const metadata = {
+  title: 'Hono',
+  description:
+    'Mount Luno on Hono — one fetch-native handler that runs unchanged on Node, Cloudflare Workers, Deno and Bun.',
+  openGraph: { images: '/og?title=Hono' }
+}
+
+# Hono
+
+Hono is fetch-native, so the same handler runs on Node, Workers, Deno and Bun.
+Only the `upgradeWebSocket` helper differs per runtime, and you pass it in —
+which is the whole reason this adapter is the thinnest of the set.
+
+## Install
+
+```sh
+npm install @luno-oss/core @luno-oss/hono hono
+```
+
+Plus the server and WebSocket helpers for your runtime — on Node,
+`@hono/node-server` and `@hono/node-ws`.
+
+## Mount it
+
+<Tabs items={['Node', 'Cloudflare', 'Deno', 'Bun']}>
+  <Tabs.Tab>
+```ts
+import { serve } from '@hono/node-server'
+import { createNodeWebSocket } from '@hono/node-ws'
+import { Hono } from 'hono'
+import { createLuno, memoryStore } from '@luno-oss/core'
+import { registerLuno } from '@luno-oss/hono'
+
+const luno = createLuno({
+  store: memoryStore(),
+  secret: process.env.LUNO_SECRET!
+})
+
+const app = new Hono()
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
+registerLuno(app, { luno, upgradeWebSocket })
+
+const server = serve({ fetch: app.fetch, port: 3000 })
+injectWebSocket(server)
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```ts
+import { upgradeWebSocket } from 'hono/cloudflare-workers'
+registerLuno(app, { luno, upgradeWebSocket })
+```
+
+On Workers, hold the session in a Durable Object — see
+[Cloudflare](/docs/backend-sdk/adapters/cloudflare).
+  </Tabs.Tab>
+  <Tabs.Tab>
+```ts
+import { upgradeWebSocket } from 'hono/deno'
+registerLuno(app, { luno, upgradeWebSocket })
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```ts
+import { createBunWebSocket } from 'hono/bun'
+const { upgradeWebSocket, websocket } = createBunWebSocket()
+registerLuno(app, { luno, upgradeWebSocket })
+```
+
+Pass `websocket` to `Bun.serve` alongside `app.fetch`.
+  </Tabs.Tab>
+</Tabs>
+
+## API
+
+| Export | Purpose |
+| --- | --- |
+| `lunoHono(options)` | Returns a standalone `Hono` app carrying all three routes |
+| `registerLuno(app, options, basePath?)` | Mounts that app onto one you already have |
+
+```ts
+interface LunoHonoOptions {
+  luno: Luno
+  upgradeWebSocket: UpgradeWebSocket
+  paths?: { enroll?: string; enrollStatus?: string; ws?: string }
+}
+```
+
+Paths default to `/enroll`, `/enroll/status` and `/ws`. Mount under a prefix
+with `registerLuno(app, options, '/api/luno')` — just make sure the URL you
+give the node at pairing time matches.
+
+## Serving it standalone
+
+```ts
+import { lunoHono } from '@luno-oss/hono'
+
+const app = lunoHono({ luno, upgradeWebSocket })
+```
+
+Use this when Luno is the whole service. Use `registerLuno` when it is one part
+of a larger app.
+
+<Callout type="info">
+  The REST routes hand `c.req.raw` — a real `Request` — straight to
+  `luno.http.handle`, with no shim at all. That is the payoff of the core
+  accepting a structural `{ method, url, json() }`.
+</Callout>
+
+## Next
+
+- [Quickstart](/docs/getting-started/quickstart) — a complete runnable Hono server
+- [Cloudflare](/docs/backend-sdk/adapters/cloudflare) — the Durable Object shape
+- [Testing](/docs/backend-sdk/testing) — run a fake node against it

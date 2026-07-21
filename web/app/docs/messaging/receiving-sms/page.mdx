@@ -80,14 +80,8 @@ a device or a radio.
 Handled server-side with:
 
 ```ts
-const luno = createLuno({
-  store,
-  secret: process.env.LUNO_SECRET!,
-  onEvent: {
-    'sms.received': async msg => {
-      await db.messages.insert({ from: msg.from, body: msg.body })
-    }
-  }
+luno.on('sms.received', async ({ deviceId, from, body, subscriptionId, receivedAt, parts }) => {
+  await db.messages.insert({ deviceId, from, body, receivedAt })
 })
 ```
 

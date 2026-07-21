@@ -34,18 +34,18 @@ and renders the verdict, enforcing no expiry, usage limit, revocation or
 approval rule of its own. Every enrolment policy is backend configuration rather
 than an app release.
 
-**The backend SDK — all five phases.** `@luno/protocol` cross-checked against
-the Kotlin codec over a shared fixture corpus; `@luno/core` implementing pairing,
+**The backend SDK — all five phases.** `@luno-oss/protocol` cross-checked against
+the Kotlin codec over a shared fixture corpus; `@luno-oss/core` implementing pairing,
 enrolment, device management, the handshake and messaging behind injected ports;
-`@luno/testing` shipping a scriptable fake node and the store conformance kit;
-`@luno/store-postgres` passing conformance against real Postgres semantics; and
+`@luno-oss/testing` shipping a scriptable fake node and the store conformance kit;
+`@luno-oss/store-postgres` passing conformance against real Postgres semantics; and
 five framework adapters riding the core unchanged — Hono, Express, Fastify,
 NestJS and Cloudflare Workers.
 
 <Callout type="info">
   Phases 4 and 5 are the proof the abstraction generalises: five frameworks and
   a real database, spanning fetch-native, classic-Node and edge runtimes — not
-  one of which required a change to `@luno/core`.
+  one of which required a change to `@luno-oss/core`.
 </Callout>
 
 ## Next
@@ -93,9 +93,9 @@ with no change to the queue, protocol or UI. They are not in v1.
 **A hosted Luno service.** There is no Luno cloud and none is planned. Your
 backend is the only server involved.
 
-**Client SDKs.** `@luno/react`, `@luno/flutter`, `@luno/go` would talk to *your*
+**Client SDKs.** `@luno-oss/react`, `@luno-oss/flutter`, `@luno-oss/go` would talk to *your*
 backend, never to a node directly — the backend holds the privileged position
-and all node credentials. They would consume `@luno/protocol` for types only.
+and all node credentials. They would consume `@luno-oss/protocol` for types only.
 Anticipated, not scheduled.
 
 ## Long-term direction

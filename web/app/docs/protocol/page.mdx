@@ -60,7 +60,7 @@ revoked credential does not become a denial-of-service against your own server.
 
 The protocol has a Kotlin implementation in the node (`ProtocolCodec`,
 `kotlinx.serialization`) and a TypeScript one in
-[`@luno/protocol`](/docs/backend-sdk). They are cross-checked against a shared
+[`@luno-oss/protocol`](/docs/backend-sdk). They are cross-checked against a shared
 fixture corpus — the same `fixtures/frames.json` is read by the node's
 `ProtocolFixturesTest` and by the TypeScript test suite, both asserting
 byte-identical round-trips.

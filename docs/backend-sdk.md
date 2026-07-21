@@ -182,36 +182,38 @@ explicit — every dependency injected, nothing ambient:
 
 ```ts
 import { createLuno } from "@luno-oss/core";
-import { PostgresStore } from "@luno-oss/store-postgres";
+import { postgresStore } from "@luno-oss/store-postgres";
 
 const luno = createLuno({
-  store: new PostgresStore(pool),
+  store: postgresStore(pool),
+  secret: process.env.LUNO_SECRET!, // at least 16 characters
   pairing: {
-    expiresIn: "10m",
+    expiresInMs: 10 * 60 * 1000,
     maxEnrollments: 1,
-    invalidateOnUse: true,
     requireApproval: false,
-  },
-  onEvent: {
-    "sms.received": async (msg) => {
-      /* your business logic */
-    },
-    "device.online": async (d) => {},
+    allowReplacement: false,
   },
 });
+
+luno.on("sms.received", async ({ from, body }) => {
+  /* your business logic */
+});
+luno.on("device.online", async ({ deviceId }) => {});
 ```
 
 Operator-facing API — the surface a dashboard or backend service calls:
 
 ```ts
-const session = await luno.pairing.createSession({
+const { session, code, qrUri } = await luno.pairing.createSession({
   label: "Acme",
   createdBy: user.id,
+  backendUrl: "https://gw.example.com",
 });
-session.code; // plaintext, returned exactly once
-session.qrPayload; // luno://pair?v=1&…
+session.id; // non-secret handle, safe to log
+code; // plaintext, returned exactly once
+qrUri; // luno://pair?v=1&… (null without backendUrl)
 
-await luno.devices.list({ ownerId });
+await luno.devices.list();
 await luno.devices.revoke(deviceId);
 
 const msg = await luno.sms.send({
@@ -242,10 +244,11 @@ fetch-native platforms while quietly excluding the others. A fetch adapter
 converts in one line, and `toFetchHandler(router, makeResponse)` takes the
 constructor as an argument so the core never reaches for a platform global.
 
-`sink` is a `FrameSink` — `{ send(frame): Promise<void> }`. That one interface is
-the entire transport abstraction: a `ws` socket, a Durable Object, an SSE
-stream, or a long-poll buffer all satisfy it identically. The core does not know
-which, and the §6/§7 logic is written once against it.
+`sink` is a `FrameSink` —
+`{ send(frame): Promise<void>; close(code?, reason?): Promise<void> }`. That one
+interface is the entire transport abstraction: a `ws` socket, a Durable Object,
+an SSE stream, or a long-poll buffer all satisfy it identically. The core does
+not know which, and the §6/§7 logic is written once against it.
 
 ---
 
@@ -254,15 +257,19 @@ which, and the §6/§7 logic is written once against it.
 Narrow and purpose-built, not one god-interface. Grouped:
 
 **Storage** — `PairingSessionStore`, `DeviceStore`, `MessageStore`,
-`EventLogStore`, `EnrollmentStore`. Each is a handful of methods.
+`EventLogStore`, `EnrollmentStore`, composed into one `LunoStore`. Each is a
+handful of methods.
 
-**Runtime** — `Clock`, `IdGenerator`, `RandomSource`, `Crypto` (hash/verify/
-constant-time compare), `Timers`, `Logger`. Injecting `Clock` and `RandomSource`
-makes expiry, backoff and code generation deterministic under test, which is
-worth far more than it costs.
+**Runtime** — `Clock`, `IdGenerator`, `CryptoPort` (hash/verify/random),
+`Logger`. Each has a default (`systemClock`, `tokenIdGenerator`, `webCrypto`,
+`silentLogger`), so only what you want to control gets injected. Injecting
+`Clock` and `CryptoPort` makes expiry, backoff and code generation deterministic
+under test, which is worth far more than it costs.
 
-**Distribution** — `SessionRegistry` (who is connected, where), `PubSub`
-(cross-instance command routing), `RateLimiter`.
+**Distribution** — `SessionRegistry` (who is connected, where), defaulting to
+`localSessionRegistry()`. Its `DeliveryOutcome` separates `offline` from
+`not_local`, which is what lets a broker-backed registry express multi-instance
+routing without the core changing.
 
 ### Storage atomicity is a contract, not an implementation detail
 

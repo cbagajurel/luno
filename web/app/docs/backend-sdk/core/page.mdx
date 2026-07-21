@@ -9,8 +9,8 @@ export const metadata = {
 
 # Core API
 
-`@luno/core` holds all the business logic and depends only on
-`@luno/protocol`. It is designed so that a backend developer never has to read
+`@luno-oss/core` holds all the business logic and depends only on
+`@luno-oss/protocol`. It is designed so that a backend developer never has to read
 the protocol specification.
 
 ## Composition
@@ -18,41 +18,44 @@ the protocol specification.
 Every dependency is injected; nothing is ambient.
 
 ```ts
-import { createLuno } from '@luno/core'
-import { PostgresStore } from '@luno/store-postgres'
+import { createLuno } from '@luno-oss/core'
+import { postgresStore } from '@luno-oss/store-postgres'
 
 const luno = createLuno({
-  store: new PostgresStore(pool),
-  secret: process.env.LUNO_SECRET!,
+  store: postgresStore(pool),
+  secret: process.env.LUNO_SECRET!, // at least 16 characters
   pairing: {
-    expiresIn: '10m',
+    expiresInMs: 10 * 60 * 1000,
     maxEnrollments: 1,
-    invalidateOnUse: true,
-    requireApproval: false
-  },
-  onEvent: {
-    'sms.received': async msg => {
-      /* your business logic */
-    },
-    'device.online': async device => {}
+    requireApproval: false,
+    allowReplacement: false
   }
 })
+
+luno.on('sms.received', async ({ from, body }) => {
+  /* your business logic */
+})
+luno.on('device.online', async ({ deviceId }) => {})
 ```
 
+Subscriptions are registered with `luno.on(event, handler)`, which returns an
+unsubscribe function. A handler that throws is logged and swallowed — a failing
+webhook is your application's problem, not a reason to drop a node's connection.
+
 <Callout type="info">
-  `memoryStore()` ships inside `@luno/core` rather than as a separate package,
+  `memoryStore()` ships inside `@luno-oss/core` rather than as a separate package,
   so `createLuno` works the moment the package is installed. It is fine for
   development and tests; it loses everything on restart.
 </Callout>
 
 ### Pairing options
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `expiresIn` | `'10m'` | How long a pairing session stays valid |
-| `maxEnrollments` | `1` | How many devices one session may enrol |
-| `invalidateOnUse` | `true` | Close the session after a successful enrolment |
-| `requireApproval` | `false` | Hold enrolments as `pending` until approved |
+| Option | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `expiresInMs` | `number \| null` | `600000` (10m) | How long a session stays valid; `null` disables expiry |
+| `maxEnrollments` | `number \| null` | `1` | How many devices one session may enrol; `null` is unlimited |
+| `requireApproval` | `boolean` | `false` | Hold enrolments as `pending` until approved |
+| `allowReplacement` | `boolean` | `false` | Let a device with a known `installId` re-enrol and replace itself |
 
 These are SDK defaults, not protocol requirements. The node works with any of
 them because [it enforces no pairing policy of its
@@ -65,13 +68,24 @@ The surface a dashboard or your own services call.
 ### Pairing
 
 ```ts
-const session = await luno.pairing.createSession({
+const { session, code, qrUri, qrJson } = await luno.pairing.createSession({
   label: 'Acme',
-  createdBy: user.id
+  createdBy: user.id,
+  backendUrl: 'https://gw.example.com' // needed to build a scannable payload
 })
 
-session.code      // plaintext, returned exactly once
-session.qrPayload // luno://pair?v=1&…
+session.id // 'ses_9f3' — non-secret handle, safe to log
+code       // 'ABCD-1234' — plaintext, returned exactly once
+qrUri      // 'luno://pair?v=1&…', or null without backendUrl
+qrJson     // the same payload as JSON, or null
+```
+
+Approval gates are driven from the same service:
+
+```ts
+await luno.pairing.approveEnrollment(enrollmentId)
+await luno.pairing.denyEnrollment(enrollmentId)
+await luno.pairing.revokeSession(session.id)
 ```
 
 <Callout type="warning">
@@ -82,10 +96,26 @@ session.qrPayload // luno://pair?v=1&…
 ### Devices
 
 ```ts
-await luno.devices.list({ ownerId })
+await luno.devices.list()
 await luno.devices.get(deviceId)
-await luno.devices.revoke(deviceId)
+
+await luno.devices.revoke(deviceId)   // kill the credential, then tell the node
+await luno.devices.wipe(deviceId)     // same reset, different command to the node
+await luno.devices.requestStatus(deviceId) // throws if the device is offline
+
+await luno.devices.updateConfig(deviceId, {
+  heartbeatSec: 60,
+  rateLimitPerMinute: 30,
+  allowlist: ['+977*'],
+})
 ```
+
+<Callout type="info">
+  `revoke` kills the credential locally *before* it tries to notify the node.
+  The order matters: if the command cannot be delivered, the credential is
+  already dead, so a device that was offline during revocation cannot reconnect
+  and keep working.
+</Callout>
 
 ### Messaging
 
@@ -94,11 +124,65 @@ const msg = await luno.sms.send({
   deviceId,
   to: '+9779800000000',
   body: 'hi',
-  ref: 'order-42'
+  ref: 'order-42',        // your correlation id, echoed on every event
+  subscriptionId: 1,      // optional: pick a SIM
+  deliveryReport: true    // default true
 })
 
-msg.id // track through sms_accepted → sms_sent → delivery_report
+msg.id     // track through sms_accepted → sms_sent → delivery_report
+msg.status // 'pending' | 'dispatched' | 'accepted' | 'sent' |
+           // 'delivered' | 'undelivered' | 'failed' | 'cancelled'
+
 await luno.sms.get(msg.id)
+await luno.sms.cancel(msg.id) // only while still cancellable
+```
+
+<Callout type="info">
+  Status is a **progress rank**, not a transition table. Node events are
+  at-least-once and can arrive out of order — a `delivery_report` may land
+  before the `sms_sent` that logically precedes it. Status therefore only ever
+  moves forward, which makes replaying an old event a no-op rather than a
+  regression.
+</Callout>
+
+### Events
+
+`luno.on(name, handler)` subscribes and returns an unsubscribe function.
+Handlers may be async; one that throws is logged and swallowed rather than
+taking down the frame loop that emitted it.
+
+| Event | Payload | Fires when |
+| --- | --- | --- |
+| `device.enrolled` | `{ device }` | A pairing session produced a new device |
+| `device.online` | `{ deviceId }` | A node reached READY |
+| `device.offline` | `{ deviceId }` | Its session ended or presence timed out |
+| `device.revoked` | `{ deviceId }` | `revoke` or `wipe` reset the node |
+| `device.status` | `{ deviceId, status }` | A `device_status` event arrived (SIM, signal, battery, network) |
+| `device.heartbeat` | `{ deviceId, heartbeat }` | A heartbeat arrived |
+| `enrollment.pending` | `{ enrollment }` | An enrolment is waiting for approval |
+| `sms.status` | `{ message }` | A message record advanced |
+| `sms.received` | `{ deviceId, from, body, subscriptionId, receivedAt, parts }` | An inbound SMS was reported |
+| `node.log` | `{ deviceId, log }` | The node forwarded a log line |
+| `node.error` | `{ deviceId, error }` | The node reported an error |
+
+```ts
+const off = luno.on('device.offline', ({ deviceId }) => alert(deviceId))
+off() // unsubscribe
+```
+
+<Callout type="warning">
+  `enrollment.pending` is the hook an approval gate hangs off. If you set
+  `requireApproval: true` and subscribe to nothing, enrolments will sit pending
+  until something calls `approveEnrollment` — the engine will not approve them
+  for you.
+</Callout>
+
+### Audit trail
+
+Every frame in and out, plus lifecycle events, is persisted:
+
+```ts
+await luno.events({ deviceId, limit: 100 })
 ```
 
 ## Protocol-facing API
@@ -127,7 +211,8 @@ await session.close()
 
 ```ts
 interface FrameSink {
-  send(frame: unknown): Promise<void>
+  send(frame: ProtocolFrame): Promise<void>
+  close(code?: number, reason?: string): Promise<void>
 }
 ```
 
@@ -141,16 +226,21 @@ it.
 Narrow and purpose-built, never one god-interface.
 
 **Storage** — `PairingSessionStore`, `DeviceStore`, `MessageStore`,
-`EventLogStore`, `EnrollmentStore`. Each is a handful of methods. See
-[Stores](/docs/backend-sdk/stores).
+`EventLogStore`, `EnrollmentStore`, composed into one `LunoStore`. Each is a
+handful of methods. See [Stores](/docs/backend-sdk/stores).
 
-**Runtime** — `Clock`, `IdGenerator`, `RandomSource`, `Crypto`, `Timers`,
-`Logger`.
+**Runtime** — `Clock`, `IdGenerator`, `CryptoPort`, `Logger`. Each has a default
+(`systemClock`, `tokenIdGenerator`, `webCrypto`, `silentLogger`), so you only
+inject the ones you want to control.
 
-**Distribution** — `SessionRegistry`, `PubSub`, `RateLimiter`.
+**Distribution** — `SessionRegistry`, defaulting to `localSessionRegistry()`.
+Its `DeliveryOutcome` distinguishes `offline` from `not_local`: a single-process
+registry never returns the latter, while a broker-backed one returns it when it
+cannot route. That distinction is what keeps multi-instance and socketless
+deployments expressible without changing the core.
 
 <Callout type="info">
-  Injecting `Clock` and `RandomSource` makes expiry, backoff and code generation
+  Injecting `Clock` and `CryptoPort` makes expiry, backoff and code generation
   deterministic under test. That is worth far more than it costs — testing
   "does this session expire correctly" without controlling time means either
   sleeping in tests or not really testing it.
@@ -162,10 +252,11 @@ The two are deliberately split, and conflating them would be a security
 regression.
 
 **Operator and API-consumer auth** — a human or service calling
-`luno.sms.send`. **Belongs to the adapter.** Firebase Auth, Supabase Auth, JWT,
-OAuth, cookies, API keys: your adapter authenticates and passes an authenticated
-`Principal` into the core. The core does *authorization* — does this principal
-own this device? — never authentication.
+`luno.sms.send`. **Entirely yours.** Firebase Auth, Supabase Auth, JWT, OAuth,
+cookies, API keys: you authenticate the caller and decide whether they may act
+on that device *before* you call into the engine. The operator API is not
+exposed over HTTP by any adapter, so nothing reaches it that you did not route
+there yourself.
 
 **Node credential auth** — a Luno node presenting its credential on the
 handshake. **Belongs to the core.** It is protocol-defined, security-critical,
@@ -174,16 +265,24 @@ revocation. Pushing it into every adapter means writing it many times and
 getting it subtly wrong in at least one.
 
 ```ts
-const principal = await myAuth(req)              // your job
-await luno.sms.send({ principal, deviceId, … })  // core authorizes
+// Your job: authenticate the caller and authorize the action.
+const user = await myAuth(req)
+if (!(await userOwnsDevice(user, deviceId))) throw new Forbidden()
+await luno.sms.send({ deviceId, to, body })
 
-const device = await luno.connections.authorize(bearerToken) // core's job
+// The core's job: the node credential on the WSS upgrade.
+const device = await luno.connections.authorize(bearerToken)
 ```
+
+<Callout type="warning">
+  The engine does not know who your users are, so it cannot check that this
+  caller owns this device. `luno.sms.send` sends. Guard it.
+</Callout>
 
 ## Extension
 
 New protocol-level capability — a new command, a new transport like MMS — lands
-in `@luno/protocol` and `@luno/core` once, and every adapter inherits it with no
+in `@luno-oss/protocol` and `@luno-oss/core` once, and every adapter inherits it with no
 code change.
 
 That is also the test for whether a change is in the right place: **if adding a

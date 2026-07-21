@@ -10,7 +10,7 @@ export const metadata = {
 # Testing
 
 With one core, several adapters and several stores, the thing that actually
-prevents ecosystem drift is an executable contract. `@luno/testing` is that
+prevents ecosystem drift is an executable contract. `@luno-oss/testing` is that
 contract.
 
 ## What is in the kit
@@ -34,29 +34,55 @@ It performs the genuine connection handshake — `version_negotiate` → `resync
 READY — over any transport, with no mocks in the core. It is the closest thing
 to a phone that runs in CI.
 
+Enrol the way a phone does, then attach the node to a channel and run the
+handshake:
+
 ```ts
-import { createFakeNode } from '@luno/testing'
+import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno-oss/testing'
+import WebSocket from 'ws'
 
-const node = createFakeNode({ url: 'ws://localhost:3000/ws', credential })
+const { deviceId, credential } = await enrollNode(
+  fetchTransport('http://localhost:3000'),
+  'ABCD-1234'
+)
 
-await node.connect()          // full handshake
-await node.expectCommand('send_sms')
-await node.emit('sms_sent', { messageId, parts: [{ index: 0, status: 'sent' }] })
-await node.expectAck()
-await node.close()
+const ws = new WebSocket('ws://localhost:3000/ws', {
+  headers: { Authorization: `Bearer ${credential}` }
+})
+await new Promise(resolve => ws.on('open', resolve))
+
+const node = new FakeNode({ deviceId })
+node.attach(webSocketChannel(ws))
+await node.handshake()   // version_negotiate → resync → READY
 ```
 
-Use it to test your own event handlers, your dashboard, and any adapter you
-write.
+By default the node **auto-answers commands** with the same event flow the real
+agent produces, so a `luno.sms.send` drives right through to delivery. Pass
+`autoAnswerCommands: false` to drive each step yourself:
+
+```ts
+const frame = await node.waitFor(f => f.kind === 'command')
+await node.sendEventAwaitingAck(mySmsSentEvent)
+
+await node.sendInboundSms({ from: '+9779800000000', body: 'hello' })
+
+node.received      // every frame the server sent, for assertions
+node.isReady()
+node.close()
+```
+
+For a unit test with no socket at all, `channelPair()` gives you an in-memory
+pipe with the same `NodeChannel` interface. Use the fake node to test your own
+event handlers, your dashboard, and any adapter you write.
 
 ## Store conformance
 
 ```ts
 import { describe } from 'vitest'
-import { storeConformance } from '@luno/testing/store'
+import { describeStoreConformance } from '@luno-oss/testing/store'
 
 describe('MyStore', () => {
-  storeConformance(() => new MyStore(connection))
+  describeStoreConformance(() => new MyStore(connection))
 })
 ```
 
@@ -65,7 +91,7 @@ assertions described in [Stores](/docs/backend-sdk/stores#atomicity-is-a-contrac
 
 ## Protocol fixtures
 
-The golden frames stayed in `@luno/protocol`, next to the codec they check.
+The golden frames stayed in `@luno-oss/protocol`, next to the codec they check.
 The node's Kotlin `ProtocolFixturesTest` reads the same `fixtures/frames.json`
 and asserts the same byte-identical round-trip.
 
@@ -99,13 +125,13 @@ A reasonable ladder, cheapest first:
 
 ## What is proven today
 
-- `@luno/protocol` — 91 tests, cross-checked against the Kotlin codec over the
+- `@luno-oss/protocol` — 91 tests, cross-checked against the Kotlin codec over the
   shared fixture corpus
-- `@luno/core` — 73 tests, including the exported store conformance suite
+- `@luno-oss/core` — 74 tests, including the exported store conformance suite
   asserting `claim()` linearizability under real concurrency, and an end-to-end
   smoke run (pair → connect → handshake → send → delivered) against built
   bundles on real Web Crypto
 - Every adapter — gated on a fake-node run over its own transport: a real socket
   for the Node frameworks, an in-memory `WebSocketPair` for the edge one
-- `@luno/store-postgres` — passes conformance, including a 60-way concurrent
+- `@luno-oss/store-postgres` — passes conformance, including a 60-way concurrent
   claim test, against real Postgres semantics via PGlite

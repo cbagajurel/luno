@@ -1,0 +1,132 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Writing your own',
+  description:
+    'The full adapter contract — four calls — and how to prove a new integration is correct with the conformance suite.',
+  openGraph: { images: '/og?title=Writing%20your%20own' }
+}
+
+# Writing your own
+
+If your runtime is not covered, writing the integration is a small job. An
+adapter is glue: it never parses a protocol frame, and it holds no business
+logic. The core drives the handshake, acks, resync and command dispatch.
+
+## The contract
+
+```ts
+// 1. REST — both enrolment endpoints
+const result = await luno.http.handle({ method, url, json })
+
+// 2. Authorise BEFORE upgrading the socket
+const device = await luno.connections.authorize(bearerCredential)
+if (!device) return unauthorized401()
+
+// 3. Open a session and pump frames in
+const session = await luno.connections.open(device, sink)
+await session.receive(rawFrameText)
+
+// 4. Close when the socket ends
+await session.close()
+```
+
+That is all of it. If you find yourself parsing a frame, the logic belongs in
+the core.
+
+## The two interfaces you implement
+
+**`HttpRequest`** — structural, so almost anything satisfies it:
+
+```ts
+interface HttpRequest {
+  readonly method: string
+  readonly url: string
+  json(): Promise<unknown>
+}
+```
+
+A web `Request` satisfies this as-is. A Node `IncomingMessage` needs three lines.
+
+<Callout type="info">
+  `handle` returns a plain `{ status, headers, body }` rather than a `Response`.
+  Constructing a `Response` requires a global that Express does not have at all
+  and that older Node lacked — returning one would serve fetch-native platforms
+  while quietly excluding the others. Convert in one line, or use
+  `toFetchHandler(router, makeResponse)`.
+</Callout>
+
+**`FrameSink`** — the entire transport abstraction:
+
+```ts
+interface FrameSink {
+  send(frame: ProtocolFrame): Promise<void>
+  close(code?: number, reason?: string): Promise<void>
+}
+```
+
+A `ws` socket, a Durable Object, an SSE stream and a long-poll buffer all
+satisfy it identically, which is why the connection and reliability logic is
+written once.
+
+## Rules that are not optional
+
+<Callout type="error">
+  **Authorise before upgrading.** A bad credential must fail as an HTTP 401. The
+  node treats a 401 as "re-enrolment required" and pauses; a post-upgrade close
+  looks transient and it will reconnect through it forever. Getting this wrong
+  turns every revoked device into a reconnect loop against your server.
+</Callout>
+
+- **Encode frames with `encodeFrame`** from `@luno-oss/protocol`. Do not
+  `JSON.stringify` a frame yourself.
+- **Decode defensively.** A frame is text, but some clients hand back bytes —
+  handle `string`, `ArrayBuffer` and views.
+- **Close the session on error, not just on close.** A socket that errors
+  without a close event otherwise leaks a registry entry.
+- **Do not hold state the registry owns.** If you find yourself keeping a `Map`
+  of sockets, that is `SessionRegistry`'s job.
+
+## Prove it
+
+An integration is "done" when a fake node completes a full lifecycle against it
+over its own transport. That is the same bar every packaged adapter is held to:
+
+```ts
+import { FakeNode, enrollNode, fetchTransport, webSocketChannel } from '@luno-oss/testing'
+
+const { deviceId, credential } = await enrollNode(fetchTransport(baseUrl), code)
+
+const ws = new WebSocket(wsUrl, { headers: { Authorization: `Bearer ${credential}` } })
+await new Promise(resolve => ws.on('open', resolve))
+
+const node = new FakeNode({ deviceId })
+node.attach(webSocketChannel(ws))
+await node.handshake()
+
+const message = await luno.sms.send({ deviceId, to: '+9779800000000', body: 'hi' })
+// the fake node auto-answers, so this reaches 'delivered'
+```
+
+Assert on the four things that break in practice: enrolment returns a
+credential, the handshake reaches READY, a send reaches a terminal status, and a
+bad credential is refused with 401 before the upgrade.
+
+<Callout type="info">
+  If it helps, `channelPair()` gives you an in-memory transport with the same
+  `NodeChannel` interface — useful for proving the frame flow before the real
+  socket exists.
+</Callout>
+
+## Where the seam should be
+
+If adding a capability requires touching more than one adapter, it belongs in
+the core. New protocol-level capability — a new command, a new transport like
+MMS — lands in `@luno-oss/protocol` and `@luno-oss/core` once, and every adapter
+inherits it with no code change.
+
+## Next
+
+- [Testing](/docs/backend-sdk/testing) — the fake node and conformance kit in full
+- [Core API](/docs/backend-sdk/core) — the protocol-facing surface
+- [Protocol](/docs/protocol) — what is actually on the wire

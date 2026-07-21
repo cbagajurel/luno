@@ -1,0 +1,221 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
+export const metadata = {
+  title: 'Quickstart',
+  description:
+    'A complete, runnable Luno backend in one file: enrol a device, send an SMS, and handle inbound messages end to end.',
+  openGraph: { images: '/og?title=Quickstart' }
+}
+
+# Quickstart
+
+One file, one dependency install, and a phone that sends a message on command.
+Everything on this page is copy-pasteable and uses only the published
+`@luno-oss/*` packages.
+
+<Callout type="info">
+  This page is the compressed path. [Installation](/docs/getting-started/installation),
+  [Pairing](/docs/getting-started/pairing) and [First
+  message](/docs/getting-started/first-message) cover the same ground with the
+  reasoning attached.
+</Callout>
+
+## 1. Install
+
+```sh
+npm install @luno-oss/core @luno-oss/hono hono @hono/node-server @hono/node-ws
+```
+
+`@luno-oss/core` is the engine; the adapter mounts it on the framework you run.
+Swap `@luno-oss/hono` for [`express`, `fastify`, `nestjs` or
+`cloudflare`](/docs/backend-sdk/adapters) — the rest of this page is unchanged.
+
+## 2. The server
+
+```ts filename="server.ts"
+import { serve } from '@hono/node-server'
+import { createNodeWebSocket } from '@hono/node-ws'
+import { Hono } from 'hono'
+import { createLuno, memoryStore } from '@luno-oss/core'
+import { registerLuno } from '@luno-oss/hono'
+
+// The URL the phone will reach this server on. Must be HTTPS in production.
+const PUBLIC_URL = process.env.PUBLIC_URL ?? 'http://localhost:3000'
+
+const luno = createLuno({
+  store: memoryStore(),                 // swap for postgresStore(pool) in production
+  secret: process.env.LUNO_SECRET!,     // at least 16 characters, durable
+  wsUrl: `${PUBLIC_URL.replace(/^http/, 'ws')}/ws`
+})
+
+const app = new Hono()
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
+
+// Mounts the node-facing surface: POST /enroll, POST /enroll/status, WS /ws
+registerLuno(app, { luno, upgradeWebSocket })
+
+// ── Your own operator routes. Guard these with your own auth. ───────────────
+app.post('/admin/pair', async c => {
+  const { session, code, qrUri } = await luno.pairing.createSession({
+    label: 'Warehouse phone 1',
+    backendUrl: PUBLIC_URL
+  })
+  // `code` is plaintext and returned exactly once — only its hash is stored.
+  return c.json({ sessionId: session.id, code, qrUri })
+})
+
+app.get('/admin/devices', async c => c.json(await luno.devices.list()))
+
+app.post('/admin/send', async c => {
+  const { deviceId, to, body } = await c.req.json()
+  const message = await luno.sms.send({ deviceId, to, body, ref: 'quickstart' })
+  return c.json({ id: message.id, status: message.status })
+})
+
+// ── React to what the node reports ──────────────────────────────────────────
+luno.on('device.online', ({ deviceId }) => console.log('online:', deviceId))
+
+luno.on('sms.status', ({ message }) =>
+  console.log(`message ${message.id} → ${message.status}`)
+)
+
+luno.on('sms.received', async ({ from, body }) => {
+  console.log(`inbound from ${from}: ${body}`)
+})
+
+const server = serve({ fetch: app.fetch, port: 3000 })
+injectWebSocket(server)
+```
+
+```sh
+LUNO_SECRET=please-change-this-secret npx tsx server.ts
+```
+
+<Callout type="warning">
+  `memoryStore()` loses everything on restart — including device credentials,
+  which means every paired phone has to be re-paired. It is for development
+  only. Use [`postgresStore`](/docs/backend-sdk/stores) for anything real.
+</Callout>
+
+## 3. Expose it over HTTPS
+
+The node refuses plaintext transport, so `localhost` will not do unless you are
+running a debug build on the same LAN. For development, tunnel it:
+
+<Tabs items={['cloudflared', 'ngrok', 'tailscale']}>
+  <Tabs.Tab>
+```sh
+cloudflared tunnel --url http://localhost:3000
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```sh
+ngrok http 3000
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```sh
+tailscale funnel 3000
+```
+  </Tabs.Tab>
+</Tabs>
+
+Restart the server with `PUBLIC_URL` set to the tunnel's HTTPS address, so the
+QR payload and `wsUrl` point where the phone can actually reach you.
+
+## 4. Register the device
+
+<Steps>
+### Mint a pairing session
+
+```sh
+curl -X POST https://your-tunnel.example.com/admin/pair
+```
+
+```jsonc
+{
+  "sessionId": "ses_9f3",
+  "code": "ABCD-1234",
+  "qrUri": "luno://pair?v=1&u=https%3A%2F%2F…&c=ABCD-1234&s=ses_9f3&l=Warehouse+phone+1"
+}
+```
+
+### Submit it from the phone
+
+Open the Luno app, tap **Pair device**, and either scan `qrUri` rendered as a QR
+code or type `ABCD-1234` by hand. Both carry identical authority.
+
+### Confirm
+
+The app flips to **Connected**, and the server logs `online: dev_…`.
+
+```sh
+curl https://your-tunnel.example.com/admin/devices
+```
+</Steps>
+
+<Callout type="info">
+  With the default policy the session is now spent: one device, ten-minute
+  expiry, no replacement. Every one of those rules is [server
+  config](/docs/backend-sdk/core#pairing-options), never an app release.
+</Callout>
+
+## 5. Send a message
+
+```sh
+curl -X POST https://your-tunnel.example.com/admin/send \
+  -H 'content-type: application/json' \
+  -d '{"deviceId":"dev_9","to":"+9779800000000","body":"Hello from Luno"}'
+```
+
+The server log follows the message through the radio:
+
+```
+message msg_1 → dispatched
+message msg_1 → accepted    # written to the node's durable outbox
+message msg_1 → sent        # left the device
+message msg_1 → delivered   # carrier confirmed handset delivery
+```
+
+`delivered` depends on the carrier returning a delivery report — many routes
+never do. Treat `sent` as the last guaranteed transition and see [Delivery
+reports](/docs/messaging/delivery-reports).
+
+<Callout type="info">
+  If the device is offline the send still succeeds. The command is persisted and
+  dispatched when the node reconnects.
+</Callout>
+
+## 6. Receive a message
+
+Text the phone's SIM from another handset. The `sms.received` handler fires:
+
+```
+inbound from +9779811111111: hi there
+```
+
+This needs the `full` build flavor, which declares `RECEIVE_SMS`. The
+`sendOnly` flavor cannot capture inbound messages — see [Play
+Protect](/docs/android/play-protect) for why both exist.
+
+## Before you call it production
+
+- **Guard the `/admin/*` routes.** The engine authenticates *nodes*, never your
+  operators. `luno.sms.send` sends to whoever asks — see [the two
+  axes](/docs/backend-sdk/core#authentication--two-axes).
+- **Swap the store.** `memoryStore()` → [`postgresStore`](/docs/backend-sdk/stores).
+- **Keep `secret` durable.** Rotating it invalidates every issued pairing code
+  and device credential.
+- **Set rate limits and an allowlist** with `luno.devices.updateConfig` — a
+  consumer SIM sending bulk traffic gets blocked by the carrier. Read
+  [Security](/docs/security).
+- **Exempt the app from battery optimisation** on the handset, or an OEM skin
+  will eventually kill the agent. See [OEM
+  reliability](/docs/android/oem-reliability).
+
+## Next
+
+- [Testing](/docs/backend-sdk/testing) — run a fake node against this server in
+  CI, no phone required
+- [Protocol](/docs/protocol) — what is actually on the wire
+- [Operations](/docs/operations/device-management) — running more than one device

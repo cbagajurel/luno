@@ -1,0 +1,114 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Express',
+  description:
+    'Mount Luno on Express — and use the same package as the socket bridge for any bare Node http.Server.',
+  openGraph: { images: '/og?title=Express' }
+}
+
+# Express
+
+Express is the **non-fetch-native** path: an `HttpRequest` shim plus a `ws`
+bridge on a classic Node server, a seam Hono never touches.
+
+## Install
+
+```sh
+npm install @luno-oss/core @luno-oss/express express
+```
+
+## Mount it
+
+The integration splits into two calls, because the REST routes belong to the app
+and the socket belongs to the `http.Server` the app listens on:
+
+```ts
+import express from 'express'
+import { createLuno, memoryStore } from '@luno-oss/core'
+import { attachLunoWebSocket, registerLunoEnroll } from '@luno-oss/express'
+
+const luno = createLuno({
+  store: memoryStore(),
+  secret: process.env.LUNO_SECRET!
+})
+
+const app = express()
+registerLunoEnroll(app, luno)      // POST /enroll, POST /enroll/status
+
+const server = app.listen(3000)
+attachLunoWebSocket(server, luno)  // WS /ws
+```
+
+The enrol handlers read the body from `req.body` if a JSON parser already
+populated it and straight off the stream otherwise, so they work with or without
+`express.json()` mounted.
+
+## API
+
+| Export | Purpose |
+| --- | --- |
+| `registerLunoEnroll(target, luno, options?)` | Registers both enrol routes on any `{ post(path, handler) }` |
+| `lunoEnrollHandlers(luno, options?)` | The same handlers as `{ path, handler }[]`, to mount yourself |
+| `attachLunoWebSocket(server, luno, options?)` | Attaches `WS /ws` to an `http.Server`; returns the `WebSocketServer` |
+| `toHttpRequest(req)` | The request shim, if you are routing enrolment by hand |
+
+```ts
+attachLunoWebSocket(server, luno, {
+  path: '/ws',
+  onOtherUpgrade: (req, socket, head) => {
+    // Hand non-Luno upgrades (an HMR socket, your own realtime feed) elsewhere
+    // instead of dropping them.
+  }
+})
+```
+
+<Callout type="warning">
+  If anything else on this server upgrades WebSockets, pass `onOtherUpgrade`.
+  Without it, upgrades on other paths are dropped — the handler owns the
+  server's `upgrade` event.
+</Callout>
+
+## It is really the Node adapter
+
+Despite the name, this package does **not** depend on Express. Its only imports
+are `node:http`, `node:stream` and `ws`, and `registerLunoEnroll` accepts
+anything with a `post(path, handler)` method.
+
+That makes `attachLunoWebSocket` the general-purpose socket bridge for **any**
+Node server:
+
+```ts
+import http from 'node:http'
+import { attachLunoWebSocket } from '@luno-oss/express'
+
+const server = http.createServer(async (req, res) => {
+  if (req.method === 'POST' && req.url?.endsWith('/enroll')) {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    const result = await luno.http.handle({
+      method: req.method,
+      url: req.url,
+      json: async () => JSON.parse(body)
+    })
+    res.writeHead(result.status, result.headers).end(result.body)
+    return
+  }
+  res.writeHead(404).end()
+})
+
+attachLunoWebSocket(server, luno)
+server.listen(3000)
+```
+
+That is a complete, working Luno backend with no framework at all — enrolment,
+handshake, send and delivery. It is also the mechanism behind the
+[Next.js](/docs/backend-sdk/adapters/nextjs) and
+[Firebase Cloud Run](/docs/backend-sdk/adapters/firebase) integrations, neither
+of which needs an adapter of its own.
+
+## Next
+
+- [Fastify](/docs/backend-sdk/adapters/fastify) — the same seam as one plugin
+- [Next.js](/docs/backend-sdk/adapters/nextjs) — this bridge on a custom server
+- [Testing](/docs/backend-sdk/testing) — run a fake node against it

@@ -13,7 +13,7 @@ The REST surface is small on purpose: two endpoints, both concerned with
 enrolment. Everything else happens over [the WebSocket
 session](/docs/protocol/websocket).
 
-This page is the contract that the `@luno/*` SDKs implement and that the Android
+This page is the contract that the `@luno-oss/*` SDKs implement and that the Android
 node implements the client half of, exactly as written.
 
 ## `POST /enroll`
@@ -112,7 +112,7 @@ correctly rejected as exhausted.
   device credential to whoever presents the id, which makes it a bearer secret
   in practice however it is described elsewhere. A sequential or otherwise
   predictable value turns the approval gate into an enrolment bypass. Mint it
-  from a CSPRNG with at least 128 bits of entropy; `@luno/core` uses 192.
+  from a CSPRNG with at least 128 bits of entropy; `@luno-oss/core` uses 192.
 </Callout>
 
 A node that polls again after `approved` has, by definition, not received the

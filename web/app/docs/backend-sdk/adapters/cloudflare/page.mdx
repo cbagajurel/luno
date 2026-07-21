@@ -1,0 +1,108 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Cloudflare Workers',
+  description:
+    'Run Luno at the edge with a WebSocketPair bridge, and hold each device session in a Durable Object.',
+  openGraph: { images: '/og?title=Cloudflare%20Workers' }
+}
+
+# Cloudflare Workers
+
+The Workers adapter proves the **edge** path: a `WebSocketPair` bridge instead
+of a Node socket, with Durable Objects holding the session.
+
+## Install
+
+```sh
+npm install @luno-oss/core @luno-oss/cloudflare
+```
+
+## Mount it
+
+```ts
+import { createLuno } from '@luno-oss/core'
+import { lunoWorker } from '@luno-oss/cloudflare'
+
+export default {
+  fetch(request: Request, env: Env) {
+    const luno = createLuno({
+      store: yourStore(env),
+      secret: env.LUNO_SECRET
+    })
+    return lunoWorker({ luno }).fetch(request)
+  }
+}
+```
+
+`lunoWorker({ luno })` returns the `{ fetch }` shape a Worker entry module
+expects, so when the engine can be built at module scope this is simply:
+
+```ts
+export default lunoWorker({ luno })
+```
+
+## API
+
+| Export | Purpose |
+| --- | --- |
+| `lunoWorker({ luno, paths? })` | The `{ fetch }` entry shape |
+| `lunoFetch({ luno, paths? })` | The bare handler, to compose with your own routes |
+| `bridgeSocket(luno, socket, device)` | Bridges an already-accepted socket — the Durable Object seam |
+
+<Callout type="warning">
+  A plain Worker instance cannot reliably hold a session across requests. Use a
+  Durable Object — one per device, so the DO *is* the session. The adapter is
+  built for this shape, which is what `bridgeSocket` exists for.
+</Callout>
+
+## Inside a Durable Object
+
+Authorise, accept the server half of the pair, and hand it to `bridgeSocket`.
+The core drives the handshake from there, exactly as it does over a Node socket:
+
+```ts
+export class DeviceSession {
+  constructor(private state: DurableObjectState, private env: Env) {}
+
+  async fetch(request: Request) {
+    const luno = createLuno({ store: yourStore(this.env), secret: this.env.LUNO_SECRET })
+    const credential = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+
+    const device = await luno.connections.authorize(credential)
+    if (!device) return new Response('unauthorized', { status: 401 })
+
+    const pair = new WebSocketPair()
+    this.state.acceptWebSocket(pair[1])
+    bridgeSocket(luno, pair[1], device)
+
+    return new Response(null, { status: 101, webSocket: pair[0] })
+  }
+}
+```
+
+Route to it by device id so each device gets its own object:
+
+```ts
+const id = env.DEVICE_SESSION.idFromName(deviceId)
+return env.DEVICE_SESSION.get(id).fetch(request)
+```
+
+<Callout type="info">
+  `bridgeSocket` is exported and Node-testable on its own precisely because the
+  socket is the only part a Worker cannot exercise off-platform. Drive it with
+  an in-memory fake to prove the handshake and command flow without `workerd`.
+</Callout>
+
+## Storage
+
+`memoryStore()` is per-isolate and will not survive, so it is development-only
+here in a stronger sense than elsewhere. Use a store backed by D1, Durable
+Object storage, or an external Postgres over HTTP. See
+[Stores](/docs/backend-sdk/stores).
+
+## Next
+
+- [Hono](/docs/backend-sdk/adapters/hono) — if you want one handler across edge and Node
+- [Stores](/docs/backend-sdk/stores) — writing a D1 or DO-backed store
+- [Testing](/docs/backend-sdk/testing) — the in-memory socket path

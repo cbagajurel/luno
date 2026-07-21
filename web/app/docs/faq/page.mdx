@@ -117,7 +117,7 @@ all. Gate business logic on `sent`; treat `delivered` as enrichment.
 
 ## Backend
 
-### Do I have to use the `@luno/*` SDK?
+### Do I have to use the `@luno-oss/*` SDK?
 
 No. The protocol is published precisely so any backend in any language can
 implement it. The SDK exists so you do not have to.
@@ -130,14 +130,27 @@ lines of glue.
 
 ### Can I run it on Vercel or Firebase Functions?
 
-Partly. Those runtimes are request-scoped and cannot hold a WebSocket open, so
-enrolment works but the session socket needs a companion service. The HTTP
-fallback transport that would fix this is designed but not built. See
-[Backend SDK](/docs/backend-sdk#not-every-platform-can-hold-a-socket).
+Partly, and the split is clean. Those runtimes are request-scoped and cannot
+hold a WebSocket open, so **enrolment and sending work there**, but the session
+socket needs a companion process that stays alive — a small Node service, or
+Cloud Run on Google's platform. Your application code does not change either
+way, because a send is persisted first and dispatched by whichever process holds
+the socket.
+
+The HTTP fallback transport that would remove the companion entirely is designed
+but not built. See [Next.js](/docs/backend-sdk/adapters/nextjs) and
+[Firebase](/docs/backend-sdk/adapters/firebase) for the concrete setups.
+
+### Is there a Next.js adapter?
+
+None is needed. A Next.js route handler receives a real `Request`, and
+`luno.http.handle` accepts it directly — so enrolment is one catch-all route and
+no glue. Self-hosted behind a custom server, the socket attaches to the
+underlying `http.Server` too. See [Next.js](/docs/backend-sdk/adapters/nextjs).
 
 ### Which database?
 
-Postgres is supported today via `@luno/store-postgres`, and `memoryStore()`
+Postgres is supported today via `@luno-oss/store-postgres`, and `memoryStore()`
 covers development. Others are additive — implement the ports and pass the
 conformance suite.
 

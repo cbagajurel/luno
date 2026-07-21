@@ -1,9 +1,9 @@
-import { Callout, Tabs } from 'nextra/components'
+import { Callout, Cards } from 'nextra/components'
 
 export const metadata = {
   title: 'Adapters',
   description:
-    'Mount the Luno engine on Hono, Express, Fastify, NestJS or Cloudflare Workers — each adapter is glue, never business logic.',
+    'Mount the Luno engine on Hono, Express, Fastify, NestJS, Cloudflare Workers, Next.js or Firebase — each adapter is glue, never business logic.',
   openGraph: { images: '/og?title=Adapters' }
 }
 
@@ -15,140 +15,83 @@ never parses a protocol frame. The core drives the entire handshake, acks,
 resync and command dispatch.
 
 <Callout type="info">
-  Every adapter listed here ships with a fake-node run over its own transport, so
-  a phone pairs against any of them identically. None of them required a change
-  to `@luno/core`.
+  Every packaged adapter ships with a fake-node run over its own transport, so a
+  phone pairs against any of them identically. None of them required a change to
+  `@luno-oss/core`.
 </Callout>
 
-## Hono
+## The contract
 
-Fetch-native, so the same handler runs on Node, Workers, Deno and Bun. Only the
-`upgradeWebSocket` helper differs per runtime, and you pass it in.
+Whichever runtime you are on, an integration is these four calls. Everything
+else on these pages is the glue a particular framework needs to make them.
 
-<Tabs items={['Node', 'Cloudflare', 'Deno', 'Bun']}>
-  <Tabs.Tab>
-```ts
-import { serve } from '@hono/node-server'
-import { createNodeWebSocket } from '@hono/node-ws'
-import { Hono } from 'hono'
-import { createLuno, memoryStore } from '@luno/core'
-import { registerLuno } from '@luno/hono'
+1. Route `POST /enroll` and `POST /enroll/status` to `luno.http.handle`
+2. Authorise the `WS /ws` upgrade with `luno.connections.authorize` —
+   **before** upgrading
+3. Open a session with `luno.connections.open(device, sink)` and pump frames
+   into `session.receive`
+4. Call `session.close()` when the socket ends
 
-const luno = createLuno({
-  store: memoryStore(),
-  secret: process.env.LUNO_SECRET!
-})
+## Pick your runtime
 
-const app = new Hono()
-const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
-registerLuno(app, { luno, upgradeWebSocket })
+<Cards>
+  <Cards.Card title="Hono" href="/docs/backend-sdk/adapters/hono" arrow>
+    Fetch-native. One handler across Node, Workers, Deno and Bun.
+  </Cards.Card>
+  <Cards.Card title="Express" href="/docs/backend-sdk/adapters/express" arrow>
+    Classic Node. Also the socket bridge for any bare `http.Server`.
+  </Cards.Card>
+  <Cards.Card title="Fastify" href="/docs/backend-sdk/adapters/fastify" arrow>
+    A single plugin that registers routes and the socket.
+  </Cards.Card>
+  <Cards.Card title="NestJS" href="/docs/backend-sdk/adapters/nestjs" arrow>
+    A `LunoModule` and a `LUNO` token, wired through DI.
+  </Cards.Card>
+  <Cards.Card title="Cloudflare Workers" href="/docs/backend-sdk/adapters/cloudflare" arrow>
+    The edge path, with Durable Objects holding the session.
+  </Cards.Card>
+  <Cards.Card title="Next.js" href="/docs/backend-sdk/adapters/nextjs" arrow>
+    No adapter needed — route handlers talk to the core directly.
+  </Cards.Card>
+  <Cards.Card title="Firebase" href="/docs/backend-sdk/adapters/firebase" arrow>
+    Functions for enrolment, Cloud Run for the socket.
+  </Cards.Card>
+  <Cards.Card title="Writing your own" href="/docs/backend-sdk/adapters/custom" arrow>
+    The contract in full, and how to prove it.
+  </Cards.Card>
+</Cards>
 
-const server = serve({ fetch: app.fetch, port: 3000 })
-injectWebSocket(server)
-```
-  </Tabs.Tab>
-  <Tabs.Tab>
-```ts
-import { upgradeWebSocket } from 'hono/cloudflare-workers'
-registerLuno(app, { luno, upgradeWebSocket })
-```
-  </Tabs.Tab>
-  <Tabs.Tab>
-```ts
-import { upgradeWebSocket } from 'hono/deno'
-registerLuno(app, { luno, upgradeWebSocket })
-```
-  </Tabs.Tab>
-  <Tabs.Tab>
-```ts
-import { createBunWebSocket } from 'hono/bun'
-const { upgradeWebSocket, websocket } = createBunWebSocket()
-registerLuno(app, { luno, upgradeWebSocket })
-```
-  </Tabs.Tab>
-</Tabs>
+## Not every platform can hold a socket
 
-`lunoHono({ luno, upgradeWebSocket })` returns a `Hono` app you can serve
-directly, or mount under a larger one with
-`registerLuno(app, options, basePath)`.
+This is the one thing worth understanding before you choose. The protocol is
+built around a long-lived, bidirectional connection. Several popular platforms
+are request-scoped and cannot hold one — a property of those platforms, not of
+Luno.
 
-## Express and Fastify
+| Runtime | Enrolment | Session socket | Package |
+| --- | --- | --- | --- |
+| [Hono](/docs/backend-sdk/adapters/hono) (Node, Deno, Bun) | Yes | Yes | `@luno-oss/hono` |
+| [Express](/docs/backend-sdk/adapters/express) | Yes | Yes | `@luno-oss/express` |
+| [Fastify](/docs/backend-sdk/adapters/fastify) | Yes | Yes | `@luno-oss/fastify` |
+| [NestJS](/docs/backend-sdk/adapters/nestjs) | Yes | Yes | `@luno-oss/nestjs` |
+| [Cloudflare Workers](/docs/backend-sdk/adapters/cloudflare) | Yes | Yes — Durable Objects | `@luno-oss/cloudflare` |
+| [Next.js, self-hosted](/docs/backend-sdk/adapters/nextjs) | Yes | Yes — custom server | none needed |
+| [Next.js on Vercel](/docs/backend-sdk/adapters/nextjs#on-vercel) | Yes | **No** | none needed |
+| [Firebase Cloud Run](/docs/backend-sdk/adapters/firebase) | Yes | Yes | `@luno-oss/express` |
+| [Firebase Functions](/docs/backend-sdk/adapters/firebase#what-functions-can-and-cannot-do) | Yes | **No** | none needed |
+| Deno Deploy / Supabase Edge | Yes | Partly — ephemeral instances | `@luno-oss/hono` |
 
-These prove the **non-fetch-native** path — an `HttpRequest` shim plus a `ws`
-bridge on a classic Node server, a seam Hono never touches.
-
-```ts
-import express from 'express'
-import { createLuno, memoryStore } from '@luno/core'
-import { registerLuno } from '@luno/express'
-
-const app = express()
-const luno = createLuno({
-  store: memoryStore(),
-  secret: process.env.LUNO_SECRET!
-})
-
-const server = app.listen(3000)
-registerLuno(app, server, { luno })
-```
-
-The socket bridge — authorise before upgrade, then hand off to
-`connections.open` — is the same roughly thirty-five lines in each adapter. That
-duplication is deliberate: each adapter stays self-contained and
-copy-pasteable rather than introducing a shared dependency between them.
-
-## NestJS
-
-Wires the engine through DI with a `LunoModule` and a `LUNO` injection token.
-
-```ts
-import { Module } from '@nestjs/common'
-import { LunoModule } from '@luno/nestjs'
-import { memoryStore } from '@luno/core'
-
-@Module({
-  imports: [
-    LunoModule.forRoot({
-      store: memoryStore(),
-      secret: process.env.LUNO_SECRET!
-    })
-  ]
-})
-export class AppModule {}
-```
-
-```ts
-import { Inject, Injectable } from '@nestjs/common'
-import { LUNO, type Luno } from '@luno/nestjs'
-
-@Injectable()
-export class AlertService {
-  constructor(@Inject(LUNO) private readonly luno: Luno) {}
-
-  notify(deviceId: string, to: string) {
-    return this.luno.sms.send({ deviceId, to, body: 'Alert' })
-  }
-}
-```
-
-## Cloudflare Workers
-
-Proves the **edge** path with a `WebSocketPair` bridge, ready for Durable
-Objects.
-
-```ts
-import { createLuno } from '@luno/core'
-import { createLunoWorker } from '@luno/cloudflare'
-
-export default createLunoWorker(env =>
-  createLuno({ store: yourStore(env), secret: env.LUNO_SECRET })
-)
-```
+Where the socket column says no, enrolment still works and your application code
+is unchanged; the socket needs a companion process that can stay alive. See
+[Next.js](/docs/backend-sdk/adapters/nextjs) and
+[Firebase](/docs/backend-sdk/adapters/firebase) for the concrete shapes.
 
 <Callout type="warning">
-  On Workers, a plain Worker instance cannot reliably hold a session across
-  requests — use a Durable Object, one per device, so the DO *is* the session.
-  The adapter is built for this shape.
+  The HTTP fallback transport is **designed, not built**. v1 implements sockets
+  only. `FrameSink` is defined so a long-poll or SSE buffer satisfies it without
+  change, and the additive versioning rules mean the fallback can land later
+  without a redesign — but today, a socketless platform needs a companion
+  service.
 </Callout>
 
 ## Authentication at the boundary
@@ -159,7 +102,7 @@ treats a 401 as "re-enrolment required" and pauses, whereas a post-upgrade close
 looks like a transient failure and it would reconnect through it forever.
 
 <Callout type="error">
-  If you write your own adapter, authorise before upgrading. Accepting the
+  If you write your own integration, authorise before upgrading. Accepting the
   socket and closing it on bad credentials turns every revoked device into a
   reconnect loop against your server.
 </Callout>
@@ -168,16 +111,10 @@ Operator and API auth for your own dashboard routes is your application's
 concern — adapters only handle the node credential. See [the two
 axes](/docs/backend-sdk/core#authentication--two-axes).
 
-## Writing your own
+## Why the duplication is deliberate
 
-A new adapter is "done" when it passes the [conformance
-suite](/docs/backend-sdk/testing). Concretely it needs to:
-
-1. Route `POST /enroll` and `POST /enroll/status` to `luno.http.handle`
-2. Authorise the `WS /ws` upgrade with `luno.connections.authorize`
-3. Open a session with `luno.connections.open(device, sink)` and pump frames
-   into `session.receive`
-4. Call `session.close()` when the socket ends
-
-That is the whole contract. If you find yourself parsing a frame, the logic
-belongs in the core.
+The socket bridge — authorise before upgrade, then hand off to
+`connections.open` — is roughly the same thirty-five lines in each adapter. That
+repetition is a choice: each adapter stays self-contained and copy-pasteable,
+rather than introducing a shared dependency between them that would have to
+absorb every runtime's quirks.

@@ -45,22 +45,28 @@ Two consequences are worth stating explicitly:
 ### Create a session on the backend
 
 ```ts
-const session = await luno.pairing.createSession({
+const { session, code, qrUri } = await luno.pairing.createSession({
   label: 'Warehouse phone 1',
-  createdBy: user.id
+  createdBy: user.id,
+  backendUrl: 'https://gw.example.com'
 })
 
-session.code       // 'ABCD-1234' — plaintext, returned exactly once
-session.qrPayload  // 'luno://pair?v=1&u=…&c=ABCD-1234&s=ses_9f3&l=Acme'
+session.id // 'ses_9f3' — non-secret handle, safe to log
+code       // 'ABCD-1234' — plaintext, returned exactly once
+qrUri      // 'luno://pair?v=1&u=…&c=ABCD-1234&s=ses_9f3&l=Acme'
 ```
+
+`backendUrl` is what makes the payload scannable — it tells the node where to
+enrol. Without it, `qrUri` and `qrJson` are `null` and the operator must type
+the code.
 
 The backend stores only a **hash** of the code. The plaintext is returned once
 at creation and is never retrievable again — if it is lost, mint a new session.
 
 ### Present it to the operator
 
-Render `session.qrPayload` as a QR code, or display `session.code` for manual
-entry. Both carry the same authority; the SDK applies identical policy to each.
+Render `qrUri` as a QR code, or display `code` for manual entry. Both carry the
+same authority; the SDK applies identical policy to each.
 
 ### Submit it from the app
 
@@ -92,24 +98,24 @@ until it receives `approved` or `denied`. It survives an app restart mid-wait.
   `enrollmentId` is a bearer secret in practice — on approval, that endpoint
   hands a device credential to whoever presents the id. A sequential or
   otherwise predictable value turns the approval gate into an enrolment bypass.
-  Mint it from a CSPRNG with at least 128 bits of entropy; `@luno/core` uses
+  Mint it from a CSPRNG with at least 128 bits of entropy; `@luno-oss/core` uses
   192.
 </Callout>
 
 ## Secure defaults
 
 Defaults belong to the SDK, not to the protocol — the node works with any of
-them. The recommended defaults in `@luno/core`:
+them. The recommended defaults in `@luno-oss/core`:
 
-- one device per session
-- a short expiry
-- session invalidated after a successful enrolment
-- no reuse unless explicitly configured
+- `maxEnrollments: 1` — one device per session
+- `expiresInMs: 600000` — a ten-minute expiry
+- `requireApproval: false` — no approval gate unless you ask for one
+- `allowReplacement: false` — a known device may not silently re-enrol
 - identical rules whether the session is delivered as a QR code or a typed code
 
 ## When pairing fails
 
-The app shows the backend's own message. These are the codes `@luno/core`
+The app shows the backend's own message. These are the codes `@luno-oss/core`
 emits; a backend may define others, and the node will display whatever message
 accompanies them.
 

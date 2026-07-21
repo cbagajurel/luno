@@ -19,7 +19,7 @@ need to know before opening a pull request.
 | `lib/` | Flutter — UI only |
 | `android/` | The native Kotlin agent; the actual gateway |
 | `pigeons/` | The Flutter↔native contract |
-| `packages/` | The `@luno/*` server SDK (TypeScript) |
+| `packages/` | The `@luno-oss/*` server SDK (TypeScript) |
 | `docs/` | Design documents — architecture, pairing, pitfalls, roadmap |
 | `web/` | This documentation site |
 
@@ -81,15 +81,15 @@ genuinely needs explaining. Scope commits by concern — one logical change each
 </Callout>
 
 **Dependencies.** The native agent stays dependency-minimal. The Flutter stack
-lives only in `lib/` and never leaks into the agent. `@luno/core` and
-`@luno/protocol` import nothing beyond each other.
+lives only in `lib/` and never leaks into the agent. `@luno-oss/core` and
+`@luno-oss/protocol` import nothing beyond each other.
 
 ## Changing the protocol
 
 <Steps>
 ### Update both implementations
 
-The Kotlin codec in the node and `@luno/protocol` in TypeScript.
+The Kotlin codec in the node and `@luno-oss/protocol` in TypeScript.
 
 ### Update the shared fixtures
 

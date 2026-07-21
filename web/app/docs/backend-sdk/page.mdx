@@ -3,19 +3,19 @@ import { Callout, Cards } from 'nextra/components'
 export const metadata = {
   title: 'Backend SDK',
   description:
-    'The @luno/* packages implement the server half of the protocol: a framework-independent core plus thin adapters for the runtime you already use.',
+    'The @luno-oss/* packages implement the server half of the protocol: a framework-independent core plus thin adapters for the runtime you already use.',
   openGraph: { images: '/og?title=Backend%20SDK' }
 }
 
 # Backend SDK
 
-You never have to implement the protocol yourself. The `@luno/*` packages
+You never have to implement the protocol yourself. The `@luno-oss/*` packages
 provide a framework-independent core that handles pairing, enrolment, device
 management, the connection handshake and messaging — and thin adapters that
 mount it on whatever you already run.
 
 ```ts
-import { createLuno, memoryStore } from '@luno/core'
+import { createLuno, memoryStore } from '@luno-oss/core'
 
 const luno = createLuno({
   store: memoryStore(),
@@ -30,7 +30,7 @@ and sockets.
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  ADAPTERS   @luno/hono · express · fastify · nestjs ·  │
+│  ADAPTERS   @luno-oss/hono · express · fastify · nestjs ·  │
 │             cloudflare — translate runtime ⇄ core.     │
 │             no business logic.                         │
 └───────────────────────────▲────────────────────────────┘
@@ -45,7 +45,7 @@ and sockets.
 └───────────────────────────▲────────────────────────────┘
                             │ depends on
 ┌───────────────────────────┴────────────────────────────┐
-│  PROTOCOL   @luno/protocol — envelope, commands,       │
+│  PROTOCOL   @luno-oss/protocol — envelope, commands,       │
 │  events, acks, control, QR payload, version negotiation│
 │  zero dependencies. shared with client SDKs.           │
 └────────────────────────────────────────────────────────┘
@@ -54,7 +54,7 @@ INFRASTRUCTURE (store-postgres, …) implements ports.
 Depends inward. Nothing depends on it.
 ```
 
-Dependencies point inward, always. `@luno/core` imports `@luno/protocol` and
+Dependencies point inward, always. `@luno-oss/core` imports `@luno-oss/protocol` and
 nothing else. Infrastructure and adapters are injected at composition time by
 you, never imported by the core.
 
@@ -62,18 +62,18 @@ you, never imported by the core.
 
 | Package | Depends on | Contains |
 | --- | --- | --- |
-| `@luno/protocol` | — | Envelope, command, event, ack and control types; codecs; `DecodeResult`; version negotiation; QR payload parse and build; pairing DTOs; error taxonomy |
-| `@luno/core` | protocol | Domain, application services, port interfaces, `createLuno()`, the fetch router, and `memoryStore()` |
-| `@luno/testing` | protocol, core | A scriptable fake node and the store conformance kit |
-| `@luno/store-postgres` | core | A durable, driver-agnostic `LunoStore` |
-| `@luno/hono` | core | Near-zero glue: Hono is already fetch-native |
-| `@luno/express` | core | `fetch`↔Express bridge plus `ws` upgrade handling |
-| `@luno/fastify` | core | The same for Fastify |
-| `@luno/nestjs` | core | A `LunoModule` wiring the engine through DI |
-| `@luno/cloudflare` | core | Worker entry plus Durable Object session |
+| `@luno-oss/protocol` | — | Envelope, command, event, ack and control types; codecs; `DecodeResult`; version negotiation; QR payload parse and build; pairing DTOs; error taxonomy |
+| `@luno-oss/core` | protocol | Domain, application services, port interfaces, `createLuno()`, the fetch router, and `memoryStore()` |
+| `@luno-oss/testing` | protocol, core | A scriptable fake node and the store conformance kit |
+| `@luno-oss/store-postgres` | core | A durable, driver-agnostic `LunoStore` |
+| `@luno-oss/hono` | core | Near-zero glue: Hono is already fetch-native |
+| `@luno-oss/express` | core | `fetch`↔Express bridge plus `ws` upgrade handling |
+| `@luno-oss/fastify` | core | The same for Fastify |
+| `@luno-oss/nestjs` | core | A `LunoModule` wiring the engine through DI |
+| `@luno-oss/cloudflare` | core | Worker entry plus Durable Object session |
 
 <Callout type="info">
-  `@luno/protocol` is its own package because **client SDKs need the protocol
+  `@luno-oss/protocol` is its own package because **client SDKs need the protocol
   types without the server engine.** A dashboard rendering a `device_status`
   payload wants the envelope types, not pairing policy and storage ports.
 </Callout>
@@ -104,14 +104,20 @@ The protocol is built around a long-lived, stateful, bidirectional connection.
 Several popular platforms are request-scoped and simply cannot hold one open.
 This is a property of those platforms, not of the code.
 
-| Platform | Can hold a node socket? | How the adapter works |
+| Platform | Can hold a node socket? | How it works |
 | --- | --- | --- |
-| Node (Express/Nest/Fastify/Hono) | Yes | `ws` server in-process; sessions in memory plus pub/sub if multi-instance |
+| Node (Express/Nest/Fastify/Hono) | Yes | `ws` server in-process; sessions in memory plus routing if multi-instance |
 | Cloudflare Workers | Yes — **Durable Objects** | One DO per device; the DO *is* the session |
-| Deno Deploy / Supabase Edge | Partly | `Deno.upgradeWebSocket` works, but instances are ephemeral |
 | Bun | Yes | Native WS server |
-| Firebase Functions | **No** | Needs Cloud Run for the socket, or the HTTP fallback |
-| Vercel / Next serverless | **No** | HTTP fallback, or a separate socket service |
+| Next.js, self-hosted | Yes | Custom server; the socket attaches to its `http.Server` |
+| Deno Deploy / Supabase Edge | Partly | `Deno.upgradeWebSocket` works, but instances are ephemeral |
+| Firebase Functions | **No** | Enrolment yes; the socket needs Cloud Run |
+| Vercel / Next serverless | **No** | Enrolment yes; the socket needs a companion service |
+
+Enrolment works everywhere on that list — only the long-lived socket is
+constrained, and where it is unavailable your application code does not change.
+[Next.js](/docs/backend-sdk/adapters/nextjs) and
+[Firebase](/docs/backend-sdk/adapters/firebase) have pages on exactly that split.
 
 The architecture accommodates this with two moves: `SessionRegistry` is a port
 with *local* and *routed* shapes, so the core never assumes where the socket
@@ -133,7 +139,7 @@ reserved.
     `createLuno`, the operator API, and the protocol-facing surface.
   </Cards.Card>
   <Cards.Card title="Adapters" href="/docs/backend-sdk/adapters" arrow>
-    Hono, Express, Fastify, NestJS and Cloudflare Workers.
+    Hono, Express, Fastify, NestJS, Cloudflare, Next.js and Firebase.
   </Cards.Card>
   <Cards.Card title="Stores" href="/docs/backend-sdk/stores" arrow>
     Persistence ports, and why `claim()` must be linearizable.

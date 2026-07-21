@@ -1,0 +1,136 @@
+import { Callout } from 'nextra/components'
+
+export const metadata = {
+  title: 'Firebase',
+  description:
+    'Run Luno on Google Cloud: Cloud Run holds the session socket, Cloud Functions can serve enrolment, and Firestore can back the store.',
+  openGraph: { images: '/og?title=Firebase' }
+}
+
+# Firebase
+
+There is no `@luno-oss/firebase` package, and the reason is worth stating
+plainly: **Cloud Functions cannot hold a WebSocket open.** They are
+request-scoped and terminate when the response is sent, so they can serve
+enrolment but can never carry a node session.
+
+That is a property of the platform, not a gap in Luno. The fix is to put the
+socket somewhere that stays alive — on Google Cloud, that is **Cloud Run**.
+
+## Recommended: all of it on Cloud Run
+
+Cloud Run runs an ordinary Node container that can hold sockets, so this is just
+a normal Node deployment. Use whichever framework you prefer —
+[Express](/docs/backend-sdk/adapters/express) or
+[Hono](/docs/backend-sdk/adapters/hono):
+
+```ts filename="server.ts"
+import express from 'express'
+import { createLuno } from '@luno-oss/core'
+import { attachLunoWebSocket, registerLunoEnroll } from '@luno-oss/express'
+import { firestoreStore } from './firestore-store'
+
+const luno = createLuno({
+  store: firestoreStore(),
+  secret: process.env.LUNO_SECRET!,
+  wsUrl: `${process.env.PUBLIC_URL}/ws`
+})
+
+const app = express()
+registerLunoEnroll(app, luno)
+
+const server = app.listen(Number(process.env.PORT) || 8080)
+attachLunoWebSocket(server, luno)
+```
+
+<Callout type="warning">
+  Configure the service with **minimum instances ≥ 1** and **CPU always
+  allocated**. Cloud Run will otherwise scale to zero and drop every connected
+  node — and because the node treats a dropped socket as transient, it will
+  reconnect in a loop against a service that keeps going back to sleep.
+
+  Raise the request timeout too (up to 60 minutes); it bounds how long a
+  WebSocket may stay open.
+</Callout>
+
+Session state lives in one container's memory by default, so either run a single
+instance or supply a `SessionRegistry` that routes across instances. See
+[Ports](/docs/backend-sdk/core#ports).
+
+## What Functions can and cannot do
+
+If your app is already Functions-based, enrolment can stay there. `luno.http.handle`
+takes a structural `{ method, url, json() }`, so an `onRequest` handler needs no
+adapter:
+
+```ts filename="functions/src/index.ts"
+import { onRequest } from 'firebase-functions/v2/https'
+import { luno } from './luno'
+
+export const lunoEnroll = onRequest(async (req, res) => {
+  const result = await luno.http.handle({
+    method: req.method,
+    url: req.url,
+    json: async () => req.body
+  })
+  res.status(result.status).set(result.headers).send(result.body)
+})
+```
+
+| Surface | Cloud Functions | Cloud Run |
+| --- | --- | --- |
+| `POST /enroll` | Yes | Yes |
+| `POST /enroll/status` | Yes | Yes |
+| `WS /ws` session | **No** | Yes |
+| `luno.sms.send` from your code | Yes | Yes |
+
+<Callout type="info">
+  Splitting them is fine. Sending from a Function while the socket lives on
+  Cloud Run needs no extra wiring: `luno.sms.send` persists the command first,
+  and whichever process holds the socket dispatches it. That is the same path an
+  offline device takes, so it is already the well-tested one.
+
+  Both processes must share a **store** — that is where devices, credentials and
+  messages live.
+</Callout>
+
+## Firestore as a store
+
+Firestore can back a `LunoStore`, but read
+[Stores](/docs/backend-sdk/stores#atomicity-is-a-contract-not-an-implementation-detail)
+first. The requirement that matters is `claim()`:
+
+<Callout type="error">
+  Consuming a pairing session **must be linearizable**. Under
+  `maxEnrollments: 1`, two nodes submitting the same code at the same moment
+  must produce exactly one enrolment. A `get()` then `set()` will race, and the
+  bug shows up only under load, in production, as a duplicate device.
+
+  Use `runTransaction` for the claim. Do not hand-roll it with a read followed
+  by a write.
+</Callout>
+
+Prove it before you trust it — the conformance suite includes a concurrent-claim
+test specifically for this:
+
+```ts
+import { describe } from 'vitest'
+import { describeStoreConformance } from '@luno-oss/testing/store'
+
+describe('firestoreStore', () => {
+  describeStoreConformance(() => firestoreStore(emulatorDb))
+})
+```
+
+## Realtime Database is not the session
+
+It is worth saying explicitly, because it is a natural assumption: the node
+speaks the Luno wire protocol over a WebSocket to *your* server. It does not
+speak Firebase's protocol, and pointing it at Realtime Database or Firestore
+will not work. Those are options for the **store**, not the transport.
+
+## Next
+
+- [Express](/docs/backend-sdk/adapters/express) — the Cloud Run integration in detail
+- [Stores](/docs/backend-sdk/stores) — writing and proving a Firestore store
+- [Next.js](/docs/backend-sdk/adapters/nextjs) — the same split on Vercel

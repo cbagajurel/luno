@@ -41,9 +41,10 @@ minutes; the ones that do not are marked.
 
 - [ ] **Every route that reaches `luno.sms.send` is authenticated.** This is the
       single most consequential item on the list.
-- [ ] Principals are scoped to the devices they own; check that
-      `luno.devices.list({ ownerId })` is actually filtered by the caller's
-      identity rather than by a value they supply.
+- [ ] **Scope every device lookup yourself.** `luno.devices.list()` takes no
+      filter and returns the whole fleet — the engine does not know who your
+      users are. Filter by the caller's identity before responding, and never by
+      an id the caller supplied.
 - [ ] Admin operations — creating pairing sessions, revoking devices — are
       restricted separately from send access.
 

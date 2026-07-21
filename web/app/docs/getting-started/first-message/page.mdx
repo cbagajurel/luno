@@ -77,19 +77,22 @@ later, or never — plenty of carriers and routes simply do not send reports.
 ```
 </Steps>
 
-Wire these up when you create the engine:
+Subscribe with `luno.on`. Every step of a message's life surfaces as one
+`sms.status` event carrying the updated record, so you switch on `status`
+rather than subscribing to a different name per step:
 
 ```ts
-const luno = createLuno({
-  store,
-  secret: process.env.LUNO_SECRET!,
-  onEvent: {
-    'sms.sent': async msg => console.log('sent', msg.ref),
-    'sms.delivered': async msg => console.log('delivered', msg.ref),
-    'sms.received': async msg => console.log('inbound from', msg.from)
-  }
+luno.on('sms.status', ({ message }) => {
+  console.log(message.ref, message.status)
+  // 'pending' → 'dispatched' → 'accepted' → 'sent' → 'delivered'
+})
+
+luno.on('sms.received', ({ from, body }) => {
+  console.log('inbound from', from, body)
 })
 ```
+
+`luno.on` returns an unsubscribe function.
 
 ## Query state directly
 
@@ -97,8 +100,14 @@ Every transition is persisted on both sides, so you can also just ask:
 
 ```ts
 const current = await luno.sms.get(msg.id)
-current.status // queued | sending | sent | delivered | undelivered | failed
+current.status
+// pending | dispatched | accepted | sent
+// delivered | undelivered | failed | cancelled
 ```
+
+Status only ever moves **forward**. Node events are at-least-once and can arrive
+out of order, so each status is ranked rather than transitioned — replaying an
+old event is a no-op instead of a regression.
 
 ## Receive
 
@@ -107,11 +116,9 @@ Inbound messages need no configuration beyond the `full` flavor and the
 messages, persists the result, and emits `sms_received`:
 
 ```ts
-onEvent: {
-  'sms.received': async msg => {
-    // msg.from, msg.body, msg.subscriptionId, msg.receivedAt
-  }
-}
+luno.on('sms.received', async ({ deviceId, from, body, subscriptionId, receivedAt, parts }) => {
+  // …
+})
 ```
 
 <Callout type="warning">
