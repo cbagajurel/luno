@@ -12,6 +12,12 @@ final deviceStateProvider = StreamProvider<DeviceState>((ref) {
   return bridge.deviceStateEvents.asyncMap((_) => bridge.getDeviceState());
 });
 
+/// Whether this build ships the receive half of the gateway (`full`) or is
+/// outbound-only (`sendOnly`). Injected in `main` after one native read so it
+/// resolves synchronously — inbound UI must be absent from the first frame, not
+/// appear once a future settles. Defaults to true when not overridden (tests).
+final receiveSmsSupportedProvider = Provider<bool>((ref) => true);
+
 /// A runtime permission the node needs, with copy for the UI to render.
 enum AppPermission {
   phone('Phone / SIM', 'Read SIM cards, signal, and carrier info'),

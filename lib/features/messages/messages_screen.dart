@@ -13,17 +13,30 @@ class MessagesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final actions = [
+      IconButton(
+        tooltip: 'Compose',
+        icon: const Icon(Icons.edit_rounded),
+        onPressed: () => showComposeSheet(context),
+      ),
+    ];
+
+    // A sendOnly build has no inbound path at all, so there is no received tab to
+    // switch to — the screen collapses to the sent list rather than offering a tab
+    // that can never fill.
+    if (!ref.watch(receiveSmsSupportedProvider)) {
+      return LunoScaffold(
+        title: 'Messages',
+        actions: actions,
+        body: const _SentTab(),
+      );
+    }
+
     return DefaultTabController(
       length: 2,
       child: LunoScaffold(
         title: 'Messages',
-        actions: [
-          IconButton(
-            tooltip: 'Compose',
-            icon: const Icon(Icons.edit_rounded),
-            onPressed: () => showComposeSheet(context),
-          ),
-        ],
+        actions: actions,
         bottom: const TabBar(
           tabs: [
             Tab(text: 'Sent'),

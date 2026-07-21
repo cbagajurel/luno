@@ -40,4 +40,19 @@ void main() {
 
     expect(find.text('No messages received yet'), findsOneWidget);
   });
+
+  testWidgets('sendOnly build never offers a received tab', (tester) async {
+    await tester.pumpWidget(
+      wrapScreen(
+        FakeLunoBridge(),
+        const MessagesScreen(),
+        receiveSmsSupported: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Received'), findsNothing);
+    expect(find.text('Sent'), findsNothing);
+    expect(find.text('No sent messages yet'), findsOneWidget);
+  });
 }
